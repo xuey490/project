@@ -130,6 +130,5 @@ final class MiddlewaresProvider implements ServiceProviderInterface
     }
 
     public function boot(ContainerInterface $container): void
-    # public function boot(ContainerConfigurator $container): void
     {}
 }

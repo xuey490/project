@@ -147,7 +147,7 @@ class Home
 		
 
         // Symfony缓存
-        cache_set('user_1', ['name' => 'AliceA'], 3600);
+        // cache_set('user_1', ['name' => 'AliceA'], 3600);
         // $user = cache_get('user_1');
 		
 		// Thinkphp 缓存
@@ -161,17 +161,17 @@ class Home
         // cache_invalidate_tags(['user_123']);
         
 
-
+		//print_r(config('storage.local'));
 
 
 
 
         // session测试
-         $session = app('session');
+        // $session = app('session');
         // 设置一个 session 属性
-         $session->set('user_id', 'tom_11');
+        // $session->set('user_id', 'tom_11');
         // 获取一个 session 属性
-        $userId = $session->get('user_id');
+        // $userId = $session->get('user_id');
         
 		
 		#dump(app('session')->all());
@@ -211,7 +211,7 @@ class Home
 		if(!$result){
 		#echo $validate->getError();
 		}
-        return new Response("<h1>Welcome to My Framework!___{$userId}</h1>");
+        return new Response("<h1>Welcome to My Framework!</h1>");
     }
 
     // http://localhost:8000/home/xss?name=mike<script>alert('ok');</script>
