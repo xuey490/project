@@ -18,6 +18,7 @@ namespace Framework\Utils;
 
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Request;
+use Redis;
 
 /*
 | 功能      | URL             | 方法   | 参数                                           |
@@ -253,6 +254,7 @@ class FileUploader
      */
     private function handleFile(UploadedFile $file): array
     {
+
         // 1. 检查上传错误
         if ($file->getError() !== UPLOAD_ERR_OK) {
             $this->raiseError($this->getUploadErrorMessage($file->getError()));
@@ -262,7 +264,6 @@ class FileUploader
         // 2. 检查文件大小
         if ($file->getSize() > $this->maxSize) {
             $this->raiseError("File size exceeds limit ({$this->maxSize} bytes).");
-            # throw new \RuntimeException("File size exceeds limit ({$this->maxSize} bytes).");
         }
 
         // 3. 获取扩展名（优先原始扩展名，其次从 MIME 推断）
@@ -274,33 +275,28 @@ class FileUploader
         }
         if (! $extension) {
             $this->raiseError('Cannot determine file extension and no valid MIME mapping found.');
-            # throw new \RuntimeException('Cannot determine file extension and no valid MIME mapping found.');
         }
 
         // 4. 黑名单检查
         if (in_array($extension, $this->blacklist)) {
             $this->raiseError("File extension '{$extension}' is blacklisted.");
-            # throw new \RuntimeException("File extension '{$extension}' is blacklisted.");
         }
 
         // 5. 白名单检查
         if (! empty($this->whitelist) && ! in_array($extension, $this->whitelist)) {
             $this->raiseError("File extension '{$extension}' is not allowed.");
-            # throw new \RuntimeException("File extension '{$extension}' is not allowed.");
         }
 
         // 6. MIME 类型严格校验（使用 fileinfo）
         $expectedMime = $this->mimeChecker->getMimeByExtension($extension);
         if (! $expectedMime || $expectedMime === 'application/octet-stream') {
             $this->raiseError("No valid MIME type defined for extension: {$extension}");
-            # throw new \RuntimeException("No valid MIME type defined for extension: {$extension}");
         }
 
         $finfo    = new \finfo(FILEINFO_MIME_TYPE);
         $realPath = $file->getRealPath();
         if (! $realPath || ! is_file($realPath)) {
             $this->raiseError('Temporary uploaded file not found.');
-            # throw new \RuntimeException('Temporary uploaded file not found.');
         }
 
         $detectedMime = $finfo->file($realPath);
@@ -412,6 +408,7 @@ class FileUploader
 
     private function getProjectDir(): string
     {
+		//echo dirname(__DIR__, 3);
         return \dirname(__DIR__, 3); // src -> src/../ -> project root
     }
 }

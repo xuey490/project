@@ -36,10 +36,10 @@ final class UploadServiceProvider implements ServiceProviderInterface
 
         // 注册 MIME 检查器
         $services->set(MimeTypeChecker::class)
-            ->args([dirname(__DIR__) . '/../config/mime_types.php'])->public();
+            ->args([BASE_PATH . '/config/mime_types.php'])->public();
 
         // 注册文件上传器，注入上传配置 + MIME 检查器
-        $uploadConfig = include dirname(__DIR__) . '/../config/upload.php';
+        $uploadConfig = include BASE_PATH . '/config/upload.php';
 
         $services->set(FileUploader::class)
             ->args([$uploadConfig, service(MimeTypeChecker::class)])->public();

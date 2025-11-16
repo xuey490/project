@@ -37,10 +37,7 @@ final class SessionServiceProvider implements ServiceProviderInterface
     // public function __invoke(ContainerConfigurator $configurator): void
     public function register(ContainerConfigurator $configurator): void
     {
-        $services = $configurator->services()
-            ->defaults()
-            ->autowire()
-            ->autoconfigure();
+        $services = $configurator->services();
 
         // === 1. 加载配置 ===
         $redisConfig   = require \dirname(__DIR__, 2) . '/config/redis.php';
