@@ -36,9 +36,6 @@ class AppTwigExtension extends AbstractExtension
         $this->tokenName    = $tokenName;
         $this->session      = app('session');
         $this->siteConfig   = require BASE_PATH . '/config/site.php';
-
-        // ⚠️ 移除下面这行，除非你真的想每次覆盖用户！
-        // $this->session->set('user', 'zhangSan');
     }
 
     public function getGlobals(): array

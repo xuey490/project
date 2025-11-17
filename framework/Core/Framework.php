@@ -44,11 +44,11 @@ final class Framework
 
     private const DATABASE_CONFIG_FILE = BASE_PATH . '/config/database.php';
 
-    private const DIR_PERMISSION = 0777; // 目录默认权限
+    private const DIR_PERMISSION = 0755; // 目录默认权限
 
     private static ?Framework $instance = null;
 
-    private Request $request;
+    private ?Request $request = null;
 
     private ContainerInterface $container;
 
@@ -210,7 +210,11 @@ final class Framework
             // 记录日志
             $this->logRequestAndResponse($this->request, $response, $start);
 
-            return $response;
+			$responseToReturn = $response;
+			// 断开引用，允许 GC 回收请求相关内存
+			$this->request = null;
+			return $responseToReturn;
+
         } catch (\Throwable $e) {
             // 捕获异常，交给 handleException
             try {
@@ -485,10 +489,10 @@ final class Framework
 
         if ($appDebug) {
             // 使用 $self 避免闭包中对 $this 的复杂引用问题
-            $self = $this;
-            Db::listen(static function ($sql, $time, $explain) use ($self): void {
+            $logger = $this->logger;
+            Db::listen(static function ($sql, $time, $explain) use ($logger): void {
                 try {
-                    $self->logger?->info('SQL Execution', [
+                    $logger ->info('SQL Execution', [
                         'sql'     => $sql,
                         'time'    => (string) $time . 's',
                         'explain' => $explain ?? [],
