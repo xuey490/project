@@ -397,9 +397,7 @@ if (isWorkerProcess()) {
 
     $worker->onWorkerStart = function(Worker $worker) use (&$framework) {
 		
-		global $redis;
-		$redis = new \Redis(); // 使用 PHP 原生 Redis 类
-		$redis->connect('127.0.0.1', 6379);
+
 		
         log_info("[Worker] PID " . getmypid() . " started");
 		Worker::log("[Worker] PID " . getmypid() . " started");

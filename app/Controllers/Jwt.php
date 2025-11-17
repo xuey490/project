@@ -41,10 +41,11 @@ class Jwt
 
 		
 		//app('cookie')->queueCookie('token', $this->tokenString, 3600);
-		app('cookie')->queueCookie('token111', 'hello world', 3600); //适合FPM 和部分workerman启动器
+		app('cookie')->queueCookie('token_123', 'hello world', 3600); //适合FPM 和部分workerman启动器
 
 		// 快捷设置 Cookie 可以这样设置
 		app('cookie')->setResponseCookie($response, 'token1111', $this->tokenString , 3600); //兼容fpm和所有workerman启动器
+		app('cookie')->setResponseCookie($response, 'token123', $this->tokenString , 3600); //兼容fpm和所有workerman启动器
 
 		// 在发送 Response 前统一绑定队列中的 Cookie
 		app('cookie')->sendQueuedCookies($response);
