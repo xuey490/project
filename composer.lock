@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "abbd1bac357a163b6fcb4e5cfcd8f3e9",
+    "content-hash": "f9aea3a4acd9d4216a8d6e9b2eeec1fd",
     "packages": [
         {
             "name": "brick/math",
@@ -3771,6 +3771,49 @@
                 }
             ],
             "time": "2025-10-12T07:54:18+00:00"
+        },
+        {
+            "name": "xuey490/storage",
+            "version": "1.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/xuey490/storage.git",
+                "reference": "e462920fc483c43769c85c5e102cafec1fe72e36"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/xuey490/storage/zipball/e462920fc483c43769c85c5e102cafec1fe72e36",
+                "reference": "e462920fc483c43769c85c5e102cafec1fe72e36",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.1"
+            },
+            "require-dev": {
+                "aliyuncs/oss-sdk-php": "^2.4",
+                "friendsofphp/php-cs-fixer": "^3.6",
+                "league/flysystem-aws-s3-v3": "^1.0",
+                "phpstan/phpstan": "^1.4",
+                "phpunit/phpunit": "^9.5",
+                "qcloud/cos-sdk-v5": "^2.5",
+                "qiniu/php-sdk": "^7.4"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Framework\\Storage\\": "src"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "novaframe storage lib",
+            "support": {
+                "issues": "https://github.com/xuey490/storage/issues",
+                "source": "https://github.com/xuey490/storage/tree/1.0.0"
+            },
+            "time": "2025-11-16T11:27:24+00:00"
         }
     ],
     "packages-dev": [
