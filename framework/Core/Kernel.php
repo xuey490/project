@@ -21,7 +21,6 @@ use Framework\Config\Config;
 use Framework\Core\Exception\Handler as ExceptionHandler;
 use Framework\Event\Dispatcher;
 use Framework\Event\ListenerScanner;
-use Framework\Utils\Cookie;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 class Kernel
@@ -67,13 +66,12 @@ class Kernel
         $timezone = app('config')->get('app.time_zone', 'UTC');
         date_default_timezone_set($timezone);
 
-        // 3. 初始化Cookie配置（强制检查安全密钥）
-        // $this->initCookie();
 
-        // 4. 注册事件监听器
+
+        // 3. 注册事件监听器
         $this->registerEventListeners();
 
-        // 5. 设置异常处理机制
+        // 4. 设置异常处理机制
         $this->setupExceptionHandling();
 
         $this->booted = true;
@@ -103,27 +101,6 @@ class Kernel
         return dirname(__DIR__, 2); // 从 framework/Core 到项目根
     }
 
-    /**
-     * 初始化Cookie配置（强化安全校验）.
-     */
-    private function initCookie(): void
-    {
-        $config = [
-            'domain'   => app('config')->get('cookie.domain', ''),
-            'secure'   => app('config')->get('app.env') === 'prod', // 生产环境强制HTTPS
-            'httponly' => true,
-            'samesite' => app('config')->get('cookie.samesite', 'lax'),
-            'secret'   => app('config')->get('cookie.secret'),
-            'encrypt'  => app('config')->get('cookie.encrypt', true),
-        ];
-
-        // 强制检查Cookie密钥（安全红线）
-        if (empty($config['secret'])) {
-            throw new \RuntimeException('请在配置文件中设置 cookie.secret（安全密钥）');
-        }
-
-        Cookie::setup($config);
-    }
 
     /**
      * 注册事件监听器（基于扫描的方式）.
@@ -152,7 +129,8 @@ class Kernel
         set_exception_handler(function (\Throwable $e) use ($exceptionHandler) {
             $exceptionHandler->report($e);
             $exceptionHandler->render($e); // ->send();
-            exit(1); // 异常后终止程序
+            return ;
+			//exit(1); // 异常后终止程序
         });
 
         // 2. 注册错误处理器（将错误转为异常）
@@ -177,7 +155,8 @@ class Kernel
                 );
                 $exceptionHandler->report($e);
                 $exceptionHandler->render($e)->send();
-                exit(1);
+                return ;
+				//exit(1);
             }
         });
     }

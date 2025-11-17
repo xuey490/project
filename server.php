@@ -53,7 +53,7 @@ if (!is_dir(LOG_DIR)) {
 }
 
 const MEMORY_LIMIT_MB = 256;   // 允许的最大内存（单位 MB）
-const MEMORY_CHECK_INTERVAL = 20; // 检查周期（秒）
+const MEMORY_CHECK_INTERVAL = 10; // 检查周期（秒）
 
 Worker::$logFile = LOG_DIR .'/workerman.log';
 
@@ -77,22 +77,6 @@ function log_info(string $msg): void {
 // ----------------------------------------------------------------------
 // Symfony Request / Response 转换
 // ----------------------------------------------------------------------
-
-function convert_to_workerman_response1(SymfonyResponse $res): WorkermanResponse {
-    $headers = [];
-    foreach ($res->headers->allPreserveCase() as $k => $vals) {
-        $headers[$k] = is_array($vals) ? implode(',', $vals) : $vals;
-    }
-    
-    $content = $res->getContent();
-    
-    // 确保 Content-Length 头存在且正确
-    if (!isset($headers['Content-Length']) && $content !== '') {
-        $headers['Content-Length'] = strlen($content);
-    }
-    
-    return new WorkermanResponse($res->getStatusCode(), $headers, $content);
-}
 
 
 function convert_to_workerman_response(SymfonyResponse $res): WorkermanResponse {
