@@ -151,17 +151,6 @@ class AttributeRouteLoader
         return $routeCollection;
     }
 
-    /**
-     * 将多维数组递归“拍平”成一维数组.
-     */
-    private function flattenArray(array $array): array
-    {
-        $result = [];
-        array_walk_recursive($array, function ($value) use (&$result) {
-            $result[] = $value;
-        });
-        return $result;
-    }
 
     /**
      * 扫描控制器目录，返回所有PHP文件.
@@ -192,23 +181,4 @@ class AttributeRouteLoader
         return "{$this->controllerNamespace}\\{$relative}";
     }
 
-    /**
-     * 拼接控制器级别 prefix 与方法级别 path.
-     */
-    private function joinPath(string $prefix, string $path): string
-    {
-        $prefix = rtrim($prefix ?? '', '/');
-        $path   = '/' . ltrim($path ?? '', '/');
-        return $prefix . $path;
-    }
-
-    /**
-     * 自动生成路由名称.
-     */
-    private function generateRouteName(string $class, string $method): string
-    {
-        $class = str_replace([$this->controllerNamespace . '\\', '\Controller'], '', $class);
-        $class = strtolower(str_replace('\\', '.', $class));
-        return "{$class}.{$method}";
-    }
 }
