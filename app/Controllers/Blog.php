@@ -57,8 +57,8 @@ class Blog
     public function index(): Response
     {
 		
-        $users = Admin::select()->toArray();
-        print_r($users); // 因为你框架会处理 array => json
+        //$users = Admin::select()->toArray();
+        //print_r($users); // 因为你框架会处理 array => json
 		
 		
         // 🔍 检查当前 Twig 实例是否加载了 AppTwigExtension

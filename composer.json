@@ -46,7 +46,8 @@
         "topthink/think-template": "^3.0",
         "topthink/think-validate": "^3.0",
         "twig/twig": "^3.14",
-        "workerman/workerman": "^5.1"
+        "workerman/workerman": "^5.1",
+        "xuey490/storage": "^1.0"
     },
     "require-dev": {
         "friendsofphp/php-cs-fixer": "^3.88",
