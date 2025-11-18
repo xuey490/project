@@ -36,7 +36,7 @@ class CorsMiddleware implements MiddlewareInterface
         $response->headers->set('Access-Control-Allow-Origin', '*');
         $response->headers->set('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Accept, Origin, Authorization');
         $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-
+        $response->headers->set('Access-Control-Allow-Credentials', 'true');
         // dump('--- 退出 CorsMiddleware (中间件) ---');
 
         // 4. 返回最终的响应
