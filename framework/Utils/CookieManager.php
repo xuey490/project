@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * This file is part of NavaFrame Framework.
+ * This file is part of FssPhp Framework.
  *
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
@@ -21,7 +21,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /*
-$response = app('response')->setContent('Hello NovaFrame!');
+$response = app('response')->setContent('Hello FSSPHP!');
 
 //app('cookie')->queueCookie('token', $this->tokenString, 3600);
 //app('cookie')->queueCookie('token111', 'oooooo', 3600);

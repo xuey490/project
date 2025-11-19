@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * This file is part of NavaFrame Framework.
+ * This file is part of FssPhp Framework.
  *
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
@@ -22,7 +22,7 @@ use Symfony\Component\HttpFoundation\Response;
 $response = new Response('ok', 200);
 
 // 重置内容
-app('response')->setContent('Hello NovaFrame!');
+app('response')->setContent('Hello FSSPHP!');
 
 // 设置单个头
 $response->headers->set('Authorization', 'Bearer 123');

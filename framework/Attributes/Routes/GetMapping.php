@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * This file is part of NavaFrame Framework.
+ * This file is part of FssPhp Framework.
  *
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE

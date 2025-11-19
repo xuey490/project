@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * This file is part of NovaFrame.
+ * This file is part of FssPhp.
  *
  */
 
@@ -33,7 +33,7 @@ class View
     {
         $html = view('home/welcome.html.twig', [
             'name'      => 'Guest',
-            'site_name' => 'NovaFrame',
+            'site_name' => 'FssPhp',
 
             'app_debug' => $_ENV['APP_DEBUG'] ?? true,
         ]);

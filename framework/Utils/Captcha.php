@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * This file is part of NavaFrame Framework.
+ * This file is part of FssPhp Framework.
  *
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
@@ -235,7 +235,7 @@ class Captcha
      */
     protected static function writeNoise(array $config, $im): void
     {
-        $codeSet = 'NovaFrame20222345678abcdefhijkmnpqrstuvwxyz';
+        $codeSet = 'FSSPHP20222345678abcdefhijkmnpqrstuvwxyz';
         for ($i = 0; $i < 10; ++$i) {
             // 杂点颜色
             $noiseColor = imagecolorallocate($im, mt_rand(150, 225), mt_rand(150, 225), mt_rand(150, 225));
