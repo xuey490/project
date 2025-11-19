@@ -53,8 +53,6 @@ FssPhp 是一款轻量级强大，快速，简单，安全的php框架，这是F
 
 `php -S localhost:8000 -t public`
 
-- 打开浏览器，输入地址http://localhost:8000
-- 也可以部署到任何可以运行php的Apache或Nginx服务器上。
 ### 2.workerman启动
 - 本地环境:php8.0 + 及以上，Redis，MySQL5.7, composer 2.x及以上
 - 从GitHub下载main版本，解压到本地目录，在根目录下运行
@@ -64,6 +62,8 @@ FssPhp 是一款轻量级强大，快速，简单，安全的php框架，这是F
 - 等组件包下载完毕后，打开cmd命令行窗口，输入:
 
 `php watch.php start `
+
+### 3.访问
 
 - 打开浏览器，输入地址http://localhost:8000
 - 也可以部署到任何可以运行php的Apache或Nginx服务器上。
