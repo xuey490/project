@@ -22,15 +22,22 @@ use Framework\Attributes\Auth;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
 use Framework\Attributes\Route;
 
+
+use Framework\Utils\ThinkORMFactory;
+
 ##[Auth(roles: ['admin'])]
 ##[Prefix('/secures', middleware: [AuthMiddleware::class])]
 ##[Route(prefix: '/vvv2/admins', group: 'aaaa', middleware: [\App\Middlewares\AuthMiddleware::class])]
-
+/*
+ * @auth true
+ * @role super
+*/
 class Home
 {
     public function __construct(
         private CsrfTokenManager $csrf,private RequestStack $requestStack,
 		private CookieManager $cookie, 
+		private ThinkORMFactory $db
 		//SessionServiceProvider 已经注册的服务名是 'session'， 容器会自动注入 Session 实例
     ) {}
 	
@@ -94,8 +101,15 @@ class Home
 	}
 	
 	##[Auth(required: true, roles: ['admin', 'editor'])]
-    public function index(Request $request): Response
+	
+
+    public function index(Request $request)
     {
+
+
+        $users = Admin::select()->toArray();
+        dump($users); // 因为你框架会处理 array => json
+		
 		
 		//$session = $request->getSession();
 		//$session->set('test', 'workerman');	
@@ -143,11 +157,9 @@ class Home
 		// 使用自定义参数
 		$logger2 = app('log_cache', [
 			'channel' => 'payment',
-			'logFile' => BASE_PATH .'/storage/payment.log',
+			'logFile' => BASE_PATH .'/storage/log/payment.log',
 		]);
 		$logger2->log('支付日志');	
-		
-		
 
         // Symfony缓存
         // cache_set('user_1', ['name' => 'AliceA'], 3600);
@@ -162,11 +174,7 @@ class Home
         // 删除所有 posts 相关缓存
         // cache_invalidate_tags(['posts']);
         // cache_invalidate_tags(['user_123']);
-        
-
 		//print_r(config('storage.local'));
-
-
 
 
         // session测试
@@ -193,11 +201,6 @@ class Home
             count($includedFiles),
             count($loadedClasses)
         );
-
-
-
-
-
 
 
 		##

@@ -156,23 +156,6 @@ class MiddlewareDispatcher
         if (! $controller || ! $action) {
             return [];
         }
-
-        /*
-        Array
-        (
-            [controller] => App\Controllers\Admins
-            [middleware] => Array
-                (
-                )
-
-            [method] => legacyAdmin
-            [params] => Array
-                (
-                )
-
-        )
-        */
-
         try {
             // 🧠 支持 "App\Controllers\Admins@legacyAdmin" 这种形式
             if (str_contains($controller, '@')) {

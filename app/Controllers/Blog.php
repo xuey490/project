@@ -15,6 +15,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Request;
 use Twig\Environment;
 use App\Models\Admin;
+use Framework\Utils\ThinkORMFactory;
  // 假设你有文章服务
 
 class Blog
@@ -22,11 +23,14 @@ class Blog
     private Environment $twig;
 
     private BlogService $blogService;
+	
+    private ThinkORMFactory $db;
 
-    public function __construct(Environment $twig, BlogService $blogService)
+    public function __construct(Environment $twig, BlogService $blogService , ThinkORMFactory $db)
     {
         $this->twig        = $twig;
         $this->blogService = $blogService;
+        $this->db = $db;
     }
 	
 	public function list(Request $request)
@@ -57,6 +61,8 @@ class Blog
     public function index(): Response
     {
 		
+        #$users = ($this->db)(Admin::class)::select()->toArray();	//这三种方法都可以运行
+        #$users = $this->db->make(Admin::class)::select()->toArray();//这三种方法都可以运行
         $users = Admin::select()->toArray();
         dump($users); // 因为你框架会处理 array => json
 		

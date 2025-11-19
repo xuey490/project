@@ -8,8 +8,6 @@ use function Symfony\Component\DependencyInjection\Loader\Configurator\param;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Reference;
 use Framework\Container\ContainerProviders;
-use think\db\ConnectionInterface;
-
 
 return function (ContainerConfigurator $configurator) {
     $services = $configurator->services();
@@ -29,6 +27,16 @@ return function (ContainerConfigurator $configurator) {
     $services->set(\Framework\Event\Dispatcher::class)
         ->arg('$container', service('service_container'))->public(); // ✅ 显式注入容器自身 注意arg，跟args差异
 
+	$databseConfig  = require BASE_PATH . '/config/database.php';
+
+    // === 注册 ThinkORM 模型工厂服务 ===
+    $services
+        ->set(\Framework\Utils\ThinkORMFactory::class)
+		->args([$databseConfig])
+        ->public(); // 可选：设为 public 以便直接从容器获取
+
+    // 可以额外 alias
+    $services->alias('orm', \Framework\Utils\ThinkORMFactory::class);
 
     // ✅ 1. 自动加载应用 Provider
     $providerManager = new ContainerProviders();

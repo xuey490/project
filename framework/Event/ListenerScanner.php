@@ -54,12 +54,12 @@ class ListenerScanner
 
         // 2. 缓存命中且指纹一致 → 直接返回
         if ($cached && is_array($cached) && ($cached['fingerprint'] ?? null) === $currentFingerprint) {
-            app('log')->info('[Event] Subscribers loaded from cache (fingerprint match).');
+            app('log')->info('[Event Scan] Subscribers loaded from cache (fingerprint match).');
             return $cached['subscribers'] ?? [];
         }
 
         // 3. 缓存未命中 或 指纹不一致 → 重新扫描
-        app('log')->info('[Event] Listener files changed or cache expired. Rescanning...');
+        app('log')->info('[Event Expired] Listener files changed or cache expired. Rescanning...');
         $result = $this->scanAndBuild();
 
         // 4. 更新缓存
@@ -79,7 +79,7 @@ class ListenerScanner
         $listenerDir = $this->listenerDir;
 
         if (! is_dir($listenerDir)) {
-            app('log')->info("[Event] Listeners directory not found: {$listenerDir}");
+            app('log')->info("[Event NF] Listeners directory not found: {$listenerDir}");
             return [];
         }
 

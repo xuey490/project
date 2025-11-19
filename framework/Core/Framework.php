@@ -344,13 +344,12 @@ final class Framework
      */
     private function initializeDependencies(): void
     {
-        // 1. 初始化数据库ORM
-        $this->initORM();
 
-        // 2. 加载路由（支持缓存）
+
+        // 1. 加载路由（支持缓存）
         $allRoutes = $this->loadAllRoutes();
 
-        // 3. 初始化中间件调度器
+        // 2. 初始化中间件调度器
         // 优先尝试容器获取，否则新建
         try {
             if ($this->container->has(MiddlewareDispatcher::class)) {
@@ -364,7 +363,7 @@ final class Framework
             $this->logError('Failed to initialize MiddlewareDispatcher: ' . $e->getMessage());
         }
 
-        // 4. 初始化路由
+        // 3. 初始化路由
         $this->router = new Router(
             $allRoutes,
             $this->container,
@@ -432,7 +431,7 @@ final class Framework
         }
 
         $this->logger?->info(sprintf(
-            'Loaded %d routes (manual: %d, annotated: %d)',
+            '[Route Loaded]Loaded %d routes (manual: %d, annotated: %d)',
             $allRoutes->count(),
             $manualCount,
             $annotatedCount
@@ -455,52 +454,7 @@ final class Framework
         @chmod(self::ROUTE_CACHE_FILE, 0644); // 缓存文件权限只读
     }
 
-    /**
-     * 初始化 ThinkORM.
-     */
-    private function initORM(): void
-    {
-        if (! file_exists(self::DATABASE_CONFIG_FILE)) {
-            throw new \RuntimeException('Database configuration file not found: ' . self::DATABASE_CONFIG_FILE);
-        }
 
-        $config = require self::DATABASE_CONFIG_FILE;
-        if (! isset($config['connections']) || ! is_array($config['connections'])) {
-            throw new \RuntimeException('Invalid database configuration format');
-        }
-
-        Db::setConfig($config);
-
-        // 开发环境开启 SQL 日志
-        $appDebug = false;
-        if (function_exists('app')) {
-            try {
-                /** @noinspection PhpUndefinedFunctionInspection */
-                $cfg = app('config');
-                if ($cfg !== null && method_exists($cfg, 'get')) {
-                    $appDebug = (bool) $cfg->get('app.debug');
-                }
-            } catch (\Throwable $_) {
-                $appDebug = false;
-            }
-        }
-
-        if ($appDebug) {
-            // 使用 $self 避免闭包中对 $this 的复杂引用问题
-            $logger = $this->logger;
-            Db::listen(static function ($sql, $time, $explain) use ($logger): void {
-                try {
-                    $logger ->info('SQL Execution', [
-                        'sql'     => $sql,
-                        'time'    => (string) $time . 's',
-                        'explain' => $explain ?? [],
-                    ]);
-                } catch (\Throwable $_) {
-                    // 忽略记录过程中的异常
-                }
-            });
-        }
-    }
 
     /**
      * 调用控制器方法（优化参数解析和返回值处理）.
@@ -754,7 +708,7 @@ final class Framework
         $duration = microtime(true) - $startTime;
 
         try {
-            $this->logger?->info('Request processed', [
+            $this->logger?->info('[Request processed]', [
                 'method'   => $request->getMethod(),
                 'path'     => $request->getPathInfo(),
                 'status'   => $response->getStatusCode(),
