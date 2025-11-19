@@ -15,8 +15,9 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Request;
 use Twig\Environment;
 use App\Models\Admin;
-use Framework\Utils\ThinkORMFactory;
+#use Framework\Utils\ThinkORMFactory;
  // 假设你有文章服务
+use Framework\Factory\ThinkORMFactory;
 
 class Blog
 {

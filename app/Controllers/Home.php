@@ -22,8 +22,9 @@ use Framework\Attributes\Auth;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
 use Framework\Attributes\Route;
 
-
-use Framework\Utils\ThinkORMFactory;
+	use Framework\Factory\ThinkORMFactory;
+	use think\DbManager;
+//use Framework\Utils\ThinkORMFactory;
 
 ##[Auth(roles: ['admin'])]
 ##[Prefix('/secures', middleware: [AuthMiddleware::class])]
@@ -37,7 +38,8 @@ class Home
     public function __construct(
         private CsrfTokenManager $csrf,private RequestStack $requestStack,
 		private CookieManager $cookie, 
-		private ThinkORMFactory $db
+		private ThinkORMFactory $db,
+		private DbManager $db1
 		//SessionServiceProvider 已经注册的服务名是 'session'， 容器会自动注入 Session 实例
     ) {}
 	
@@ -73,7 +75,9 @@ class Home
 	public function html():Response
 	{
 		
-
+        //$list = Db::table('users')->select();
+        dump($this->db1->table('oa_admin_group')->where('id' , 1)->select()->toArray());
+		
 		/*
 		// 创建响应实例
 		$response = new Response();
