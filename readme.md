@@ -2,16 +2,13 @@
 
 
 
-[![](https://raw.githubusercontent.com/xuey490/novaphp/refs/heads/main/mmexport1761113888445.png)](https://github.com/xuey490/project)
-
-
 ## 官方网站： https://www.phpframe.org/
 欢迎访问。
 
 ## 简介:
-NovaFrame is a lightweight Powerful Fast, Simple, secure PHP framework。 This is the best practical project using NovaFrame framework.
+FssPhp is a lightweight Powerful Fast, Simple, secure PHP framework。 This is the best practical project using FssPhp framework.
 
-NovaFrame 是一款轻量级强大，快速，简单，安全的php框架，这是NovaFrame框架的最佳实践使用项目。
+FssPhp 是一款轻量级强大，快速，简单，安全的php框架，这是FssPhp框架的最佳实践使用项目。
 
 ## 使用文档
 强烈推荐Zread.Ai，感谢他们提供项目文档分析生成。https://zread.ai/xuey490/project
@@ -43,7 +40,7 @@ NovaFrame 是一款轻量级强大，快速，简单，安全的php框架，这�
 
 本框架的程序代码，非常规范，冗余，重复代码非常少，也适合新手自学扩展。
 
-[![](https://raw.githubusercontent.com/xuey490/project/refs/heads/main/quality.png)](https://gitee.com/fsscms/NovaFrame)
+[![](https://raw.githubusercontent.com/xuey490/project/refs/heads/main/quality.png)](https://gitee.com/fsscms/FssPhp)
 
 ## 下载安装:
 ### 1.传统启动模式

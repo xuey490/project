@@ -12,9 +12,9 @@ return [
 	
     'refresh_ttl' => 86400, // 刷新令牌有效期：24 小时
 	
-	'audience'	=> 'NovaFrame.Inc',
+	'audience'	=> 'FssPhp.Inc',
 	
-    'issuer' => 'NovaFrame',
+    'issuer' => 'FssPhp',
 	
     'blacklist_enabled' => true,
 	

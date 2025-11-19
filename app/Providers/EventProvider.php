@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * This file is part of NovaFrame Framework.
+ * This file is part of FssPhp Framework.
  *
  * @link     https://github.com/xuey490/novaphp
  * @license  https://github.com/xuey490/novaphp/blob/main/LICENSE
