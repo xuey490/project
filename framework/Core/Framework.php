@@ -120,7 +120,6 @@ final class Framework
                 $response = $this->handleNotFound();
                 $this->logRequestAndResponse($this->request, $response, $start);
                 $response->send();
-
                 return;
             }
 
@@ -129,7 +128,6 @@ final class Framework
                 $response = $this->handleEasterEgg($route);
                 $this->logRequestAndResponse($this->request, $response, $start);
                 $response->send();
-
                 return;
             }
 

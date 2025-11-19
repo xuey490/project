@@ -19,24 +19,19 @@ use Symfony\Component\HttpFoundation\RequestStack;
 use Framework\Utils\Captcha as CCaptcha;
 use Framework\Utils\CookieManager;
 use Framework\Attributes\Auth;
-
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
-
+use Framework\Attributes\Route;
 
 
 use Framework\Utils\ThinkORMFactory;
 
 ##[Auth(roles: ['admin'])]
-<<<<<<< Updated upstream
-##[Route(prefix: '/secure', middleware: [AuthMiddleware::class])]
-=======
 ##[Prefix('/secures', middleware: [AuthMiddleware::class])]
 ##[Route(prefix: '/vvv2/admins', group: 'aaaa', middleware: [\App\Middlewares\AuthMiddleware::class])]
 /*
  * @auth true
  * @role super
 */
->>>>>>> Stashed changes
 class Home
 {
     public function __construct(
@@ -72,7 +67,9 @@ class Home
 	
 	
     ##[Auth] // 仅登录即可访问
-	##[Route(path: '/html', methods: ['GET'], middleware: [AuthMiddleware::class])]
+	##[Route(path: '/aa',  auth: true, roles: ['admin'], methods: ['GET'], name: 'home.html')] //注解路由的auth roles
+	##[Route(path: '/htmls/', auth: true, methods: ['GET'], middleware: [\App\Middlewares\AuthMiddleware::class], name: 'Homeindex')]
+	##[GetMapping('/list')]
 	public function html():Response
 	{
 		
