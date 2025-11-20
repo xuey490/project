@@ -15,9 +15,10 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Request;
 use Twig\Environment;
 use App\Models\Admin;
-#use Framework\Utils\ThinkORMFactory;
- // 假设你有文章服务
-use Framework\Factory\ThinkORMFactory;
+use Framework\Utils\ORMFactory;
+
+
+
 
 class Blog
 {
@@ -25,9 +26,9 @@ class Blog
 
     private BlogService $blogService;
 	
-    private ThinkORMFactory $db;
+    private ORMFactory $db;
 
-    public function __construct(Environment $twig, BlogService $blogService , ThinkORMFactory $db)
+    public function __construct(Environment $twig, BlogService $blogService , ORMFactory $db)
     {
         $this->twig        = $twig;
         $this->blogService = $blogService;

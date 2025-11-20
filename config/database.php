@@ -1,5 +1,6 @@
 <?php
 return [
+	'engine'	=>'eloquent', // 'think' or 'eloquent'
     // 默认使用的数据库连接配置
     'default'         => 'mysql',
     // 自定义时间查询规则
@@ -13,10 +14,13 @@ return [
     // 数据库连接配置信息
     'connections'     => [
         'mysql' => [
+			//Illuminate\Database driver必须
+			'driver' => 'mysql',
             // 数据库类型
             'type'               =>  'mysql',
-            // 服务器地址
+            // 服务器地址 // ThinkORM 可定义多个别名
             'hostname'           =>  '127.0.0.1',
+			'host'     => '127.0.0.1',  
             // 数据库名
             'database'           =>  'oa',
             // 用户名
