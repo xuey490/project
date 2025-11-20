@@ -6,7 +6,7 @@
 // 如果不指定路径，默认处理当前目录
 
 $header = <<<'EOF'
-This file is part of NavaFrame Framework.
+This file is part of FssPHP Framework.
 
 @link     https://github.com/xuey490/project
 @license  https://github.com/xuey490/project/blob/main/LICENSE

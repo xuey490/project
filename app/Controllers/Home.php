@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Models\Admin;
+use App\Models\Config;
 use App\Middlewares\AuthMiddleware;
 use Framework\Middleware\MiddlewareXssFilter;
 use Framework\Security\CsrfTokenManager;
@@ -22,11 +23,13 @@ use Framework\Attributes\Auth;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
 use Framework\Attributes\Route;
 
-	use Framework\Factory\ThinkORMFactory;
-	use think\DbManager;
-	
-	use think\facade\Db;
-//use Framework\Utils\ThinkORMFactory;
+
+
+use Framework\Utils\ORMFactory;
+use Illuminate\Database\Capsule\Manager as Capsule;
+#use Illuminate\Support\Facades\DB;
+
+#use think\facade\Db;
 
 ##[Auth(roles: ['admin'])]
 ##[Prefix('/secures', middleware: [AuthMiddleware::class])]
@@ -40,10 +43,13 @@ class Home
     public function __construct(
         private CsrfTokenManager $csrf,private RequestStack $requestStack,
 		private CookieManager $cookie, 
-		private ThinkORMFactory $db,
-		private DbManager $db1
+		private ORMFactory $db,
+		#private DB $db1,
+		#private DbManager $db1
 		//SessionServiceProvider 已经注册的服务名是 'session'， 容器会自动注入 Session 实例
-    ) {}
+    ) {
+		
+	}
 	
 	public function setcookies(Request $request):Response
 	{
@@ -76,10 +82,15 @@ class Home
 	##[GetMapping('/list')]
 	public function html():Response
 	{
+		//thinkORM 和 DB 的测试
+        #$list = Db::name('config')->select();//error：Undefined db config:mysql
+		#dump($list);
+        #dump(($this->db)('config')->where('id' , 1)->select()->toArray());
 		
-        #$list = Db::table('oa_admin_group')->select();//error：Undefined db config:mysql
-
-        dump($this->db1->table('oa_admin_group')->where('id' , 1)->select()->toArray());
+		//ThinkORM Model的写法
+        $users = Admin::select()->toArray();
+        dump($users);	
+		
 		
 		/*
 		// 创建响应实例
@@ -112,12 +123,56 @@ class Home
 
     public function index(Request $request)
     {
+        // ✅ 此时 app() 已可用！
 
+        // dump(app()->getServiceIds()); // 查看所有服务 ID
 
-        $users = Admin::select()->toArray();
-        dump($users); // 因为你框架会处理 array => json
+		//Eloquent 模型的写法
+        #$config = Config::where('id', 1)->first(); //得到 App\Models\Config 可以使用->toArray()转化
+		
+		//use Illuminate\Database\Capsule\Manager as Capsule; //必须要有这个才能下面的操作
+		$config = Capsule::table('config')->where('id', 1)->get();  //得到：Illuminate\Support\Collection 可以使用->toArray()转化
+		dump($config);
+		
+		// Eloquent 模型 $this->db->make('config') 小写表名
+		#$config =  $this->db->make('flow')->count();
+		#$config->find(1);
+		#dump($config);		
+			
+		//$this->db('表名') 的写法相当于 DB::table
+		//Eloquent 和thinkorm 通用
+		/*
+		$test = ($this->db)('config')
+		->orderBy('id', 'desc')
+		->limit(10)
+		->get()->toArray();
+		$count = ($this->db)('config')->count();  //5
+		$users = ($this->db)('users')->paginate(15);
+        #dump($count);
+		*/
 		
 		
+		// 用 __invoke()  == > ($this->db)('App\Models\Config') 完整模型名不带::class
+		//$config1 = ($this->db)('App\Models\Config')->where('id', 1)->first()->toArray();
+		//dump($config1);
+		
+		// Laravel 风格查询
+		//use Illuminate\Support\Facades\DB;
+		/*
+		$sql = DB::table('config')->where('id', 1)->toSql();
+		DB::beginTransaction();
+		try {
+			$config = DB::table('config')
+				->orderBy('id', 'desc')
+				->limit(10)
+				->get();
+			DB::commit();
+		} catch (\Exception $e) {
+			DB::rollBack();
+			throw $e;
+		}		
+		*/
+
 		//$session = $request->getSession();
 		//$session->set('test', 'workerman');	
 		
@@ -125,9 +180,7 @@ class Home
 
         # $userService = getService('App\Service\UserService'); // ✅ 只要容器已 set，就可以
         
-        // ✅ 此时 app() 已可用！
 
-        // dump(app()->getServiceIds()); // 查看所有服务 ID
 		
 		// echo storage_path('logs/sql.log');
 

@@ -236,21 +236,23 @@ if (! function_exists('caches_clear')) {
 /**
  * 环境变量读取.
  */
-function env(string $key, mixed $default = null): mixed
-{
-    $value = $_ENV[$key] ?? $_SERVER[$key] ?? getenv($key);
+if (! function_exists('env')) {
+	function env(string $key, mixed $default = null): mixed
+	{
+		$value = $_ENV[$key] ?? $_SERVER[$key] ?? getenv($key);
 
-    if ($value === false) {
-        return $default;
-    }
+		if ($value === false) {
+			return $default;
+		}
 
-    return match (strtolower((string) $value)) {
-        'true', '(true)'   => true,
-        'false', '(false)' => false,
-        'empty', '(empty)' => '',
-        'null', '(null)'   => null,
-        default             => preg_match('/\A([\'"])(.*)\1\z/', (string) $value, $m) ? $m[2] : $value,
-    };
+		return match (strtolower((string) $value)) {
+			'true', '(true)'   => true,
+			'false', '(false)' => false,
+			'empty', '(empty)' => '',
+			'null', '(null)'   => null,
+			default             => preg_match('/\A([\'"])(.*)\1\z/', (string) $value, $m) ? $m[2] : $value,
+		};
+	}
 }
 
 if (! function_exists('config')) {

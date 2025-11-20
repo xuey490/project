@@ -9,7 +9,7 @@ use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Reference;
 use Framework\Container\ContainerProviders;
 
-	use Framework\Factory\ThinkORMFactory;
+
 
 return function (ContainerConfigurator $configurator) {
     $services = $configurator->services();
@@ -29,6 +29,7 @@ return function (ContainerConfigurator $configurator) {
     $services->set(\Framework\Event\Dispatcher::class)
         ->arg('$container', service('service_container'))->public(); // ✅ 显式注入容器自身 注意arg，跟args差异
 
+
 	$databseConfig  = require BASE_PATH . '/config/database.php';
 
     // === 注册 ThinkORM 模型工厂服务 ===
@@ -39,10 +40,18 @@ return function (ContainerConfigurator $configurator) {
         ->public(); // 可选：设为 public 以便直接从容器获取
 
     // 可以额外 alias
-    $services->alias('orm', \Framework\Utils\ThinkORMFactory::class);
+    $services->alias('thinkorm', \Framework\Utils\ThinkORMFactory::class);
 	*/
 	
+	/** 双orm同时注册
+	$databaseConfig  = require BASE_PATH . '/config/database.php';
+	$ormType = 'eloquent'; // eloquent 或 'think'，可从配置读取
 
+	$services
+		->set(\Framework\Utils\ORMFactory::class)
+		->args([$databaseConfig, $ormType])
+		->public();
+	**/
 	
 
     // ✅ 1. 自动加载应用 Provider
@@ -59,8 +68,14 @@ return function (ContainerConfigurator $configurator) {
     // ✅ 3. 启动所有 Provider（boot）
     $providerManager->bootProviders($configurator);
 	
-    // 工厂服务
-	$services->set(ThinkORMFactory::class)
+	
+	
+	
+	
+	
+	/*
+    // 工厂服务 0.4.1 版本使用
+	$services->set(Framework\Factory\ThinkORMFactory::class)
 		->args([
 			$databseConfig,
 			service('log'),        // SQL 日志
@@ -71,12 +86,12 @@ return function (ContainerConfigurator $configurator) {
 
 	// DbManager 使用工厂创建
 	$services->set(\think\DbManager::class)
-		->factory([ service(ThinkORMFactory::class), 'create' ])
+		->factory([ service(Framework\Factory\ThinkORMFactory::class), 'create' ])
 		->public();
 
 	// 你框架里的统一 service id
 	$services->alias('thinkorm', \think\DbManager::class);
-	
+	*/
 	
 	
 
