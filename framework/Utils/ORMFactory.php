@@ -27,7 +27,7 @@ final class ORMFactory implements ModelFactoryInterface
                 break;
         }
     }
-
+	
     public function make(string $modelClass): mixed
     {
         return $this->impl->make($modelClass);

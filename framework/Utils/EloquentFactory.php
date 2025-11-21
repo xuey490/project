@@ -9,7 +9,7 @@ use Psr\Log\LoggerInterface;
 use Throwable;
 use Framework\Utils\ModelFactoryInterface;
 use Illuminate\Container\Container;
-use Illuminate\Events\Dispatcher;
+#use Illuminate\Events\Dispatcher;
 use Illuminate\Support\Facades\Facade;
 
 
@@ -23,8 +23,6 @@ class EloquentFactory implements ModelFactoryInterface
     {
         $this->config = $config;
         $this->logger = $logger;
-
-        
 		
         $container = new Container;
 
@@ -77,7 +75,6 @@ class EloquentFactory implements ModelFactoryInterface
 			'strict'    => $cfg['strict'] ?? true,
 		];
 	}
-
 
     public function make(string $modelClass):mixed
     {

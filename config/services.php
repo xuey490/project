@@ -30,7 +30,7 @@ return function (ContainerConfigurator $configurator) {
         ->arg('$container', service('service_container'))->public(); // ✅ 显式注入容器自身 注意arg，跟args差异
 
 
-	$databseConfig  = require BASE_PATH . '/config/database.php';
+	//$databseConfig  = require BASE_PATH . '/config/database.php';
 
     // === 注册 ThinkORM 模型工厂服务 ===
 	/*
@@ -65,14 +65,10 @@ return function (ContainerConfigurator $configurator) {
 		
 	);
 
+
     // ✅ 3. 启动所有 Provider（boot）
-    $providerManager->bootProviders($configurator);
-	
-	
-	
-	
-	
-	
+	\Framework\Container\Container::setProviderManager($providerManager);
+
 	/*
     // 工厂服务 0.4.1 版本使用
 	$services->set(Framework\Factory\ThinkORMFactory::class)
