@@ -29,7 +29,7 @@ use Framework\Utils\ORMFactory;
 use Illuminate\Database\Capsule\Manager as Capsule;
 #use Illuminate\Support\Facades\DB;
 
-#use think\facade\Db;
+use think\facade\Db;
 
 ##[Auth(roles: ['admin'])]
 ##[Prefix('/secures', middleware: [AuthMiddleware::class])]
@@ -83,8 +83,8 @@ class Home
 	public function html():Response
 	{
 		//thinkORM 和 DB 的测试
-        #$list = Db::name('config')->select();//error：Undefined db config:mysql
-		#dump($list);
+        $list = Db::name('config')->select();//error：Undefined db config:mysql
+		dump($list);
         #dump(($this->db)('config')->where('id' , 1)->select()->toArray());
 		
 		//ThinkORM Model的写法
@@ -128,10 +128,10 @@ class Home
         // dump(app()->getServiceIds()); // 查看所有服务 ID
 
 		//Eloquent 模型的写法
-        #$config = Config::where('id', 1)->first(); //得到 App\Models\Config 可以使用->toArray()转化
+        $config = Config::where('id', 1)->first()->toArray(); //得到 App\Models\Config 可以使用->toArray()转化
 		
 		//use Illuminate\Database\Capsule\Manager as Capsule; //必须要有这个才能下面的操作
-		$config = Capsule::table('config')->where('id', 1)->get();  //得到：Illuminate\Support\Collection 可以使用->toArray()转化
+		//$config = Capsule::table('config')->where('id', 1)->get();  //得到：Illuminate\Support\Collection 可以使用->toArray()转化
 		dump($config);
 		
 		// Eloquent 模型 $this->db->make('config') 小写表名

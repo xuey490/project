@@ -15,9 +15,9 @@ declare(strict_types=1);
  */
 namespace Framework\Utils;
  
-use think\db\BaseQuery;
+#use think\db\BaseQuery;
+#use think\DbManager; // DbManager
 use think\Container;
-use think\DbManager; // DbManager
 use think\Model;
 use think\facade\Db;
 use Framework\Utils\ModelFactoryInterface;
@@ -76,7 +76,7 @@ class ThinkORMFactory implements ModelFactoryInterface
 		$container->bind('model', fn() => $db);
 		*/
 
-		//什么注释掉的写法也可以
+
 		// ✅ 核心：设置静态配置（ThinkORM 4.0 必须！）
 	    $db = \think\facade\Db::setConfig($config);
 

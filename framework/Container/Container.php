@@ -22,12 +22,15 @@ use Symfony\Component\DependencyInjection\ContainerInterface as SymfonyContainer
 use Symfony\Component\DependencyInjection\Dumper\PhpDumper;
 use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
 use Symfony\Component\Dotenv\Dotenv;
+use Framework\Container\ContainerProviders;
 
 class Container implements SymfonyContainerInterface
 {
     private const CACHE_FILE = BASE_PATH . '/storage/cache/container.php';
 
     private static ?SymfonyContainerInterface $container = null;
+	
+	private static ?ContainerProviders $providers = null;
 
     /**
      * 初始化容器.
@@ -62,6 +65,9 @@ class Container implements SymfonyContainerInterface
         if (! file_exists($servicesFile)) {
             throw new \RuntimeException("服务配置文件不存在: {$servicesFile}");
         }
+		
+		// 创建 Provider 管理器
+		$providersManager = new ContainerProviders();
 
         $containerBuilder = new ContainerBuilder();
         $containerBuilder->setParameter('kernel.project_dir', $projectRoot);
@@ -75,7 +81,12 @@ class Container implements SymfonyContainerInterface
         $loader = new PhpFileLoader($containerBuilder, new FileLocator($configDir));
         $loader->load('services.php');
 
-        $containerBuilder->compile();
+
+		$containerBuilder->compile();
+
+		// ***在容器编译后真正执行所有 Provider 的 boot()***
+		$providersManager->bootProviders($containerBuilder);
+			
 
         if ($isProd) {
             @mkdir(dirname(self::CACHE_FILE), 0777, true);
@@ -92,7 +103,92 @@ class Container implements SymfonyContainerInterface
         } else {
             self::$container = $containerBuilder;
         }
+		
+		// ✅ 编译完成后再执行 bootProviders
+		if (isset(self::$providers)) {
+			self::$providers->bootProviders(self::$container);
+		}
     }
+
+	public static function setProviderManager(ContainerProviders $p): void
+	{
+		self::$providers = $p;
+	}
+	
+public static function init2(array $parameters = []): void
+{
+    if (self::$container !== null) {
+        return;
+    }
+
+    // 1. 加载 .env
+    $dotenv  = new Dotenv();
+    $envFile = BASE_PATH . '/.env';
+    if (file_exists($envFile)) {
+        (new Dotenv())->load($envFile);
+    }
+
+    $env    = env('APP_ENV') ?: 'local';
+    $isProd = $env === 'prod';
+
+    $projectRoot = BASE_PATH;
+    $configDir   = $projectRoot . '/config';
+
+    if (! is_dir($configDir)) {
+        throw new \RuntimeException("配置目录不存在: {$configDir}");
+    }
+
+    $servicesFile = $configDir . '/services.php';
+    if (! file_exists($servicesFile)) {
+        throw new \RuntimeException("服务配置文件不存在: {$servicesFile}");
+    }
+
+    // 2. 创建 Provider 管理器
+    $providersManager = new ContainerProviders();
+
+    // 3. 创建 builder（配置阶段）
+    $containerBuilder = new ContainerBuilder();
+    $containerBuilder->setParameter('kernel.project_dir', $projectRoot);
+    $containerBuilder->setParameter('kernel.debug', (bool) getenv('APP_DEBUG'));
+    $containerBuilder->setParameter('kernel.environment', $env);
+
+    if (! empty($parameters)) {
+        $containerBuilder->setParameter('config', $parameters);
+    }
+
+    // 4. 载入 services.php（此时 registerProviders 会被调用）
+    $loader = new PhpFileLoader($containerBuilder, new FileLocator($configDir));
+    $loader->load('services.php');
+
+    // 5. ***在容器编译前执行 CONFIGURATOR boot（延迟存储 pendingBoot）***
+    // 注意：bootProviders 接收到 Configurator 时会自动进入 pending
+    $providersManager->bootProviders($loader->getConfigurator());
+
+    // 6. 编译容器（进入最终形态）
+    $containerBuilder->compile();
+
+    // 7. ***在容器编译后真正执行所有 Provider 的 boot()***
+    $providersManager->bootProviders($containerBuilder);
+
+    // 8. 生成缓存（生产环境）
+    if ($isProd) {
+        @mkdir(dirname(self::CACHE_FILE), 0777, true);
+        $dumper       = new PhpDumper($containerBuilder);
+        $cacheContent = $dumper->dump(['class' => 'ProjectServiceContainer']);
+        file_put_contents(self::CACHE_FILE, $cacheContent);
+
+        $loadedContainer = require self::CACHE_FILE;
+
+        self::$container = $loadedContainer instanceof SymfonyContainerInterface
+            ? $loadedContainer
+            : $containerBuilder;
+
+    } else {
+        // 开发环境直接使用 builder
+        self::$container = $containerBuilder;
+    }
+}
+
 
     /**
      * 获取 Container 实例.

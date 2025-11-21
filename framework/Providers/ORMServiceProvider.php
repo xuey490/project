@@ -6,15 +6,6 @@ namespace Framework\Providers;
 
 use Framework\Container\ServiceProviderInterface;
 use Framework\Utils\ORMFactory;
-
-
-use Illuminate\Container\Container as IlluminateContainer;
-use Illuminate\Database\Capsule\Manager as Capsule;
-use Illuminate\Events\Dispatcher;
-use Illuminate\Support\Facades\Facade;
-use Illuminate\Support\Facades\DB;
-
-
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Reference;
@@ -29,6 +20,9 @@ final class ORMServiceProvider implements ServiceProviderInterface
 
         $dbConfig = require BASE_PATH . '/config/database.php';
         $ormType  = $dbConfig['engine'] ?? 'think';
+
+
+
 
         // 注册 ORMFactory
         $services->set(ORMFactory::class)
@@ -47,11 +41,33 @@ final class ORMServiceProvider implements ServiceProviderInterface
                 service(LoggerInterface::class)->nullOnInvalid()
             ])
             ->public();
+			
     }
 
-    public function boot(ContainerInterface $container): void
-    {
 
-    }
+	/*
+	模型基类的别名，暂时不可用
+	*/
+	public function boot(ContainerInterface $container): void
+	{
+		 $engine = config('database.engine', 'eloquent');
+		 
+		//caches('test1', ['name' => 'mike'], 3600);
+		 #dump($engine);
+        // === 再进行 class_alias 切换 ORM Model ===
+		if ($engine === 'eloquent') {
+			class_alias(
+				\Illuminate\Database\Eloquent\Model::class,
+				\Framework\Utils\Model::class
+			);
+		}
 
+		if ($engine === 'thinkorm') {
+			class_alias(
+				\think\Model::class,
+				\Framework\Utils\Model::class
+			);
+		}	 
+
+	}
 }
