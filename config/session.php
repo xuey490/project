@@ -3,7 +3,7 @@
 
 return [
 	// 可选值：file / redis / redis_grouped
-    'storage_type' => 'file' , //env('SESSION_STORAGE') ?? 'redis', // 'file' 或 'redis' 'redis_grouped'
+    'storage_type' => 'redis_grouped' , //env('SESSION_STORAGE') ?? 'redis', // 'file' 或 'redis' 'redis_grouped'
 
     'options' => [
         'cookie_secure'   => true,
