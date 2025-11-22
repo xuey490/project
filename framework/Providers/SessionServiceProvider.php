@@ -38,7 +38,7 @@ final class SessionServiceProvider implements ServiceProviderInterface
     public function register(ContainerConfigurator $configurator): void
     {
         $services = $configurator->services();
-		
+
 		$load =  new \Framework\Config\ConfigService(config_path());
 
         // === 1. 加载配置 ===
@@ -106,17 +106,17 @@ final class SessionServiceProvider implements ServiceProviderInterface
             case 'file':
             default:
                 // ✅ 文件存储（自定义 FileSessionHandler）
-                $services->set('session.handler.custom_file', FileSessionHandler::class)
+                $services->set('session.handler', FileSessionHandler::class)
                     ->call('setSavePath', [$fileSavePath])
                     ->call('setPrefix', [$sessionOptions['name'] ?? 'sess'])
                     ->public();
 
-                $services->set('session.handler', StrictSessionHandler::class)
-                    ->args([service('session.handler.custom_file')])
+                $services->set('session.handler.strict', StrictSessionHandler::class)
+                    ->args([service('session.handler')])
                     ->public();
 
                 $services->set('session.storage', NativeSessionStorage::class)
-                    ->args([$sessionOptions, service('session.handler')])
+                    ->args([$sessionOptions, service('session.handler.strict')])
                     ->public();
                 break;
         }
