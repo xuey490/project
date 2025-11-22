@@ -9,7 +9,6 @@ use Psr\Log\LoggerInterface;
 use Throwable;
 use Framework\Utils\ModelFactoryInterface;
 use Illuminate\Container\Container;
-#use Illuminate\Events\Dispatcher;
 use Illuminate\Support\Facades\Facade;
 
 
@@ -35,7 +34,7 @@ class EloquentFactory implements ModelFactoryInterface
 			$connection = $this->config['connections'][$this->config['default']] ?? [];
 
 			if (!isset($connection['driver'])) {
-				// 说明是 ThinkORM 格式 → 自动转换
+				// ThinkORM 格式 → 自动转换
 				$connection = $this->convertThinkToEloquent($connection);
 			}
             $this->capsule->addConnection($connection);

@@ -3,7 +3,7 @@
 
 return [
 	// 可选值：file / redis / redis_grouped
-    'storage_type' => 'redis_grouped' , //env('SESSION_STORAGE') ?? 'redis', // 'file' 或 'redis' 'redis_grouped'
+    'storage_type' => 'file' , //env('SESSION_STORAGE') ?? 'redis', // 'file' 或 'redis' 'redis_grouped'
 
     'options' => [
         'cookie_secure'   => true,
@@ -17,7 +17,7 @@ return [
     ],
 	
     // 新增：仅用于 file 存储的路径
-    'file_save_path' => __DIR__ . '/../storage/sessions',
+    'file_save_path' => BASE_PATH . '/storage/sessions',
 	
 
     // redis_grouped 模式扩展参数
