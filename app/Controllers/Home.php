@@ -134,10 +134,10 @@ class Home
 		//$config = Capsule::table('config')->where('id', 1)->get()->toArray();  //得到：Illuminate\Support\Collection 可以使用->toArray()转化
 		//dump($config);
 		
-		// Eloquent 模型 $this->db->make('config') 小写表名
+		//Eloquent 模型 $this->db->make('config') 小写表名
 		//$config =  $this->db->make('flow')->where('id', 1)->first();
 		$config =$this->db->make('flow')->find(1);
-		dump(app('response')->headers->set('Authorization', 'Bearer 123'));
+		//dump(app('response')->headers->set('Authorization', 'Bearer 123'));
 		
 		//$allHeaders = app('response')->headers->all();
 
