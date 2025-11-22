@@ -128,16 +128,22 @@ class Home
         // dump(app()->getServiceIds()); // 查看所有服务 ID
 
 		//Eloquent 模型的写法
-        $config = Config::where('id', 1)->first()->toArray(); //得到 App\Models\Config 可以使用->toArray()转化
+        //$config = Config::where('id', 1)->first()->toArray(); //得到 App\Models\Config 可以使用->toArray()转化
 		
 		//use Illuminate\Database\Capsule\Manager as Capsule; //必须要有这个才能下面的操作
-		//$config = Capsule::table('config')->where('id', 1)->get();  //得到：Illuminate\Support\Collection 可以使用->toArray()转化
-		dump($config);
+		//$config = Capsule::table('config')->where('id', 1)->get()->toArray();  //得到：Illuminate\Support\Collection 可以使用->toArray()转化
+		//dump($config);
 		
 		// Eloquent 模型 $this->db->make('config') 小写表名
-		#$config =  $this->db->make('flow')->count();
-		#$config->find(1);
-		#dump($config);		
+		//$config =  $this->db->make('flow')->where('id', 1)->first();
+		$config =$this->db->make('flow')->find(1);
+		dump(app('response')->headers->set('Authorization', 'Bearer 123'));
+		
+		//$allHeaders = app('response')->headers->all();
+
+		//dump($allHeaders);	
+
+		dump($config);
 			
 		//$this->db('表名') 的写法相当于 DB::table
 		//Eloquent 和thinkorm 通用
@@ -238,11 +244,11 @@ class Home
 
 
         // session测试
-        // $session = app('session');
+        $session = app('session');
         // 设置一个 session 属性
-        // $session->set('user_id', 'tom_11');
+        $session->set('user_id', 'tom_11');
         // 获取一个 session 属性
-        // $userId = $session->get('user_id');
+        $userId = $session->get('user_id');
         
 		
 		#dump(app('session')->all());
@@ -277,7 +283,7 @@ class Home
 		if(!$result){
 		#echo $validate->getError();
 		}
-        return new Response("<h1>Welcome to My Framework!</h1>");
+        return new Response("<h1>Welcome to My Framework!__{$userId}</h1>");
     }
 
     // http://localhost:8000/home/xss?name=mike<script>alert('ok');</script>

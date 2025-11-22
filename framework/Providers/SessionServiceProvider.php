@@ -38,10 +38,12 @@ final class SessionServiceProvider implements ServiceProviderInterface
     public function register(ContainerConfigurator $configurator): void
     {
         $services = $configurator->services();
+		
+		$load =  new \Framework\Config\ConfigService(config_path());
 
         // === 1. 加载配置 ===
-        $redisConfig   = require \dirname(__DIR__, 2) . '/config/redis.php';
-        $sessionConfig = require \dirname(__DIR__, 2) . '/config/session.php';
+        $redisConfig   = $load->get('redis');  //require \dirname(__DIR__, 2) . '/config/redis.php';
+        $sessionConfig = $load->get('session'); //require \dirname(__DIR__, 2) . '/config/session.php';
 
         $storageType     = $sessionConfig['storage_type']          ?? 'file';
         $sessionOptions  = $sessionConfig['options']               ?? [];

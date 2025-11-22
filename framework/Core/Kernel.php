@@ -47,63 +47,34 @@ class Kernel
             return; // 防止重复启动
         }
 
-        // 1. 设置全局容器入口（供助手函数使用）
-        App::setContainer($this->container);
-
-        $sessionConfig = require $this->getProjectDir() . '/config/session.php';
-        if (($sessionConfig['storage_type'] ?? 'redis') === 'file') {
-            $savePath = $sessionConfig['file_save_path'];
-            if (! is_dir($savePath)) {
-                mkdir($savePath, 0755, true);
-            }
-            ini_set('session.save_path', $savePath);
-        }
-
+		$this->setupContainerAlias();
+		
+		$this->setupTimezone();
         // $debug = app('config')->get('app.debug', false);
         // dump(app()->getServiceIds()); // 查看所有服务 ID
 
-        // 2. 初始化时区（从配置获取）
-        $timezone = app('config')->get('app.time_zone', 'UTC');
-        date_default_timezone_set($timezone);
-
-
-
-        // 3. 注册事件监听器
         $this->registerEventListeners();
 
-        // 4. 设置异常处理机制
         $this->setupExceptionHandling();
 
         $this->booted = true;
     }
 
-    /**
-     * 获取容器（修正返回类型）.
-     */
-    public function getContainer(): ContainerInterface
+	// 1. 设置全局容器入口（供助手函数使用）
+    private function setupContainerAlias(): void
     {
-        return $this->container;
+        App::setContainer($this->container);
+    }
+
+	// 2. 初始化时区（从配置获取）
+    private function setupTimezone(): void
+    {
+        $timezone = app('config')->get('app.time_zone', 'UTC');
+        date_default_timezone_set($timezone);
     }
 
     /**
-     * 检查内核是否已启动.
-     */
-    public function isBooted(): bool
-    {
-        return $this->booted;
-    }
-
-    /**
-     * 获取项目根目录.
-     */
-    public function getProjectDir(): string
-    {
-        return dirname(__DIR__, 2); // 从 framework/Core 到项目根
-    }
-
-
-    /**
-     * 注册事件监听器（基于扫描的方式）.
+     * 3.注册事件监听器（基于扫描的方式）.
      */
     private function registerEventListeners(): void
     {
@@ -120,7 +91,7 @@ class Kernel
     }
 
     /**
-     * 设置异常处理机制（统一接管错误与异常）.
+     * 4.设置异常处理机制（统一接管错误与异常）.
      */
     private function setupExceptionHandling(): void
     {
@@ -159,5 +130,29 @@ class Kernel
 				exit(1);
             }
         });
+    }
+	
+    /**
+     * 获取容器（修正返回类型）.
+     */
+    public function getContainer(): ContainerInterface
+    {
+        return $this->container;
+    }
+
+    /**
+     * 检查内核是否已启动.
+     */
+    public function isBooted(): bool
+    {
+        return $this->booted;
+    }
+
+    /**
+     * 获取项目根目录.
+     */
+    public function getProjectDir(): string
+    {
+        return dirname(__DIR__, 2); // 从 framework/Core 到项目根
     }
 }
