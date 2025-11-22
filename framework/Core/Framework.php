@@ -100,131 +100,75 @@ final class Framework
         return self::$instance;
     }
 
-    /**
-     * 框架入口：完整调度流程.
-     */
-    public function run(): void
-    {
-        $start = microtime(true);
+	/**
+	 * 核心统一调度入口（FPM/Workerman/Swoole 都走这里）
+	 */
+	private function dispatch(Request $request): Response
+	{
+		$start = microtime(true);
+		$this->request = $request;
 
-        $this->request = Request::createFromGlobals();
+		$response = new Response('', Response::HTTP_INTERNAL_SERVER_ERROR);
 
-        // 保证 $response 在任何异常路径都有值，避免未定义变量问题
-        $response = new Response('', Response::HTTP_INTERNAL_SERVER_ERROR);
+		try {
+			$route = $this->router->match($this->request);
 
-        try {
-            // 1. 路由匹配
-            $route = $this->router->match($this->request);
+			if ($route === null || $route === false) {
+				$response = $this->handleNotFound();
+				$this->logRequestAndResponse($this->request, $response, $start);
+				return $response;
+			}
 
-            if ($route === null || $route === false) {
-                $response = $this->handleNotFound();
-                $this->logRequestAndResponse($this->request, $response, $start);
-                $response->send();
-                return;
-            }
+			if ($this->isEasterEggRoute($route)) {
+				$response = $this->handleEasterEgg($route);
+				$this->logRequestAndResponse($this->request, $response, $start);
+				return $response;
+			}
 
-            // 2. 彩蛋处理
-            if ($this->isEasterEggRoute($route)) {
-                $response = $this->handleEasterEgg($route);
-                $this->logRequestAndResponse($this->request, $response, $start);
-                $response->send();
-                return;
-            }
+			$this->request->attributes->set('_route', $route);
 
-            // 3. 绑定路由到请求
-            $this->request->attributes->set('_route', $route);
+			$response = $this->middlewareDispatcher->dispatch(
+				$this->request,
+				fn (Request $req): Response => $this->callController($route)
+			);
 
-            // 4. 执行中间件 + 控制器
-            // 确保匿名函数具有类型签名，且返回 Response（或可被 normalize）
-            $response = $this->middlewareDispatcher->dispatch(
-                $this->request,
-                fn (Request $req): Response => $this->callController($route)
-            );
-        } catch (\Throwable $e) {
-            // 记录异常并返回错误响应
-            // $this->logger?->error('Unhandled exception in run', ['exception' => $e]);
-            $this->logger?->info('Logging exception via logger->logException if available');
+			if (! $response instanceof Response) {
+				$response = $this->normalizeResponse($response);
+			}
 
-            // 如果容器中的 logger 实现了 logException 方法 完整记录（建议可选）
-            try {
-                // @phpstan-ignore-next-line call may not exist on LoggerInterface
-                $this->logger?->logException($e, $this->request);
-            } catch (\Throwable $_) {
-                // 忽略二次异常记录
-            }
+			$this->logRequestAndResponse($this->request, $response, $start);
+			return $response;
 
-            $response = $this->handleException($e);
-        }
+		} catch (\Throwable $e) {
 
-        // 统一日志记录
-        $this->logRequestAndResponse($this->request, $response, $start);
-        $response->send();
-    }
+			try { $this->logger?->logException($e, $this->request); } catch (\Throwable $_) {}
+
+			return $this->handleException($e);
+		} finally {
+			// Workerman 下必须释放
+			$this->request = null;
+		}
+	}
+
+	/**
+	 * FPM入口：完整调度流程.
+	 */
+	public function run(): void
+	{
+		$request = Request::createFromGlobals();
+		$response = $this->dispatch($request);
+		$response->send();
+	}
 
     /*
-     * 由workerman调度 ##
+     * 由workerman调度
      * 传入的是symfony 的request
      */
-    public function handleRequest(Request $request): Response
-    {
-        $start         = microtime(true);
-        $this->request = $request;
+	public function handleRequest(Request $request): Response
+	{
+		return $this->dispatch($request);
+	}
 
-        // 默认响应，保证在任何异常路径上都有返回
-        $response = new Response('', Response::HTTP_INTERNAL_SERVER_ERROR);
-
-        try {
-            $route = $this->router->match($this->request);
-
-            // 未匹配路由
-            if ($route === null || $route === false) {
-                $response = $this->handleNotFound();
-                $this->logRequestAndResponse($this->request, $response, $start);
-
-                return $response;
-            }
-
-            // 特殊 EasterEgg 路由（如果你有）
-            if ($this->isEasterEggRoute($route)) {
-                return $this->handleEasterEgg($route);
-            }
-
-            // 绑定路由到请求
-            $this->request->attributes->set('_route', $route);
-
-            // 通过中间件分发执行控制器
-            $response = $this->middlewareDispatcher->dispatch(
-                $this->request,
-                function (Request $req) use ($route): Response {
-                    return $this->callController($route);
-                }
-            );
-
-            // 若结果不是 Response，转换一下
-            if (! $response instanceof Response) {
-                $response = $this->normalizeResponse($response);
-            }
-
-            // 记录日志
-            $this->logRequestAndResponse($this->request, $response, $start);
-
-			$responseToReturn = $response;
-			// 断开引用，允许 GC 回收请求相关内存
-			$this->request = null;
-			return $responseToReturn;
-
-        } catch (\Throwable $e) {
-            // 捕获异常，交给 handleException
-            try {
-                // @phpstan-ignore-next-line: logger may not have logException
-                $this->logger?->logException($e, $this->request);
-            } catch (\Throwable $_) {
-                // ignore
-            }
-
-            return $this->handleException($e);
-        }
-    }
 
     /**
      * 获取容器（对外提供接口）.
