@@ -28,6 +28,27 @@ return function (ContainerConfigurator $configurator) {
         ->arg('$container', service('service_container'))->public(); // ✅ 显式注入容器自身 注意arg，跟args差异
 
 
+	$databseConfig  = require BASE_PATH . '/config/database.php';
+	$engine = $databseConfig['engine'];
+	
+	// === 再进行 class_alias 切换 ORM Model ===
+	if ($engine === 'eloquent') {
+		class_alias(
+			\Illuminate\Database\Eloquent\Model::class,
+			\Framework\Utils\BaseModel::class,
+			true
+		);
+	}
+
+	if ($engine === 'think') {
+		class_alias(
+			\think\Model::class,
+			\Framework\Utils\BaseModel::class,
+			true
+		);
+	}	 
+
+
 	//$databseConfig  = require BASE_PATH . '/config/database.php';
 
     // === 注册 ThinkORM 模型工厂服务 ===
@@ -66,6 +87,11 @@ return function (ContainerConfigurator $configurator) {
 
     // ✅ 3. 启动所有 Provider（boot）
 	\Framework\Container\Container::setProviderManager($providerManager);
+	
+	
+	
+
+
 
 	/*
     // 工厂服务 0.4.1 版本使用

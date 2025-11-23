@@ -9,13 +9,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model as EloquentModel;
-
-
-use Framework\Utils\BaseModel;
-
-
-class Config extends EloquentModel
+class Config extends \Framework\Utils\BaseModel
 {
     // 移除这行，让 ORM 自动根据模型类名推断表名并应用前缀
     protected $table = 'config';

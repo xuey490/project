@@ -21,9 +21,6 @@ final class ORMServiceProvider implements ServiceProviderInterface
         $dbConfig = require BASE_PATH . '/config/database.php';
         $ormType  = $dbConfig['engine'] ?? 'think';
 
-
-
-
         // 注册 ORMFactory
         $services->set(ORMFactory::class)
             ->args([
@@ -50,24 +47,7 @@ final class ORMServiceProvider implements ServiceProviderInterface
 	*/
 	public function boot(ContainerInterface $container): void
 	{
-		 $engine = config('database.engine', 'eloquent');
-		 
-		//caches('test1', ['name' => 'mike'], 3600);
-		 #dump($engine);
-        // === 再进行 class_alias 切换 ORM Model ===
-		if ($engine === 'eloquent') {
-			class_alias(
-				\Illuminate\Database\Eloquent\Model::class,
-				\Framework\Utils\Model::class
-			);
-		}
-
-		if ($engine === 'thinkorm') {
-			class_alias(
-				\think\Model::class,
-				\Framework\Utils\Model::class
-			);
-		}	 
+ 
 
 	}
 }

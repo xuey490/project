@@ -152,10 +152,12 @@ class Home
 		->orderBy('id', 'desc')
 		->limit(10)
 		->get()->toArray();
-		$count = ($this->db)('config')->count();  //5
-		$users = ($this->db)('users')->paginate(15);
-        #dump($count);
 		*/
+		
+		//$count = ($this->db)('config')->count();  //5
+		//$users = ($this->db)('config')->paginate(2);
+        //dump($users);
+
 		
 		
 		// 用 __invoke()  == > ($this->db)('App\Models\Config') 完整模型名不带::class
