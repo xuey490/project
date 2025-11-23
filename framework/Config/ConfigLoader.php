@@ -26,12 +26,12 @@ class ConfigLoader
 {
     private ?array $cachedConfig = null;
 	
-	private string $configDir;
+	private string $configFile;
 
     public function __construct(
-        string $configDir
+        string $configFile
     ) {
-        $this->configDir = $configDir;
+        $this->configFile = $configFile;
     }
 
     /**
@@ -45,8 +45,8 @@ class ConfigLoader
 
         $config = [];
 		
-		if(file_exists($this->configDir)&& is_file($this->configDir)){
-			$config = require $this->configDir;
+		if(file_exists($this->configFile)&& is_file($this->configFile)){
+			$config = require $this->configFile;
 		}
 
         return $this->cachedConfig = $config;
