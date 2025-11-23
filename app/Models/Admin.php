@@ -9,9 +9,8 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use think\Model;
 
-class Admin extends Model
+class Admin extends \Framework\Utils\BaseModel
 {
     // 移除这行，让 ORM 自动根据模型类名推断表名并应用前缀
     // protected $table = 'admin';

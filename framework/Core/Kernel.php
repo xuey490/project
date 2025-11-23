@@ -97,6 +97,7 @@ class Kernel
     {
         // 1. 注册异常处理器
         $exceptionHandler = $this->container->get(ExceptionHandler::class);
+		
         set_exception_handler(function (\Throwable $e) use ($exceptionHandler) {
             $exceptionHandler->report($e);
             $exceptionHandler->render($e); // ->send();
