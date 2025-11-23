@@ -16,13 +16,13 @@ declare(strict_types=1);
  
 namespace Framework\Middleware;
 
-use Framework\Utils\RedisFactory; // 引入你的 Redis 助手
+use Framework\Utils\RedisFactory; // 引入Redis 助手
 use Redis;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class CircuitBreakerMiddleware
+class CircuitBreakerMiddleware implements MiddlewareInterface
 {
 	private Redis $redis; // 依赖一个 \Redis 实例
 	

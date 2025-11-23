@@ -2,25 +2,37 @@
 
 declare(strict_types=1);
 
+/**
+ * This file is part of FssPhp Framework.
+ *
+ * @link     https://github.com/xuey490/project
+ * @license  https://github.com/xuey490/project/blob/main/LICENSE
+ *
+ * @Filename: DebugMiddleware.php
+ * @Date: 2025-11-15
+ * @Developer: xuey863toy
+ * @Email: xuey863toy@gmail.com
+ */
+ 
 namespace Framework\Middleware;
 
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-class DebugMiddleware
+class DebugMiddleware implements MiddlewareInterface
 {
     /** @var bool 是否启用调试输出 */
     protected bool $debug;
 
     public function __construct(bool $debug = true)
     {
-        $this->debug = $debug;
+        $this->debug = $debug ?? false ;
     }
 
     /**
      * 中间件入口.
      */
-    public function handle(Request $request, \Closure $next): Response
+    public function handle(Request $request, callable $next): Response
     {
         $requestDebugInfo = '';
         if ($this->debug) {

@@ -18,26 +18,27 @@ namespace Framework\Middleware;
 
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\JsonResponse; // 引入 JsonResponse
+use \Redis; // 引入 Redis 类
 
 class RateLimitMiddleware
 {
     private int $maxRequests = 10;
-
     private int $period = 60; // seconds
+    private array $except = [];
+    
+    /** @var \Redis [MODIFIED] 声明 Redis 属性 */
+    private \Redis $redis;
 
-    // private string $cacheDir;
-
-    private array $except =[];
-
-    public function __construct(private array $config, private string $cacheDir)
+    /**
+     * [MODIFIED] 构造函数现在接收 \Redis 实例，而不是 $cacheDir
+     */
+    public function __construct(private array $config, \Redis $redis)
     {
         $this->maxRequests = $config['maxRequests'] ?? $this->maxRequests;
         $this->period      = $config['period']      ?? $this->period;
         $this->except      = $config['except']      ?? $this->except;
-        $this->cacheDir    = rtrim($cacheDir, '/') . '/';
-        if (! is_dir($this->cacheDir)) {
-            mkdir($this->cacheDir, 0755, true);
-        }
+        $this->redis       = $redis; // 存储 Redis 实例
     }
 
     /**
@@ -49,42 +50,67 @@ class RateLimitMiddleware
     {
         foreach ($this->except as $pattern) {
             if ($this->matchPath($request->getPathInfo(), $pattern)) {
-                return $next($request);
+                return $next($request); // 匹配成功，跳过限流
             }
         }
 
         $ip  = $request->getClientIp() ?: 'unknown';
-        $key = $this->cacheDir . 'rate_limit_' . md5($ip);
-        $now = time();
+        
+        // [MODIFIED] 使用 Redis key prefix，例如 "rate_limit:md5_of_ip"
+        $key = 'rate_limit:' . md5($ip);
 
-        $data = ['count' => 1, 'time' => $now];
+        // [MODIFIED] 核心逻辑：使用 Redis 的 INCR 和 EXPIRE
+        // 1. 原子性地增加计数器
+        $currentCount = $this->redis->incr($key);
 
-        if (file_exists($key)) {
-            $content = @file_get_contents($key);
-            if ($content !== false) {
-                $decoded = json_decode($content, true);
-                if ($decoded && $decoded['time'] > $now - $this->period) {
-                    if ($decoded['count'] >= $this->maxRequests) {
-                        // === 限流触发 ===
-                        $retryAfter = $this->period - ($now - $decoded['time']);
-                        return $this->buildRateLimitResponse($request, $retryAfter);
-                    }
-                    $data['count'] = $decoded['count'] + 1;
-                }
-            }
+        // 2. 如果是窗口内的第一个请求 (incr 返回 1)，则设置过期时间
+        if ($currentCount === 1) {
+            $this->redis->expire($key, $this->period);
         }
 
-        file_put_contents($key, json_encode($data));
-        return $next($request);
+        // 3. 检查是否超过限制
+        if ($currentCount > $this->maxRequests) {
+            // === 限流触发 ===
+            
+            // [MODIFIED] 从 Redis 获取剩余的 TTL 作为 Retry-After
+            $retryAfter = $this->redis->ttl($key);
+            // 兜底处理，-1 (永不过期) 或 -2 (已删除) 都应视为一个完整周期
+            if ($retryAfter < 0) { 
+                $retryAfter = $this->period; 
+            }
+
+            return $this->buildRateLimitResponse($request, $retryAfter);
+        }
+
+        // === 未触发限流, 执行请求 ===
+        $response = $next($request);
+
+        // === [MODIFIED] 在 *成功* 的响应头中也添加当前的限流状态 (最佳实践) ===
+        // 这让客户端可以知道自己还剩多少次请求
+        $remaining = max(0, $this->maxRequests - $currentCount);
+        
+        // 获取当前 key 的剩余时间
+        $ttl = $this->redis->ttl($key);
+        if ($ttl < 0) { $ttl = $this->period; } // 兜底
+        $resetTime = time() + $ttl;
+
+        $response->headers->set('X-RateLimit-Limit', (string) $this->maxRequests);
+        $response->headers->set('X-RateLimit-Remaining', (string) $remaining);
+        $response->headers->set('X-RateLimit-Reset', (string) $resetTime);
+
+        return $response;
     }
 
+    /**
+     * [MODIFIED] 签名保持不变，内部逻辑也无需大改
+     */
     private function buildRateLimitResponse(Request $request, int $retryAfter): Response
     {
         $message = "请求过于频繁，请 {$retryAfter} 秒后再试。";
 
         // 判断是否为 API 请求
         if ($request->isXmlHttpRequest()
-            || strpos($request->headers->get('Accept', ''), 'application/json') !== false) {
+            || str_contains($request->headers->get('Accept', ''), 'application/json')) {
             $response = new JsonResponse([
                 'success'     => false,
                 'error'       => 'rate_limit_exceeded',
@@ -99,15 +125,18 @@ class RateLimitMiddleware
             $response = new Response($html, 429, ['Content-Type' => 'text/html; charset=utf-8']);
         }
 
-        // 将整数转换为字符串
+        // 设置标准的限流头
         $response->headers->set('Retry-After', (string) $retryAfter);
         $response->headers->set('X-RateLimit-Limit', (string) $this->maxRequests);
-        $response->headers->set('X-RateLimit-Remaining', '0'); // 直接使用字符串
+        $response->headers->set('X-RateLimit-Remaining', '0'); // 触发了限流，剩余次数为 0
         $response->headers->set('X-RateLimit-Reset', (string) (time() + $retryAfter));
 
         return $response;
     }
 
+    /**
+     * (保持不变)
+     */
     private function matchPath(string $path, string $pattern): bool
     {
         $regex = str_replace('\*', '.*', preg_quote($pattern, '#'));

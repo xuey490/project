@@ -77,11 +77,7 @@ final class MiddlewaresProvider implements ServiceProviderInterface
             ->autowire()
             ->public();
 
-        // 注册debug中间件 默认不启动
-        $services->set(DebugMiddleware::class)
-            ->args([true])
-            ->autowire()
-            ->public();
+
 
         // 加载中间件配置
         $middlewareConfig = require BASE_PATH . '/config/middleware.php';
@@ -91,7 +87,8 @@ final class MiddlewaresProvider implements ServiceProviderInterface
             $services->set(RateLimitMiddleware::class)
                 ->args([
                     $middlewareConfig['rate_limit'],
-                    '%kernel.project_dir%/storage/cache/',
+                    service('redis'),
+					//'%kernel.project_dir%/storage/cache/',
                 ])
                 ->autoconfigure()
                 ->public();
@@ -129,6 +126,13 @@ final class MiddlewaresProvider implements ServiceProviderInterface
                 ])
                 ->public();
         }
+		
+		
+        // 注册debug中间件 默认不启动
+        $services->set(DebugMiddleware::class)
+            ->args([$middlewareConfig['debug']['enabled']])
+            ->autowire()
+            ->public();		
     }
 
     public function boot(ContainerInterface $container): void
