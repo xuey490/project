@@ -32,7 +32,7 @@ class DebugMiddleware implements MiddlewareInterface
     /**
      * 中间件入口.
      */
-    public function handle(Request $request, \Closure $next): Response
+    public function handle(Request $request, callable $next): Response
     {
         $requestDebugInfo = '';
         if ($this->debug) {

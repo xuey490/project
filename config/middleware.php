@@ -51,6 +51,10 @@ return [
             '/payment/notify'
         ],		
     ],
+	
+	'debug'	=> [
+		'enabled' => env('APP_DEBUG' , true),
+	],
 
     // 可扩展其他中间件
     // 'rate_limit' => [...]
