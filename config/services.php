@@ -7,8 +7,6 @@ use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 use function Symfony\Component\DependencyInjection\Loader\Configurator\param;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Reference;
-use Framework\Container\ContainerProviders;
-
 
 
 return function (ContainerConfigurator $configurator) {
@@ -55,7 +53,7 @@ return function (ContainerConfigurator $configurator) {
 	
 
     // ✅ 1. 自动加载应用 Provider
-    $providerManager = new ContainerProviders();
+    $providerManager = new \Framework\Container\ContainerProviders();
 
 	// ✅ 2. 自动加载核心 + 应用 Provider
 	$providerManager->loadAll(
