@@ -15,7 +15,7 @@ use Framework\Attributes\Route;
 use Framework\Utils\CookieManager;
 use App\Middlewares\AuthMiddleware;
 use Framework\Attributes\Auth;
-
+use Symfony\Component\HttpFoundation\JsonResponse;
 
 #[Route(prefix: '/jwts/apijwt', group: 'apijwt' , middleware: [AuthMiddleware::class] )]
 class Jwt
@@ -35,17 +35,21 @@ class Jwt
 		
 		// 登录页面登录-->获取uid，role，name-->签发token-->token存入cookie/缓存-->到下一个页面的时候
 		//-->中间件请求头（或 Cookie）中提取 Token，验证 JWT 签名、issuer、exp、nbf 等标准 claims，再验证Redis 中是否存在 login:token:{jti}（用于判断是否被提前注销）-->验证失败，跳转到登录，
-		$this->tokenString = app('jwt')->issue(['uid' => 42, 'name'=>'张三' ,'role'=>'admin']);
-		$token = "  Token: {$this->tokenString}<br/>";
+		$token = app('jwt')->issue(['uid' => 42, 'name'=>'张三' ,'role'=>'admin']);
+		
+		#print_r($token);
+		
+		
+		//$token = "  Token: {$this->tokenString}<br/>";
 
 
 		
-		//app('cookie')->queueCookie('token', $this->tokenString, 3600);
+		app('cookie')->queueCookie('token', $token['token'], 3600);
 		app('cookie')->queueCookie('token_123', 'hello world', 3600); //适合FPM 和部分workerman启动器
 
 		// 快捷设置 Cookie 可以这样设置
-		app('cookie')->setResponseCookie($response, 'token1111', $this->tokenString , 3600); //兼容fpm和所有workerman启动器
-		app('cookie')->setResponseCookie($response, 'token123', $this->tokenString , 3600); //兼容fpm和所有workerman启动器
+		//app('cookie')->setResponseCookie($response, 'token1111', $this->tokenString , 3600); //兼容fpm和所有workerman启动器
+		//app('cookie')->setResponseCookie($response, 'token123', $this->tokenString , 3600); //兼容fpm和所有workerman启动器
 
 		// 在发送 Response 前统一绑定队列中的 Cookie
 		app('cookie')->sendQueuedCookies($response);
@@ -72,6 +76,59 @@ class Jwt
 		
 		
 	}
+	
+	
+	
+	
+	
+	public function login() 
+    {
+        // ... 验证用户凭证 ...
+        $userId = 123;
+        
+        // 1. 核心业务：签发 JWT Token（JwtFactory 仅关注 Token 内容和Redis持久化）
+        $jwtFactory = app('jwt');
+        $result = $jwtFactory->issue(['uid' => $userId]);
+        
+        $token   = $result['token'];
+        $expires = $result['expiresAt'];
+        $ttl     = $result['ttl'];
+        
+        // 2. 传输逻辑：处理 HTTP 响应 (JwtResponseHelper 仅关注 Header/Cookie)
+        $request = app('request');  // 从容器获取 Request
+        $response = app('response'); // 从容器获取 Response
+        
+        try {
+            \Framework\Utils\JwtResponseHelper::setTokenResponse($token, $expires, $ttl, $request, $response);
+        } catch (\Throwable $e) {
+            // 忽略响应设置错误，或记录日志
+        }
+        
+        // 3. 返回最终响应
+        return new JsonResponse([
+            'token' => $token, 
+            'message' => 'Login successful',
+            'expires_in' => $ttl
+        ]);
+		
+		/*
+		
+		return new Response(
+			json_encode($data),
+			Response::HTTP_OK,
+			['Content-Type' => 'application/json']
+		);
+		*/
+    }	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 	
 	public function refresh()
 	{
@@ -115,7 +172,7 @@ class Jwt
 		//return new Response('token:'.$token );
 		$user = app('jwt')->getPayload($token);
 		
-		//dump($user);
+		dump($user);
 		
 /*
 #原生cookie操作

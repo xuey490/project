@@ -29,9 +29,7 @@ use Lcobucci\JWT\Validation\Constraint\IssuedBy;
 use Lcobucci\JWT\Validation\Constraint\LooseValidAt;
 // 校验token
 use Lcobucci\JWT\Validation\Constraint\SignedWith;
-use Symfony\Component\HttpFoundation\Cookie;
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
+
 
 class JwtFactory
 {
@@ -51,7 +49,11 @@ class JwtFactory
     /*
      * 签发jwt token
      */
-    public function issue(array $claims = [], ?int $ttl = null): string
+    /*
+     * 签发jwt token
+     * 返回一个包含 token 字符串和过期时间的数组，便于外部处理（如设置 Cookie）
+     */
+    public function issue(array $claims = [], ?int $ttl = null): array
     {
         $now       = new \DateTimeImmutable('now', $this->timezone);
         $ttl       = $ttl ?? ($this->jwtConfig['ttl'] ?? 3600);
@@ -83,74 +85,6 @@ class JwtFactory
         $token    = $builder->getToken($this->config->signer(), $this->config->signingKey());
         $tokenStr = $token->toString();
 
-        // === 自动设置响应 ===
-        try {
-            /** @var null|Request $request */
-            $request = app('request');
-            /** @var null|Response $response */
-            $response = app('response');
-
-            if ($response) {
-                // 判断是否为 API 请求
-                $isApi = false;
-                if ($request) {
-                    $accept = $request->headers->get('Accept');
-                    $ajax   = $request->headers->get('X-Requested-With');
-                    $isApi  = str_contains((string) $accept, 'json') || $ajax === 'XMLHttpRequest';
-                }
-
-                if ($isApi) {
-                    // === API / Ajax 场景：添加 Authorization 头 ===
-                    $response->headers->set('Authorization', 'Bearer ' . $tokenStr);
-                } else {
-                    // === Web 场景：写入 Cookie ===
-                    $cookieName     =  'token';
-                    $cookieDomain   = config('cookie.domain')    ?? '';
-                    $cookieSecure   = config('cookie.secure')    ?? true;
-                    $cookieHttpOnly = config('cookie.httponly')  ?? true;
-                    $cookiePath     = config('cookie.path')      ?? '/';
-                    $samesite       = config('cookie.samesite')  ?? 'lax';
-
-                    $cookie = Cookie::create(
-                        $cookieName,
-                        $tokenStr,	// token值
-                        $expiresAt,
-                        $cookiePath,
-                        $cookieDomain,
-                        $cookieSecure,
-                        $cookieHttpOnly,
-                        false, // raw
-                        $samesite // SameSite
-                    );
-                    $response->headers->setCookie($cookie);
-                    app('cookie')->queueCookie('token', $tokenStr, $ttl);
-                }
-            } else {
-                // 没有全局响应实例时，作为 Web 场景处理（例如 FPM）
-                $cookieName     =  'token';
-                $cookieDomain   = config('cookie.domain')    ?? '';
-                $cookieSecure   = config('cookie.secure')    ?? true;
-                $cookieHttpOnly = config('cookie.httponly')  ?? true;
-                $cookiePath     = config('cookie.path')      ?? '/';
-                $samesite       = config('cookie.samesite')  ?? 'lax';
-
-                $cookie = Cookie::create(
-                    $cookieName,
-                    $tokenStr,	// token值
-                    $expiresAt,
-                    $cookiePath,
-                    $cookieDomain,
-                    $cookieSecure,
-                    $cookieHttpOnly,
-                    false, // raw
-                    $samesite // SameSite
-                );
-                $response->headers->setCookie($cookie);
-            }
-        } catch (Throwable $e) {
-            // 忽略响应设置错误，避免影响签发
-        }
-
         if ($userId) {
             $redis = app('redis.client');
             // token -> user_id 映射（用于快速查询）
@@ -160,7 +94,12 @@ class JwtFactory
             // 可选：给这个 set 也设个稍长的 TTL（如果需要）
         }
 
-        return $tokenStr;
+        // 返回 token 字符串和过期时间，让外部决定如何传输
+        return [
+            'token'     => $tokenStr,
+            'expiresAt' => $expiresAt, // DateTimeImmutable 实例
+            'ttl'       => $ttl,
+        ];
     }
 
     /*
