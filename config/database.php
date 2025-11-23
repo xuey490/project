@@ -1,6 +1,6 @@
 <?php
 return [
-	'engine'	=>'eloquent', // 'think' or 'eloquent'
+	'engine'	=>'think', // 'think' or 'eloquent'
     // 默认使用的数据库连接配置
     'default'         => 'mysql',
     // 自定义时间查询规则

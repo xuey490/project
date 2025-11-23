@@ -133,6 +133,10 @@ class RedisFactory
         return self::exec(fn (\Redis $r) => $r->hGetAll($hash));
     }
 
+	public static function expire(string $key, int $ttl): bool
+	{
+		return (bool) self::exec(fn (\Redis $r) => $r->expire($key, $ttl));
+	}
     // ========== 分布式锁（增强版）==========
 
     /**

@@ -38,7 +38,7 @@ class MiddlewareDispatcher
         MethodOverrideMiddleware::class,
         CorsMiddleware::class,
         RateLimitMiddleware::class,
-        # CircuitBreakerMiddleware::class, //熔断中间件，正式环境使用，开发环境直接溢出错误堆栈
+        #CircuitBreakerMiddleware::class, //熔断中间件，正式环境使用，开发环境直接溢出错误堆栈
         IpBlockMiddleware::class,
         XssFilterMiddleware::class,
         CsrfProtectionMiddleware::class,

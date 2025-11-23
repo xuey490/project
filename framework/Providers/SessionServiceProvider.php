@@ -52,7 +52,7 @@ final class SessionServiceProvider implements ServiceProviderInterface
         $ttl             = $sessionConfig['redis']['ttl']          ?? 3600;
 
         // === 2. 注册 Redis 客户端（只有 Redis 模式需要）===
-        if (in_array($storageType, ['redis', 'redis_grouped'], true)) {
+        //if (in_array($storageType, ['redis', 'redis_grouped'], true)) {
             // 注册 RedisFactory 服务
             $services->set('redis.client', \Redis::class)
                 ->factory([RedisFactory::class, 'createRedisClient']) // 工厂方法放在自身
@@ -63,7 +63,7 @@ final class SessionServiceProvider implements ServiceProviderInterface
             $services
                 ->alias('redis', 'redis.client')
                 ->public();
-        }
+        //}
 
         // === 3. 注册 Session Handler & Storage ===
         switch ($storageType) {

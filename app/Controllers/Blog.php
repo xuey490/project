@@ -65,8 +65,8 @@ class Blog
 		
         #$users = ($this->db)(Admin::class)::select()->toArray();	//这三种方法都可以运行
         #$users = $this->db->make(Admin::class)::select()->toArray();//这三种方法都可以运行
-        $users = Admin::select()->toArray();
-        dump($users); // 因为你框架会处理 array => json
+        #$users = Admin::select()->toArray();
+        #dump($users); // 因为你框架会处理 array => json
 		
 		
         // 🔍 检查当前 Twig 实例是否加载了 AppTwigExtension
