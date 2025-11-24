@@ -3,19 +3,20 @@
 declare(strict_types=1);
 
 /**
- * This file is part of FssPhp Framework.
+ * This file is part of FssPHP Framework.
  *
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
  * @Filename: %filename%
- * @Date: 2025-11-15
+ * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
  */
 
 namespace Framework\Providers;
 
+use Framework\Config\ConfigService;
 use Framework\Container\ServiceProviderInterface;
 use Framework\Session\FileSessionHandler;
 use Framework\Session\RedisGroupSessionHandler;
@@ -39,11 +40,11 @@ final class SessionServiceProvider implements ServiceProviderInterface
     {
         $services = $configurator->services();
 
-		$load =  new \Framework\Config\ConfigService(config_path());
+        $load =  new ConfigService(config_path());
 
         // === 1. 加载配置 ===
-        $redisConfig   = $load->get('redis');  //require \dirname(__DIR__, 2) . '/config/redis.php';
-        $sessionConfig = $load->get('session'); //require \dirname(__DIR__, 2) . '/config/session.php';
+        $redisConfig   = $load->get('redis');  // require \dirname(__DIR__, 2) . '/config/redis.php';
+        $sessionConfig = $load->get('session'); // require \dirname(__DIR__, 2) . '/config/session.php';
 
         $storageType     = $sessionConfig['storage_type']          ?? 'file';
         $sessionOptions  = $sessionConfig['options']               ?? [];
@@ -52,18 +53,18 @@ final class SessionServiceProvider implements ServiceProviderInterface
         $ttl             = $sessionConfig['redis']['ttl']          ?? 3600;
 
         // === 2. 注册 Redis 客户端（只有 Redis 模式需要）===
-        //if (in_array($storageType, ['redis', 'redis_grouped'], true)) {
-            // 注册 RedisFactory 服务
-            $services->set('redis.client', \Redis::class)
-                ->factory([RedisFactory::class, 'createRedisClient']) // 工厂方法放在自身
-                ->args([$redisConfig])
-                ->public();
+        // if (in_array($storageType, ['redis', 'redis_grouped'], true)) {
+        // 注册 RedisFactory 服务
+        $services->set('redis.client', \Redis::class)
+            ->factory([RedisFactory::class, 'createRedisClient']) // 工厂方法放在自身
+            ->args([$redisConfig])
+            ->public();
 
-            // 或者注册封装类别名
-            $services
-                ->alias('redis', 'redis.client')
-                ->public();
-        //}
+        // 或者注册封装类别名
+        $services
+            ->alias('redis', 'redis.client')
+            ->public();
+        // }
 
         // === 3. 注册 Session Handler & Storage ===
         switch ($storageType) {

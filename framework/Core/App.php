@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 /**
- * This file is part of FssPhp Framework.
+ * This file is part of FssPHP Framework.
  *
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
  * @Filename: %filename%
- * @Date: 2025-11-15
+ * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
  */
@@ -76,21 +76,19 @@ class App
     {
         $container = self::getContainer();
 
-        if (! empty($params) && method_exists($container, 'make')) {
-            return $container->make($id, $params);
+        // 1. 优先从容器获取（工厂、单例、服务等）
+        if ($container->has($id) && empty($params)) {
+            $service = $container->get($id);
+
+            if (! is_object($service)) {
+                throw new \RuntimeException("服务 {$id} 返回不是对象类型");
+            }
+
+            return $service;
         }
 
-        if (! $container->has($id)) {
-            throw new \RuntimeException(sprintf('服务 "%s" 未注册于容器。', $id));
-        }
-
-        $service = $container->get($id);
-
-        if (! is_object($service)) {
-            throw new \RuntimeException(sprintf('服务 "%s" 返回不是对象类型。', $id));
-        }
-
-        return $service;
+        // 2. ★ 不在容器中 → 使用容器的 make()（反射创建）
+        return $container->make($id, $params);
     }
 
     /**

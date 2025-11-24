@@ -26,4 +26,20 @@ return [
         'group_prefix' 		=> env('SESSION_GROUP_PREFIX', 'session:default'),
     ],
 	
+    // encryption
+    'encrypt' => [
+        'enabled' => true,
+        'key'     => 'your-secret-key-32bytes',
+    ],
+
+    'rate_limit' => [
+        'enabled' => true,
+        'limit'   => 60,   // 每分钟最多 60 次访问
+        'window'  => 60,
+    ],
+
+    'queue' => [
+        'enabled' => true,
+    ],
+	
 ];

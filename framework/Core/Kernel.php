@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 /**
- * This file is part of FssPhp Framework.
+ * This file is part of FssPHP Framework.
  *
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
  * @Filename: %filename%
- * @Date: 2025-11-15
+ * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
  */
@@ -47,9 +47,9 @@ class Kernel
             return; // 防止重复启动
         }
 
-		$this->setupContainerAlias();
-		
-		$this->setupTimezone();
+        $this->setupContainerAlias();
+
+        $this->setupTimezone();
         // $debug = app('config')->get('app.debug', false);
         // dump(app()->getServiceIds()); // 查看所有服务 ID
 
@@ -60,13 +60,37 @@ class Kernel
         $this->booted = true;
     }
 
-	// 1. 设置全局容器入口（供助手函数使用）
+    /**
+     * 获取容器（修正返回类型）.
+     */
+    public function getContainer(): ContainerInterface
+    {
+        return $this->container;
+    }
+
+    /**
+     * 检查内核是否已启动.
+     */
+    public function isBooted(): bool
+    {
+        return $this->booted;
+    }
+
+    /**
+     * 获取项目根目录.
+     */
+    public function getProjectDir(): string
+    {
+        return dirname(__DIR__, 2); // 从 framework/Core 到项目根
+    }
+
+    // 1. 设置全局容器入口（供助手函数使用）
     private function setupContainerAlias(): void
     {
         App::setContainer($this->container);
     }
 
-	// 2. 初始化时区（从配置获取）
+    // 2. 初始化时区（从配置获取）
     private function setupTimezone(): void
     {
         $timezone = app('config')->get('app.time_zone', 'UTC');
@@ -97,12 +121,12 @@ class Kernel
     {
         // 1. 注册异常处理器
         $exceptionHandler = $this->container->get(ExceptionHandler::class);
-		
+
         set_exception_handler(function (\Throwable $e) use ($exceptionHandler) {
             $exceptionHandler->report($e);
             $exceptionHandler->render($e); // ->send();
-            //return ;
-			exit(1); // 异常后终止程序
+            // return ;
+            exit(1); // 异常后终止程序
         });
 
         // 2. 注册错误处理器（将错误转为异常）
@@ -127,33 +151,9 @@ class Kernel
                 );
                 $exceptionHandler->report($e);
                 $exceptionHandler->render($e)->send();
-                //return ;
-				exit(1);
+                // return ;
+                exit(1);
             }
         });
-    }
-	
-    /**
-     * 获取容器（修正返回类型）.
-     */
-    public function getContainer(): ContainerInterface
-    {
-        return $this->container;
-    }
-
-    /**
-     * 检查内核是否已启动.
-     */
-    public function isBooted(): bool
-    {
-        return $this->booted;
-    }
-
-    /**
-     * 获取项目根目录.
-     */
-    public function getProjectDir(): string
-    {
-        return dirname(__DIR__, 2); // 从 framework/Core 到项目根
     }
 }

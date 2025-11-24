@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 /**
- * This file is part of FssPhp Framework.
+ * This file is part of FssPHP Framework.
  *
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
  * @Filename: %filename%
- * @Date: 2025-11-15
+ * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
  */
@@ -233,26 +233,26 @@ if (! function_exists('caches_clear')) {
     }
 }
 
-/**
+/*
  * 环境变量读取.
  */
 if (! function_exists('env')) {
-	function env(string $key, mixed $default = null): mixed
-	{
-		$value = $_ENV[$key] ?? $_SERVER[$key] ?? getenv($key);
+    function env(string $key, mixed $default = null): mixed
+    {
+        $value = $_ENV[$key] ?? $_SERVER[$key] ?? getenv($key);
 
-		if ($value === false) {
-			return $default;
-		}
+        if ($value === false) {
+            return $default;
+        }
 
-		return match (strtolower((string) $value)) {
-			'true', '(true)'   => true,
-			'false', '(false)' => false,
-			'empty', '(empty)' => '',
-			'null', '(null)'   => null,
-			default             => preg_match('/\A([\'"])(.*)\1\z/', (string) $value, $m) ? $m[2] : $value,
-		};
-	}
+        return match (strtolower((string) $value)) {
+            'true', '(true)'   => true,
+            'false', '(false)' => false,
+            'empty', '(empty)' => '',
+            'null', '(null)'   => null,
+            default             => preg_match('/\A([\'"])(.*)\1\z/', (string) $value, $m) ? $m[2] : $value,
+        };
+    }
 }
 
 if (! function_exists('config')) {

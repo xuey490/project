@@ -1,6 +1,6 @@
 <?php
 return [
-	'engine'	=>'think', // 'think' or 'eloquent'
+	'engine'	=>'laravelORM', // 'thinkORM' or 'laravelORM'
     // 默认使用的数据库连接配置
     'default'         => 'mysql',
     // 自定义时间查询规则
