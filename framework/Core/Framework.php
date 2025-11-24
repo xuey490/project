@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 /**
- * This file is part of FssPhp Framework.
+ * This file is part of FssPHP Framework.
  *
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
  * @Filename: %filename%
- * @Date: 2025-11-15
+ * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
  */
@@ -26,7 +26,6 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Controller\ArgumentResolver;
 use Symfony\Component\Routing\RouteCollection;
-use think\facade\Db;
 
 /**
  * Class Framework.
@@ -100,75 +99,24 @@ final class Framework
         return self::$instance;
     }
 
-	/**
-	 * 核心统一调度入口（FPM/Workerman/Swoole 都走这里）
-	 */
-	private function dispatch(Request $request): Response
-	{
-		$start = microtime(true);
-		$this->request = $request;
-
-		$response = new Response('', Response::HTTP_INTERNAL_SERVER_ERROR);
-
-		try {
-			$route = $this->router->match($this->request);
-
-			if ($route === null || $route === false) {
-				$response = $this->handleNotFound();
-				$this->logRequestAndResponse($this->request, $response, $start);
-				return $response;
-			}
-
-			if ($this->isEasterEggRoute($route)) {
-				$response = $this->handleEasterEgg($route);
-				$this->logRequestAndResponse($this->request, $response, $start);
-				return $response;
-			}
-
-			$this->request->attributes->set('_route', $route);
-
-			$response = $this->middlewareDispatcher->dispatch(
-				$this->request,
-				fn (Request $req): Response => $this->callController($route)
-			);
-
-			if (! $response instanceof Response) {
-				$response = $this->normalizeResponse($response);
-			}
-
-			$this->logRequestAndResponse($this->request, $response, $start);
-			return $response;
-
-		} catch (\Throwable $e) {
-
-			try { $this->logger?->logException($e, $this->request); } catch (\Throwable $_) {}
-
-			return $this->handleException($e);
-		} finally {
-			// Workerman 下必须释放
-			$this->request = null;
-		}
-	}
-
-	/**
-	 * FPM入口：完整调度流程.
-	 */
-	public function run(): void
-	{
-		$request = Request::createFromGlobals();
-		$response = $this->dispatch($request);
-		$response->send();
-	}
+    /**
+     * FPM入口：完整调度流程.
+     */
+    public function run(): void
+    {
+        $request  = Request::createFromGlobals();
+        $response = $this->dispatch($request);
+        $response->send();
+    }
 
     /*
      * 由workerman调度
      * 传入的是symfony 的request
      */
-	public function handleRequest(Request $request): Response
-	{
-		return $this->dispatch($request);
-	}
-
+    public function handleRequest(Request $request): Response
+    {
+        return $this->dispatch($request);
+    }
 
     /**
      * 获取容器（对外提供接口）.
@@ -176,6 +124,57 @@ final class Framework
     public function getContainer(): ContainerInterface
     {
         return $this->container;
+    }
+
+    /**
+     * 核心统一调度入口（FPM/Workerman/Swoole 都走这里）.
+     */
+    private function dispatch(Request $request): Response
+    {
+        $start         = microtime(true);
+        $this->request = $request;
+
+        $response = new Response('', Response::HTTP_INTERNAL_SERVER_ERROR);
+
+        try {
+            $route = $this->router->match($this->request);
+
+            if ($route === null || $route === false) {
+                $response = $this->handleNotFound();
+                $this->logRequestAndResponse($this->request, $response, $start);
+                return $response;
+            }
+
+            if ($this->isEasterEggRoute($route)) {
+                $response = $this->handleEasterEgg($route);
+                $this->logRequestAndResponse($this->request, $response, $start);
+                return $response;
+            }
+
+            $this->request->attributes->set('_route', $route);
+
+            $response = $this->middlewareDispatcher->dispatch(
+                $this->request,
+                fn (Request $req): Response => $this->callController($route)
+            );
+
+            if (! $response instanceof Response) {
+                $response = $this->normalizeResponse($response);
+            }
+
+            $this->logRequestAndResponse($this->request, $response, $start);
+            return $response;
+        } catch (\Throwable $e) {
+            try {
+                $this->logger?->logException($e, $this->request);
+            } catch (\Throwable $_) {
+            }
+
+            return $this->handleException($e);
+        } finally {
+            // Workerman 下必须释放
+            $this->request = null;
+        }
     }
 
     /**
@@ -288,8 +287,6 @@ final class Framework
      */
     private function initializeDependencies(): void
     {
-
-
         // 1. 加载路由（支持缓存）
         $allRoutes = $this->loadAllRoutes();
 
@@ -397,8 +394,6 @@ final class Framework
         @file_put_contents(self::ROUTE_CACHE_FILE, $serialized);
         @chmod(self::ROUTE_CACHE_FILE, 0644); // 缓存文件权限只读
     }
-
-
 
     /**
      * 调用控制器方法（优化参数解析和返回值处理）.

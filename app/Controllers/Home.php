@@ -11,6 +11,9 @@ namespace App\Controllers;
 
 use App\Models\Admin;
 use App\Models\Config;
+use App\Models\Custom;
+use App\Dao\CustomDao;
+
 use App\Middlewares\AuthMiddleware;
 use Framework\Middleware\MiddlewareXssFilter;
 use Framework\Security\CsrfTokenManager;
@@ -27,9 +30,9 @@ use Framework\Attributes\Route;
 
 use Framework\Utils\ORMFactory;
 use Illuminate\Database\Capsule\Manager as Capsule;
-#use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\DB;
 
-use think\facade\Db;
+#use think\facade\Db;
 
 ##[Auth(roles: ['admin'])]
 ##[Prefix('/secures', middleware: [AuthMiddleware::class])]
@@ -40,15 +43,20 @@ use think\facade\Db;
 */
 class Home
 {
+	
+	private CustomDao $customDao;
+	
+	
     public function __construct(
         private CsrfTokenManager $csrf,private RequestStack $requestStack,
 		private CookieManager $cookie, 
 		private ORMFactory $db,
+		CustomDao $customDao,
 		#private DB $db1,
 		#private DbManager $db1
 		//SessionServiceProvider 已经注册的服务名是 'session'， 容器会自动注入 Session 实例
     ) {
-		
+		$this->customDao = $customDao;
 	}
 	
 	public function setcookies(Request $request):Response
@@ -138,6 +146,8 @@ class Home
 		//$config =  $this->db->make('flow')->where('id', 1)->first();
 		//$config =$this->db->make('flow')->find(1);
 		//dump(app('response')->headers->set('Authorization', 'Bearer 123'));
+		//dump($config);
+		
 		
 		//$allHeaders = app('response')->headers->all();
 
@@ -190,6 +200,26 @@ class Home
         
 
 		
+		//ThinkORM Model的写法
+        #$users = Config::select();
+        #dump($users);	
+			
+		//ThinkORM Model的写法
+        #$users =App::make( Custom::class);
+      
+		//ThinkORM Model的写法
+        #$users = (new Custom())->getTableName();
+       	
+		#$list = $this->customDao->selectModel(['status'=>1] , 'id,name');
+	 #dump($users);
+		
+		
+		
+		
+		
+		
+		
+		
 		// echo storage_path('logs/sql.log');
 
         // 日志测试
@@ -222,12 +252,13 @@ class Home
 
 		#$logger1->log('默认日志文件');
 				
-		// 使用自定义参数
-		$logger2 = app('log_cache', [
+		// 使用自定义参数 app(\Framework\Log\LoggerCache::class) 或app('\Framework\Log\LoggerCache') 带引号做为字符串参数
+		$logger2 = app(\Framework\Log\LoggerCache::class, [
 			'channel' => 'payment',
-			'logFile' => BASE_PATH .'/storage/log/payment.log',
+			'logFile' => BASE_PATH .'/storage/logs/payment.log',
 		]);
-		$logger2->log('支付日志');	
+		$logger2->log('支付日志');
+	
 
         // Symfony缓存
         // cache_set('user_1', ['name' => 'AliceA'], 3600);

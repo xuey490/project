@@ -2,15 +2,27 @@
 
 declare(strict_types=1);
 
+/**
+ * This file is part of FssPHP Framework.
+ *
+ * @link     https://github.com/xuey490/project
+ * @license  https://github.com/xuey490/project/blob/main/LICENSE
+ *
+ * @Filename: %filename%
+ * @Date: 2025-11-24
+ * @Developer: xuey863toy
+ * @Email: xuey863toy@gmail.com
+ */
+
 namespace Framework\Providers;
 
 use Framework\Container\ServiceProviderInterface;
 use Framework\Utils\ORMFactory;
-use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
-use Symfony\Component\DependencyInjection\ContainerInterface;
-use Symfony\Component\DependencyInjection\Reference;
-use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
+
+use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 
 final class ORMServiceProvider implements ServiceProviderInterface
 {
@@ -19,14 +31,14 @@ final class ORMServiceProvider implements ServiceProviderInterface
         $services = $configurator->services();
 
         $dbConfig = require BASE_PATH . '/config/database.php';
-        $ormType  = $dbConfig['engine'] ?? 'think';
+        $ormType  = $dbConfig['engine'] ?? 'thinkORM';
 
         // 注册 ORMFactory
         $services->set(ORMFactory::class)
             ->args([
                 $dbConfig,
                 $ormType,
-                service(LoggerInterface::class)->nullOnInvalid()
+                service(LoggerInterface::class)->nullOnInvalid(),
             ])
             ->public();
 
@@ -35,19 +47,13 @@ final class ORMServiceProvider implements ServiceProviderInterface
             ->args([
                 $dbConfig,
                 $ormType,
-                service(LoggerInterface::class)->nullOnInvalid()
+                service(LoggerInterface::class)->nullOnInvalid(),
             ])
             ->public();
-			
     }
 
-
-	/*
-	模型基类的别名，暂时不可用
-	*/
-	public function boot(ContainerInterface $container): void
-	{
- 
-
-	}
+    /*
+    模型基类的别名，暂时不可用
+    */
+    public function boot(ContainerInterface $container): void {}
 }

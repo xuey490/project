@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 /**
- * This file is part of FssPhp Framework.
+ * This file is part of FssPHP Framework.
  *
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
  * @Filename: %filename%
- * @Date: 2025-11-15
+ * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
  */
@@ -22,15 +22,14 @@ use Symfony\Component\DependencyInjection\ContainerInterface as SymfonyContainer
 use Symfony\Component\DependencyInjection\Dumper\PhpDumper;
 use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
 use Symfony\Component\Dotenv\Dotenv;
-use Framework\Container\ContainerProviders;
 
 class Container implements SymfonyContainerInterface
 {
     private const CACHE_FILE = BASE_PATH . '/storage/cache/container.php';
 
     private static ?SymfonyContainerInterface $container = null;
-	
-	private static ?ContainerProviders $providers = null;
+
+    private static ?ContainerProviders $providers = null;
 
     /**
      * 初始化容器.
@@ -65,9 +64,9 @@ class Container implements SymfonyContainerInterface
         if (! file_exists($servicesFile)) {
             throw new \RuntimeException("服务配置文件不存在: {$servicesFile}");
         }
-		
-		// 创建 Provider 管理器
-		$providersManager = new ContainerProviders();
+
+        // 创建 Provider 管理器
+        $providersManager = new ContainerProviders();
 
         $containerBuilder = new ContainerBuilder();
         $containerBuilder->setParameter('kernel.project_dir', $projectRoot);
@@ -81,12 +80,10 @@ class Container implements SymfonyContainerInterface
         $loader = new PhpFileLoader($containerBuilder, new FileLocator($configDir));
         $loader->load('services.php');
 
+        $containerBuilder->compile();
 
-		$containerBuilder->compile();
-
-		// ***在容器编译后真正执行所有 Provider 的 boot()***
-		$providersManager->bootProviders($containerBuilder);
-			
+        // ***在容器编译后真正执行所有 Provider 的 boot()***
+        $providersManager->bootProviders($containerBuilder);
 
         if ($isProd) {
             @mkdir(dirname(self::CACHE_FILE), 0777, true);
@@ -103,18 +100,89 @@ class Container implements SymfonyContainerInterface
         } else {
             self::$container = $containerBuilder;
         }
-		
-		// ✅ 编译完成后再执行 bootProviders
-		if (isset(self::$providers)) {
-			self::$providers->bootProviders(self::$container);
-		}
+
+        // ✅ 编译完成后再执行 bootProviders
+        if (isset(self::$providers)) {
+            self::$providers->bootProviders(self::$container);
+        }
     }
 
-	public static function setProviderManager(ContainerProviders $p): void
-	{
-		self::$providers = $p;
-	}
-	
+    /**
+     * 简单的 make 实现，用于模拟 Laravel/Webman 的构建行为.
+     * @param string $abstract   类名
+     * @param array  $parameters 构造函数参数 ['paramName' => value]
+     */
+    public function make(string $abstract, array $parameters = []): object
+    {
+        // 1. 如果没有参数且容器里有该服务，直接返回（单例/服务）
+        // 只有当参数为空时才尝试 get，因为如果传了参数，说明用户想要一个新的带参实例
+        if (empty($parameters) && self::$container->has($abstract)) {
+            return self::$container->get($abstract);
+        }
+
+        // 2. 使用反射动态创建实例
+        try {
+            $reflector = new \ReflectionClass($abstract);
+
+            if (! $reflector->isInstantiable()) {
+                throw new \RuntimeException("Class [{$abstract}] is not instantiable.");
+            }
+
+            $constructor = $reflector->getConstructor();
+
+            if (is_null($constructor)) {
+                return new $abstract();
+            }
+
+            $dependencies = [];
+            foreach ($constructor->getParameters() as $parameter) {
+                $name = $parameter->getName();
+
+                // 优先使用传入的参数
+                if (array_key_exists($name, $parameters)) {
+                    $dependencies[] = $parameters[$name];
+                    continue;
+                }
+
+                // 尝试从容器获取依赖
+                $type = $parameter->getType();
+                // [优化] 增加对 UnionType 的简单处理或忽略，防止 PHP8+ 报错
+                if ($type instanceof \ReflectionNamedType && ! $type->isBuiltin()) {
+                    $dependencyClassName = $type->getName();
+
+                    // 递归：如果容器有，get；如果容器没有，尝试自动 make (递归解决依赖)
+                    // 你的原代码只做了 has() check，如果依赖也是未注册的类（如 Service），这里会失败
+                    if (self::$container->has($dependencyClassName)) {
+                        $dependencies[] = self::$container->get($dependencyClassName);
+                        continue;
+                    }
+
+                    // [新增] 尝试递归 make 依赖对象
+                    // 只有当依赖是具体的类时才尝试，接口无法 new
+                    if (class_exists($dependencyClassName)) {
+                        // 这里是关键：允许递归构建未注册的依赖树
+                        $dependencies[] = $this->make($dependencyClassName);
+                        continue;
+                    }
+                }
+
+                if ($parameter->isDefaultValueAvailable()) {
+                    $dependencies[] = $parameter->getDefaultValue();
+                } else {
+                    throw new \RuntimeException("Unable to resolve dependency [{$parameter->name}] in class {$abstract}");
+                }
+            }
+
+            return $reflector->newInstanceArgs($dependencies);
+        } catch (\ReflectionException $e) {
+            throw new \RuntimeException('Container make failed: ' . $e->getMessage());
+        }
+    }
+
+    public static function setProviderManager(ContainerProviders $p): void
+    {
+        self::$providers = $p;
+    }
 
     /**
      * 获取 Container 实例.

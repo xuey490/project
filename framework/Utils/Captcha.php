@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 /**
- * This file is part of FssPhp Framework.
+ * This file is part of FssPHP Framework.
  *
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
  * @Filename: %filename%
- * @Date: 2025-11-15
+ * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
  */
@@ -232,6 +232,7 @@ class Captcha
 
     /**
      * @desc: 画杂点  往图片上写不同颜色的字母或数字
+     * @param mixed $im
      */
     protected static function writeNoise(array $config, $im): void
     {
@@ -248,6 +249,7 @@ class Captcha
 
     /**
      * @desc: 绘制背景图片 注：如果验证码输出图片比较大，将占用比较多的系统资源
+     * @param mixed $im
      */
     protected static function background(array $config, $im): void
     {

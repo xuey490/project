@@ -3,22 +3,22 @@
 declare(strict_types=1);
 
 /**
- * This file is part of FssPhp Framework.
+ * This file is part of FssPHP Framework.
  *
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
  * @Filename: %filename%
- * @Date: 2025-11-15
+ * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
  */
 
 namespace Framework\Utils;
 
+use Redis;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Request;
-use Redis;
 
 /*
 | 功能      | URL             | 方法   | 参数                                           |
@@ -39,7 +39,7 @@ class FileUploader
     private string $mergeDir;
 
     // redis存储分片
-    private Redis $redis;
+    private \Redis $redis;
 
     private int $maxSize;
 
@@ -254,7 +254,6 @@ class FileUploader
      */
     private function handleFile(UploadedFile $file): array
     {
-
         // 1. 检查上传错误
         if ($file->getError() !== UPLOAD_ERR_OK) {
             $this->raiseError($this->getUploadErrorMessage($file->getError()));
@@ -408,7 +407,7 @@ class FileUploader
 
     private function getProjectDir(): string
     {
-		//echo dirname(__DIR__, 3);
+        // echo dirname(__DIR__, 3);
         return \dirname(__DIR__, 3); // src -> src/../ -> project root
     }
 }

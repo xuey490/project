@@ -20,6 +20,9 @@ return function (ContainerConfigurator $configurator) {
 		->public();
 		
 	#(new SessionServiceProvider())($configurator);
+	
+    $parameters = $configurator->parameters();
+    $parameters->set('database.engine', 'thinkORM'); // 可以在 .env 中被覆盖	
 
     $services->set('test', \stdClass::class)->public();
 
@@ -28,11 +31,19 @@ return function (ContainerConfigurator $configurator) {
         ->arg('$container', service('service_container'))->public(); // ✅ 显式注入容器自身 注意arg，跟args差异
 
 
+	//$services->load('App\\Dao\\', '../app/Dao/');
+	
+	$services->load('App\\Dao\\', BASE_PATH. '/app/Dao/**/*.php')
+		->autowire()
+		->autoconfigure()
+		->public();	
+	
+	/*orm 别名切换*/
 	$databseConfig  = require BASE_PATH . '/config/database.php';
 	$engine = $databseConfig['engine'];
 	
 	// === 再进行 class_alias 切换 ORM Model ===
-	if ($engine === 'eloquent') {
+	if ($engine === 'laravelORM') {
 		class_alias(
 			\Illuminate\Database\Eloquent\Model::class,
 			\Framework\Utils\BaseModel::class,
@@ -40,7 +51,7 @@ return function (ContainerConfigurator $configurator) {
 		);
 	}
 
-	if ($engine === 'think') {
+	if ($engine === 'thinkORM') {
 		class_alias(
 			\think\Model::class,
 			\Framework\Utils\BaseModel::class,

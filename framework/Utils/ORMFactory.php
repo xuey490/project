@@ -1,40 +1,49 @@
 <?php
+
 declare(strict_types=1);
+
+/**
+ * This file is part of FssPHP Framework.
+ *
+ * @link     https://github.com/xuey490/project
+ * @license  https://github.com/xuey490/project/blob/main/LICENSE
+ *
+ * @Filename: %filename%
+ * @Date: 2025-11-24
+ * @Developer: xuey863toy
+ * @Email: xuey863toy@gmail.com
+ */
 
 namespace Framework\Utils;
 
-use Framework\Utils\ModelFactoryInterface;
-use Framework\Utils\EloquentFactory;
-use Framework\Utils\ThinkORMFactory;
-
 final class ORMFactory implements ModelFactoryInterface
 {
-    protected ModelFactoryInterface $impl;
+    private ModelFactoryInterface $impl;
 
     /**
-     * @param array $config 数据库配置
-     * @param string $ormType 'think' 或 'eloquent'
+     * @param array  $config  数据库配置
+     * @param string $ormType 'thinkORM' 或 'laravelORM'
      */
-    public function __construct(array $config, string $ormType = 'think', ?LoggerInterface $logger = null)
+    public function __construct(array $config, string $ormType = 'thinkORM', ?LoggerInterface $logger = null)
     {
-        switch (strtolower($ormType)) {
-            case 'eloquent':
+        switch ($ormType) {
+            case 'laravelORM':
                 $this->impl = new EloquentFactory($config, $logger);
                 break;
-            case 'think':
+            case 'thinkORM':
             default:
                 $this->impl = new ThinkORMFactory($config, $logger);
                 break;
         }
     }
-	
-    public function make(string $modelClass): mixed
-    {
-        return $this->impl->make($modelClass);
-    }
 
     public function __invoke(string $modelClass): mixed
     {
         return $this->impl->__invoke($modelClass);
+    }
+
+    public function make(string $modelClass): mixed
+    {
+        return $this->impl->make($modelClass);
     }
 }

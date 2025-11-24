@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 /**
- * This file is part of FssPhp Framework.
+ * This file is part of FssPHP Framework.
  *
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
  * @Filename: %filename%
- * @Date: 2025-11-15
+ * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
  */
@@ -31,7 +31,7 @@ class ContainerProviders
     /**
      * 扫描并注册所有 Provider（核心 + 应用）.
      */
-    public function loadAll(ContainerConfigurator $configurator,  string $namespaceBase , ?string $appProviderDir = null): void
+    public function loadAll(ContainerConfigurator $configurator, string $namespaceBase, ?string $appProviderDir = null): void
     {
         // 1️⃣ 核心 Provider（通过 Composer 自动映射）
         $coreNamespace = 'Framework\Providers\\';
@@ -109,13 +109,13 @@ class ContainerProviders
 
     /**
      * 启动所有 Provider 的 boot 方法.
+     * @param mixed $container
      */
-
     public function bootProviders($container): void
     {
         foreach ($this->loadedProviders as $provider) {
             // 如果是 ContainerConfigurator，则推迟 boot
-            if ($container instanceof ContainerConfigurator) { 
+            if ($container instanceof ContainerConfigurator) {
                 // 暂存，等待 ContainerBuilder 阶段再执行
                 $this->pendingBoot[] = $provider;
                 continue;
@@ -129,23 +129,21 @@ class ContainerProviders
         }
     }
 
+    public function bootProviders1($container): void
+    {
+        foreach ($this->loadedProviders as $provider) {
+            // 如果还是配置阶段（Configurator），则延迟执行
+            if ($container instanceof ContainerConfigurator) {
+                $this->pendingBoot[] = $provider;
+                continue;
+            }
 
-	public function bootProviders1($container): void
-	{
-		foreach ($this->loadedProviders as $provider) {
-
-			// 如果还是配置阶段（Configurator），则延迟执行
-			if ($container instanceof ContainerConfigurator) {
-				$this->pendingBoot[] = $provider;
-				continue;
-			}
-
-			// 进入这里说明已经是最终容器（Framework\Container\Container 或 ContainerBuilder）
-			if (method_exists($provider, 'boot')) {
-				$provider->boot($container);
-			}
-		}
-	}
+            // 进入这里说明已经是最终容器（Framework\Container\Container 或 ContainerBuilder）
+            if (method_exists($provider, 'boot')) {
+                $provider->boot($container);
+            }
+        }
+    }
 
     /**
      * 自动获取 Composer 的 PSR-4 映射路径.

@@ -3,17 +3,17 @@
 declare(strict_types=1);
 
 /**
- * This file is part of FssPhp Framework.
+ * This file is part of FssPHP Framework.
  *
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
- * @Filename: DebugMiddleware.php
- * @Date: 2025-11-15
+ * @Filename: %filename%
+ * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
  */
- 
+
 namespace Framework\Middleware;
 
 use Symfony\Component\HttpFoundation\Request;
@@ -26,7 +26,7 @@ class DebugMiddleware implements MiddlewareInterface
 
     public function __construct(bool $debug = true)
     {
-        $this->debug = $debug ?? false ;
+        $this->debug = $debug ?? false;
     }
 
     /**
@@ -43,41 +43,37 @@ class DebugMiddleware implements MiddlewareInterface
         $response = $next($request);
 
         // === 响应阶段 ===
-        $responseDebugInfo = '';
+        $responseDebugInfo  = '';
         $frameworkDebugInfo = ''; // [NEW] 为框架信息初始化变量
         if ($this->debug) {
             // 收集响应信息
             $responseDebugInfo = $this->dumpResponse($response);
-            
+
             // [NEW] 收集框架运行时信息
             $frameworkDebugInfo = $this->dumpFrameworkInfo();
-			
 
             // 检查响应是否应该注入 Debug 面板
-            $body = (string) $response->getContent();
+            $body        = (string) $response->getContent();
             $contentType = $response->headers->get('Content-Type', '');
 
             // 更可靠的 HTML 检测
-			// [MODIFIED] 更可靠的 HTML 检测，并明确排除 JSON
-			$isHtml = false;
-			
+            // [MODIFIED] 更可靠的 HTML 检测，并明确排除 JSON
+            $isHtml = false;
 
-			if (stripos($body, '<html') !== false || 
-				stripos($body, '</body>') !== false || 
-				stripos($body, '<div') !== false || 
-				stripos($body, '<h') !== false || 
-				stripos($body, '<span') !== false 
-			) 
-			{
-				$isHtml = true;
-			}
-            
+            if (stripos($body, '<html')      !== false
+                || stripos($body, '</body>') !== false
+                || stripos($body, '<div')    !== false
+                || stripos($body, '<h')      !== false
+                || stripos($body, '<span')   !== false
+            ) {
+                $isHtml = true;
+            }
+
             // [MODIFIED] 只有在 $isHtml 为 true 并且有 *任何* 调试内容时才注入
-            if ( $isHtml && ($requestDebugInfo || $responseDebugInfo || $frameworkDebugInfo)) {
-                
+            if ($isHtml && ($requestDebugInfo || $responseDebugInfo || $frameworkDebugInfo)) {
                 // [MODIFIED] 构建美化且可折叠的 HTML，传入新信息
                 $debugHtml = $this->buildDebugPanel($requestDebugInfo, $responseDebugInfo, $frameworkDebugInfo);
-                
+
                 // 注入到 </body> 标签前
                 $pos = strripos($body, '</body>');
                 if ($pos !== false) {
@@ -96,19 +92,15 @@ class DebugMiddleware implements MiddlewareInterface
     /**
      * [MODIFIED] 构建美化的、默认折叠的 Debug 面板 HTML.
      *
-     * @param string $requestInfo
-     * @param string $responseInfo
      * @param string $frameworkInfo [NEW] 新增框架信息参数
-     * @return string
      */
     protected function buildDebugPanel(string $requestInfo, string $responseInfo, string $frameworkInfo): string
     {
-		
         // --- 内联 CSS 样式 ---
         $styles = [
-            'container' => 'clear:both; background-color:#1e1e1e; border-top:3px solid #007acc; margin:15px 0; font-family:Consolas, Menlo, Courier, monospace; font-size:13px; z-index:99998; position:relative; line-height:1.6; text-align:left;',
-            'main_details' => 'border:1px solid #444; border-top:0; background-color:#252526; color:#d4d4d4;',
-            'main_summary' => 'padding:10px 15px; cursor:pointer; font-weight:bold; background-color:#333337; color:#00a3ff; font-size:16px; list-style:revert; list-style-position:inside;',
+            'container'       => 'clear:both; background-color:#1e1e1e; border-top:3px solid #007acc; margin:15px 0; font-family:Consolas, Menlo, Courier, monospace; font-size:13px; z-index:99998; position:relative; line-height:1.6; text-align:left;',
+            'main_details'    => 'border:1px solid #444; border-top:0; background-color:#252526; color:#d4d4d4;',
+            'main_summary'    => 'padding:10px 15px; cursor:pointer; font-weight:bold; background-color:#333337; color:#00a3ff; font-size:16px; list-style:revert; list-style-position:inside;',
             'content_wrapper' => 'padding:15px; background-color:#1e1e1e;',
             'inner_details'   => 'margin-bottom:10px; background-color:#252526; border:1px solid #444; border-radius:4px; overflow:hidden;',
             'inner_summary'   => 'padding:10px; cursor:pointer; font-weight:bold; background-color:#333337; list-style-position:inside;',
@@ -143,7 +135,7 @@ class DebugMiddleware implements MiddlewareInterface
                 htmlspecialchars($requestInfo, ENT_QUOTES, 'UTF-8')
             );
         }
-        
+
         // [NEW] 框架信息面板
         $frameworkBlock = '';
         if ($frameworkInfo) {
@@ -176,8 +168,8 @@ class DebugMiddleware implements MiddlewareInterface
         }
 
         return sprintf(
-            "\n\n" .
-            '<div style="%s">
+            "\n\n"
+            . '<div style="%s">
                 <details style="%s">
                     <summary style="%s">
                         🚀 Framework Debug Panel (Click to expand)
@@ -211,57 +203,52 @@ class DebugMiddleware implements MiddlewareInterface
         $output .= 'Included Files Count: ' . count($includedFiles) . "\n\n";
 
         // 2. 加载的类
-        $loadedClasses = get_declared_classes();
-        $userClasses = [];
+        $loadedClasses        = get_declared_classes();
+        $userClasses          = [];
         $internalClassesCount = 0;
 
         foreach ($loadedClasses as $class) {
             try {
                 $ref = new \ReflectionClass($class);
                 if ($ref->isInternal()) {
-                    $internalClassesCount++;
+                    ++$internalClassesCount;
                 } else {
                     // 只收集用户定义的类
                     $userClasses[] = $class;
                 }
             } catch (\Throwable $e) {
                 // 捕获异常，例如 ReflectionClass 无法处理匿名类
-                $internalClassesCount++; // 算作内部或无法处理的类
+                ++$internalClassesCount; // 算作内部或无法处理的类
             }
         }
-        
-        $userClassesCount = count($userClasses);
+
+        $userClassesCount  = count($userClasses);
         $totalClassesCount = $userClassesCount + $internalClassesCount;
 
         $output .= 'Total Loaded Classes: ' . $totalClassesCount . "\n";
         $output .= 'User-Defined Classes: ' . $userClassesCount . "\n";
         $output .= 'PHP Internal Classes: ' . $internalClassesCount . "\n";
 
-
-
-
         // 3. 列出用户定义的类
         $output .= "\n--- User-Defined Class List (" . $userClassesCount . ") ---\n";
-		
 
         if (empty($userClasses)) {
             $output .= "(none)\n";
         } else {
             sort($userClasses); // 按字母排序
-			array_pop($userClasses);
-            //$output .= implode("\n", $userClasses) . "\n"; // 不输出类
+            array_pop($userClasses);
+            // $output .= implode("\n", $userClasses) . "\n"; // 不输出类
         }
-		
-		#dump($userClasses);
-        
+
+        # dump($userClasses);
+
         $output .= "==========================================================\n\n";
         return $output;
     }
 
-
     /**
      * 打印请求信息.
-     * (保持不变，返回 string)
+     * (保持不变，返回 string).
      */
     protected function dumpRequest(Request $request): string
     {
@@ -290,7 +277,7 @@ class DebugMiddleware implements MiddlewareInterface
 
     /**
      * 打印响应信息.
-     * (保持不变，返回 string)
+     * (保持不变，返回 string).
      */
     protected function dumpResponse(Response $response): string
     {

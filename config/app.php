@@ -5,4 +5,5 @@ return [
     'debug' => true,
     'dir_permission' => '0755',
 	'time_zone' =>"Asia/Shanghai",
+
 ];###

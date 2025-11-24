@@ -3,35 +3,37 @@
 declare(strict_types=1);
 
 /**
- * This file is part of FssPhp Framework.
+ * This file is part of FssPHP Framework.
  *
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
  * @Filename: %filename%
- * @Date: 2025-11-15
+ * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
  */
 
 namespace Framework\Middleware;
 
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\JsonResponse; // 引入 JsonResponse
-use \Redis; // 引入 Redis 类
+use Redis;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request; // 引入 JsonResponse
+use Symfony\Component\HttpFoundation\Response; // 引入 Redis 类
 
 class RateLimitMiddleware
 {
     private int $maxRequests = 10;
+
     private int $period = 60; // seconds
+
     private array $except = [];
-    
+
     /** @var \Redis [MODIFIED] 声明 Redis 属性 */
     private \Redis $redis;
 
     /**
-     * [MODIFIED] 构造函数现在接收 \Redis 实例，而不是 $cacheDir
+     * [MODIFIED] 构造函数现在接收 \Redis 实例，而不是 $cacheDir.
      */
     public function __construct(private array $config, \Redis $redis)
     {
@@ -55,7 +57,7 @@ class RateLimitMiddleware
         }
 
         $ip  = $request->getClientIp() ?: 'unknown';
-        
+
         // [MODIFIED] 使用 Redis key prefix，例如 "rate_limit:md5_of_ip"
         $key = 'rate_limit:' . md5($ip);
 
@@ -71,12 +73,12 @@ class RateLimitMiddleware
         // 3. 检查是否超过限制
         if ($currentCount > $this->maxRequests) {
             // === 限流触发 ===
-            
+
             // [MODIFIED] 从 Redis 获取剩余的 TTL 作为 Retry-After
             $retryAfter = $this->redis->ttl($key);
             // 兜底处理，-1 (永不过期) 或 -2 (已删除) 都应视为一个完整周期
-            if ($retryAfter < 0) { 
-                $retryAfter = $this->period; 
+            if ($retryAfter < 0) {
+                $retryAfter = $this->period;
             }
 
             return $this->buildRateLimitResponse($request, $retryAfter);
@@ -88,10 +90,12 @@ class RateLimitMiddleware
         // === [MODIFIED] 在 *成功* 的响应头中也添加当前的限流状态 (最佳实践) ===
         // 这让客户端可以知道自己还剩多少次请求
         $remaining = max(0, $this->maxRequests - $currentCount);
-        
+
         // 获取当前 key 的剩余时间
         $ttl = $this->redis->ttl($key);
-        if ($ttl < 0) { $ttl = $this->period; } // 兜底
+        if ($ttl < 0) {
+            $ttl = $this->period;
+        } // 兜底
         $resetTime = time() + $ttl;
 
         $response->headers->set('X-RateLimit-Limit', (string) $this->maxRequests);
@@ -102,7 +106,7 @@ class RateLimitMiddleware
     }
 
     /**
-     * [MODIFIED] 签名保持不变，内部逻辑也无需大改
+     * [MODIFIED] 签名保持不变，内部逻辑也无需大改.
      */
     private function buildRateLimitResponse(Request $request, int $retryAfter): Response
     {
@@ -135,7 +139,7 @@ class RateLimitMiddleware
     }
 
     /**
-     * (保持不变)
+     * (保持不变).
      */
     private function matchPath(string $path, string $pattern): bool
     {

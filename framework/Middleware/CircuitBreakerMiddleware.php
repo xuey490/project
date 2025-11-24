@@ -3,17 +3,17 @@
 declare(strict_types=1);
 
 /**
- * This file is part of FssPhp Framework.
+ * This file is part of FssPHP Framework.
  *
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
  * @Filename: %filename%
- * @Date: 2025-11-15
+ * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
  */
- 
+
 namespace Framework\Middleware;
 
 use Framework\Utils\RedisFactory; // 引入Redis 助手
@@ -24,8 +24,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 class CircuitBreakerMiddleware implements MiddlewareInterface
 {
-	private Redis $redis; // 依赖一个 \Redis 实例
-	
+    private \Redis $redis; // 依赖一个 \Redis 实例
+
     /** @var int 失败阈值 */
     private int $failureThreshold;
 
@@ -41,15 +41,15 @@ class CircuitBreakerMiddleware implements MiddlewareInterface
      * @param string $serviceName      熔断器名称 (例如: 'default', 'payment_api')
      */
     public function __construct(
-		Redis $redisClient,       // 1. 在这里注入一个已经连接好的 \Redis 实例
+        \Redis $redisClient,       // 1. 在这里注入一个已经连接好的 \Redis 实例
         int $failureThreshold = 5, // 建议默认值稍高
         int $timeout = 10,
         string $serviceName = 'default'
     ) {
-		$this->redis = $redisClient; // 2. 保存它
+        $this->redis            = $redisClient; // 2. 保存它
         $this->failureThreshold = $failureThreshold;
-        $this->timeout = $timeout;
-        $this->serviceName = $serviceName;
+        $this->timeout          = $timeout;
+        $this->serviceName      = $serviceName;
     }
 
     /**
@@ -61,8 +61,8 @@ class CircuitBreakerMiddleware implements MiddlewareInterface
     {
         // 1. 定义原子化的 Redis 键
         // 你可以根据 $request 动态设置 $this->serviceName，实现更细粒度的控制
-        $baseKey = 'breaker:' . $this->serviceName;
-        $openKey = $baseKey . ':open';      // 状态键："open" 状态标记
+        $baseKey    = 'breaker:' . $this->serviceName;
+        $openKey    = $baseKey . ':open';      // 状态键："open" 状态标记
         $failureKey = $baseKey . ':failures'; // 计数器键：记录连续失败次数
 
         // 2. 检查熔断器是否处于 "Open" 状态
@@ -89,11 +89,9 @@ class CircuitBreakerMiddleware implements MiddlewareInterface
             $this->redis->del($failureKey);
 
             return $response;
-
         } catch (\Throwable $e) {
-            
             // 5. 请求失败 (来自 $next() 或我们主动抛出的错误)
-            
+
             // 使用原子自增记录失败次数
             $failures = $this->redis->incr($failureKey);
 
@@ -103,9 +101,9 @@ class CircuitBreakerMiddleware implements MiddlewareInterface
                 // 设置 "Open" 状态键，并给予 $this->timeout 的自动过期时间
                 // 使用 ['ex' => $this->timeout] 选项
                 $this->redis->set($openKey, 1, $this->timeout);
-                
-                // (可选) 我们可以立即删除 failureKey，因为 openKey 已经接管了
-                // RedisFactory::del($failureKey);
+
+            // (可选) 我们可以立即删除 failureKey，因为 openKey 已经接管了
+            // RedisFactory::del($failureKey);
             } else {
                 // 如果是第一次失败，设置一个过期时间，防止这个计数器永久存在
                 // * 2 确保它比 openKey 活得久一点

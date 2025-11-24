@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 /**
- * This file is part of FssPhp Framework.
+ * This file is part of FssPHP Framework.
  *
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
  * @Filename: %filename%
- * @Date: 2025-11-15
+ * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
  */
@@ -38,7 +38,7 @@ class MiddlewareDispatcher
         MethodOverrideMiddleware::class,
         CorsMiddleware::class,
         RateLimitMiddleware::class,
-        #CircuitBreakerMiddleware::class, //熔断中间件，正式环境使用，开发环境直接溢出错误堆栈
+        # CircuitBreakerMiddleware::class, //熔断中间件，正式环境使用，开发环境直接溢出错误堆栈
         IpBlockMiddleware::class,
         XssFilterMiddleware::class,
         CsrfProtectionMiddleware::class,

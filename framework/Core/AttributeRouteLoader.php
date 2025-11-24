@@ -2,6 +2,18 @@
 
 declare(strict_types=1);
 
+/**
+ * This file is part of FssPHP Framework.
+ *
+ * @link     https://github.com/xuey490/project
+ * @license  https://github.com/xuey490/project/blob/main/LICENSE
+ *
+ * @Filename: %filename%
+ * @Date: 2025-11-24
+ * @Developer: xuey863toy
+ * @Email: xuey863toy@gmail.com
+ */
+
 namespace Framework\Core;
 
 use Framework\Attributes\Route;
@@ -9,17 +21,16 @@ use Framework\Attributes\Routes\BaseMapping;
 use Framework\Attributes\Routes\Prefix;
 use Symfony\Component\Routing\Route as SymfonyRoute;
 use Symfony\Component\Routing\RouteCollection;
-use ReflectionClass;
-use ReflectionMethod;
 
 /**
  * AttributeRouteLoader：
  * - 支持 原生 Route
- * - 支持 Prefix（类级）与 BaseMapping（方法级：GetMapping/PostMapping...）
+ * - 支持 Prefix（类级）与 BaseMapping（方法级：GetMapping/PostMapping...）.
  */
 class AttributeRouteLoader
 {
     private string $controllerDir;
+
     private string $controllerNamespace;
 
     public function __construct(string $controllerDir, string $controllerNamespace)
@@ -39,7 +50,7 @@ class AttributeRouteLoader
                 continue;
             }
 
-            $refClass = new ReflectionClass($className);
+            $refClass = new \ReflectionClass($className);
             if ($refClass->isAbstract()) {
                 continue;
             }
@@ -53,19 +64,19 @@ class AttributeRouteLoader
 
             // 优先读取 Prefix（Spring 风格）
             $prefixAttrs = $refClass->getAttributes(Prefix::class);
-            if (!empty($prefixAttrs)) {
-                $prefixInst     = $prefixAttrs[0]->newInstance();
-                $classPrefix     = $prefixInst->prefix ?? '';
+            if (! empty($prefixAttrs)) {
+                $prefixInst      = $prefixAttrs[0]->newInstance();
+                $classPrefix     = $prefixInst->prefix     ?? '';
                 $classMiddleware = $prefixInst->middleware ?? [];
-                $classAuth       = $prefixInst->auth ?? null;
-                $classRoles      = $prefixInst->roles ?? [];
+                $classAuth       = $prefixInst->auth       ?? null;
+                $classRoles      = $prefixInst->roles      ?? [];
                 $classGroup      = null;
             }
 
             // 兼容你已有的 Route 类级注解（会覆盖 Prefix 的相应值）
             $classRouteAttrs = $refClass->getAttributes(Route::class);
-            if (!empty($classRouteAttrs)) {
-                $classRoute = $classRouteAttrs[0]->newInstance();
+            if (! empty($classRouteAttrs)) {
+                $classRoute      = $classRouteAttrs[0]->newInstance();
                 $classPrefix     = $classRoute->prefix     ?? $classPrefix;
                 $classGroup      = $classRoute->group      ?? $classGroup;
                 $classMiddleware = $classRoute->middleware ?? $classMiddleware;
@@ -74,7 +85,7 @@ class AttributeRouteLoader
             }
 
             // ==== === 方法级注解：支持 Route 或 BaseMapping (GetMapping/PostMapping...) ====
-            foreach ($refClass->getMethods(ReflectionMethod::IS_PUBLIC) as $method) {
+            foreach ($refClass->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
                 $methodAttrs = $method->getAttributes();
 
                 // 如果没有任何注解，回退到你的 auto route 逻辑（保持原样）
@@ -129,11 +140,11 @@ class AttributeRouteLoader
 
                         // mapping 包含: path, methods, auth, roles, middleware, defaults, requirements...
                         $routeLike = (object) [
-                            'path'         => $mapping->path ?? '',
-                            'methods'      => $mapping->methods ?? (property_exists($mapping, 'methods') ? $mapping->methods : []),
+                            'path'         => $mapping->path       ?? '',
+                            'methods'      => $mapping->methods    ?? (property_exists($mapping, 'methods') ? $mapping->methods : []),
                             'middleware'   => $mapping->middleware ?? [],
-                            'auth'         => $mapping->auth ?? null,
-                            'roles'        => $mapping->roles ?? [],
+                            'auth'         => $mapping->auth       ?? null,
+                            'roles'        => $mapping->roles      ?? [],
                             'name'         => null,
                             'defaults'     => [],
                             'requirements' => [],
@@ -165,6 +176,7 @@ class AttributeRouteLoader
 
     /**
      * 将你原始 Route Attribute 转为 Symfony\Route 并加入集合。
+     * @param mixed $classAuth
      */
     private function addSymfonyRouteFromRouteAttr(
         RouteCollection $collection,
@@ -180,9 +192,9 @@ class AttributeRouteLoader
         $path      = trim($routeAttr->path ?? '', '/');
         $finalPath = '/' . trim($prefix . '/' . $path, '/');
 
-        $mergedMiddleware = array_values(array_unique(array_merge((array)$classMiddleware, (array)$routeAttr->middleware)));
+        $mergedMiddleware = array_values(array_unique(array_merge((array) $classMiddleware, (array) $routeAttr->middleware)));
 
-        $needAuth = $routeAttr->auth ?? $classAuth ?? false;
+        $needAuth = $routeAttr->auth  ?? $classAuth ?? false;
         $roles    = $routeAttr->roles ?? $classRoles ?? [];
 
         $sfRoute = new SymfonyRoute(
@@ -199,7 +211,7 @@ class AttributeRouteLoader
             ),
             requirements: $routeAttr->requirements ?? [],
             options: [],
-            host: $routeAttr->host ?? '',
+            host: $routeAttr->host       ?? '',
             schemes: $routeAttr->schemes ?? [],
             methods: $routeAttr->methods ?: ['GET']
         );
@@ -210,6 +222,7 @@ class AttributeRouteLoader
 
     /**
      * 将一个 Route-like（由 BaseMapping 生成） 转为 Symfony\Route 并加入集合。
+     * @param mixed $classAuth
      */
     private function addSymfonyRouteFromRouteLike(
         RouteCollection $collection,
@@ -225,9 +238,9 @@ class AttributeRouteLoader
         $path      = trim($routeLike->path ?? '', '/');
         $finalPath = '/' . trim($prefix . '/' . $path, '/');
 
-        $mergedMiddleware = array_values(array_unique(array_merge((array)$classMiddleware, (array)$routeLike->middleware)));
+        $mergedMiddleware = array_values(array_unique(array_merge((array) $classMiddleware, (array) $routeLike->middleware)));
 
-        $needAuth = $routeLike->auth ?? $classAuth ?? false;
+        $needAuth = $routeLike->auth  ?? $classAuth ?? false;
         $roles    = $routeLike->roles ?? $classRoles ?? [];
 
         $sfRoute = new SymfonyRoute(
@@ -244,7 +257,7 @@ class AttributeRouteLoader
             ),
             requirements: $routeLike->requirements ?? [],
             options: [],
-            host: $routeLike->host ?? '',
+            host: $routeLike->host       ?? '',
             schemes: $routeLike->schemes ?? [],
             methods: $routeLike->methods ?: ['GET']
         );
