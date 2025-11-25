@@ -596,7 +596,7 @@ final class Framework
             }
         } catch (\Throwable $e2) {
             $this->logError('Failed to render exception view: ' . $e2->getMessage());
-            $content = 'Server Error';
+            $content = 'Server Error~';
         }
 
         return new Response($content, $statusCode);
