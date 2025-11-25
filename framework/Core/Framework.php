@@ -273,17 +273,10 @@ final class Framework
             $this->logger = null;
             $this->logError('Failed to initialize logger: ' . $e->getMessage());
         }
-
-        /*
-        $this->logger->info('Framework initialized successfully', [
-            'base_path' => BASE_PATH,
-            'env' => config('app.env'),
-        ]);
-        */
     }
 
     /**
-     * 初始化所有依赖组件.
+     * 初始化路由和中间件.
      */
     private function initializeDependencies(): void
     {

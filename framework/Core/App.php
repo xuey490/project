@@ -48,7 +48,7 @@ class App
                 sprintf('容器必须实现 get() 和 has() 方法，当前类型: %s', get_class($container))
             );
         }
-
+		
         self::$container = $container;
     }
 

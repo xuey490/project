@@ -22,5 +22,7 @@ class Custom extends BaseTpORMModel
     protected $pk = 'id';
 	
     // 表名、字段等设置继承自基类或自动识别
-    protected $name = 'custom'; 
+    #protected $table = 'custom'; 
+	
+	protected $name = 'custom'; //for tp
 }
