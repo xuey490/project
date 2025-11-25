@@ -14,7 +14,7 @@ declare(strict_types=1);
  * @Email: xuey863toy@gmail.com
  */
 
-namespace Framework\Utils;
+namespace Framework\Database;
 
 use think\Container;
 use think\facade\Db;

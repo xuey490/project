@@ -28,7 +28,7 @@ use Framework\Attributes\Route;
 
 
 
-use Framework\Utils\ORMFactory;
+use Framework\Database\ORMFactory;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Support\Facades\DB;
 
@@ -210,8 +210,8 @@ class Home
 		//ThinkORM Model的写法
         #$users = (new Custom())->getTableName();
        	
-		$list = $this->customDao->selectList(['status'=>1] , 'id,name');
-	 dump($list);
+		// $list = $this->customDao->selectList(['status'=>1] , 'id,name');
+		// dump($list);
 		
 		
 		

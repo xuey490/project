@@ -17,7 +17,7 @@ declare(strict_types=1);
 namespace Framework\Providers;
 
 use Framework\Container\ServiceProviderInterface;
-use Framework\Utils\ORMFactory;
+use Framework\Database\ORMFactory;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
