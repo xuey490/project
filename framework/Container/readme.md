@@ -206,3 +206,272 @@ ContainerConfigurator 会在 Framework\Container\Container 的 compile 阶段解
 Autowire 会自动注入构造函数所需的类型
 
 如果服务在 register() 时未定义，会报错.
+
+
+--------------------------------------------------------------------------
+
+除了 singleton，Container 类还可以实现多种服务注册方式，以满足不同的依赖注入需求。以下是几种常见的服务注册方式及其实现，结合Container 类进行扩展：
+
+1.绑定接口到实现（Bind Interface to Implementation）
+将一个接口绑定到一个具体的实现类，容器会自动解析接口为对应的实现。
+实现思路
+- 使用 setDefinition 注册接口，并指定其实现类。
+- 可以选择是否为单例。
+
+在 Container 类中添加：
+
+```
+public function bind(string $abstract, string $concrete, bool $shared = false): void
+{
+    if (self::$container === null) {
+        throw new \RuntimeException('容器尚未初始化。');
+    }
+
+    if (!self::$container instanceof ContainerBuilder) {
+        throw new \RuntimeException('当前容器不支持动态注册服务。');
+    }
+
+    $containerBuilder = self::$container;
+
+    if ($containerBuilder->isCompiled()) {
+        throw new \RuntimeException('容器已经编译，无法再注册新的服务。');
+    }
+
+    $definition = new Definition($concrete);
+    $definition->setShared($shared);
+
+    $containerBuilder->setDefinition($abstract, $definition);
+}
+```
+DEMO:
+```php
+// 绑定接口到实现
+$container->bind(LoggerInterface::class, FileLogger::class);
+
+// 解析接口时，容器会自动返回 FileLogger 实例
+$logger = $container->get(LoggerInterface::class);
+```
+
+2.绑定工厂函数（Bind Factory Function）
+通过一个工厂函数来创建服务实例，适用于需要复杂初始化逻辑的场景。
+实现思路
+- 使用 setFactory 指定一个闭包或可调用对象作为工厂。
+- 可以选择是否为单例。
+
+在 Container 类中添加：
+```
+public function factory(string $id, callable $factory, bool $shared = false): void
+{
+    if (self::$container === null) {
+        throw new \RuntimeException('容器尚未初始化。');
+    }
+
+    if (!self::$container instanceof ContainerBuilder) {
+        throw new \RuntimeException('当前容器不支持动态注册服务。');
+    }
+
+    $containerBuilder = self::$container;
+
+    if ($containerBuilder->isCompiled()) {
+        throw new \RuntimeException('容器已经编译，无法再注册新的服务。');
+    }
+
+    $definition = new Definition();
+    $definition->setFactory($factory);
+    $definition->setShared($shared);
+
+    $containerBuilder->setDefinition($id, $definition);
+}
+```
+Demo
+
+// 注册一个工厂函数来创建数据库连接
+$container->factory('db.connection', function () {
+    return new DatabaseConnection([
+        'host' => 'localhost',
+        'user' => 'root',
+        'pass' => 'password',
+    ]);
+}, true); // 设为单例
+
+// 获取服务
+$db = $container->get('db.connection');
+
+3.绑定实例（Bind Instance）
+直接将一个已存在的对象实例注册到容器中，适用于预初始化的对象。
+实现思路
+- 使用 set 方法直接注册实例（Symfony 容器原生支持）。
+- 注意：编译后的容器可能不支持 set 方法，因此需要在编译前调用。
+
+在 Container 类中添加：
+```php
+public function instance(string $id, object $instance): void
+{
+    if (self::$container === null) {
+        throw new \RuntimeException('容器尚未初始化。');
+    }
+
+    // 直接注册实例
+    self::$container->set($id, $instance);
+}
+```
+
+demo:
+// 预创建一个实例
+$redis = new Redis();
+$redis->connect('127.0.0.1', 6379);
+
+// 注册实例
+$container->instance('redis', $redis);
+
+// 获取实例
+$redisInstance = $container->get('redis');
+
+4.绑定参数（Bind Parameter）
+注册一个参数（如配置值），供其他服务依赖注入时使用。
+实现思路
+- 使用 setParameter 方法注册参数。
+- 参数可以是字符串、数组、数字等。
+代码实现
+在 Container 类中添加：
+
+```php
+public function parameter(string $name, mixed $value): void
+{
+    if (self::$container === null) {
+        throw new \RuntimeException('容器尚未初始化。');
+    }
+
+    self::$container->setParameter($name, $value);
+}
+```
+
+DEMO:
+```php
+// 注册参数
+$container->parameter('app.name', 'My Framework');
+$container->parameter('database.config', [
+    'host' => 'localhost',
+    'user' => 'root',
+]);
+
+// 在服务中通过构造函数注入参数
+class ConfigService
+{
+    public function __construct(
+        string $appName,
+        array $databaseConfig
+    ) {
+        // ...
+    }
+}
+
+// 服务配置（services.php）
+return [
+    ConfigService::class => [
+        'arguments' => [
+            '$appName' => '%app.name%',
+            '$databaseConfig' => '%database.config%',
+        ],
+    ],
+];
+```
+5.绑定带标签的服务（Bind Tagged Services）
+为服务添加标签，方便批量获取同一类服务（如事件监听器、命令等）。
+实现思路
+- 在服务定义中添加标签。
+- 通过 findTaggedServiceIds 方法获取所有带特定标签的服务。
+代码实现
+在 Container 类中添加：
+
+```php
+public function tag(string $id, string $tag, array $attributes = []): void
+{
+    if (self::$container === null) {
+        throw new \RuntimeException('容器尚未初始化。');
+    }
+
+    if (!self::$container instanceof ContainerBuilder) {
+        throw new \RuntimeException('当前容器不支持动态注册服务。');
+    }
+
+    $containerBuilder = self::$container;
+
+    if ($containerBuilder->isCompiled()) {
+        throw new \RuntimeException('容器已经编译，无法再注册新的服务。');
+    }
+
+    $definition = $containerBuilder->getDefinition($id);
+    $definition->addTag($tag, $attributes);
+}
+```
+DEMO:
+```php
+// 注册一个事件监听器并添加标签
+$container->bind(OrderCreatedListener::class, OrderCreatedListener::class);
+$container->tag(OrderCreatedListener::class, 'event.listener', ['event' => 'order.created']);
+
+// 获取所有事件监听器
+$listeners = $container->getContainer()->findTaggedServiceIds('event.listener');
+foreach ($listeners as $id => $tags) {
+    $listener = $container->get($id);
+    // ...
+}
+```
+
+6.绑定延迟服务（Bind Lazy Services）
+延迟服务的初始化，直到第一次调用时才创建实例，适用于重量级服务。
+实现思路
+- 在服务定义中设置 setLazy(true)。
+- Symfony 容器会自动生成一个代理类，延迟实例化。
+代码实现
+在 Container 类中添加：
+
+```php
+public function lazy(string $id, string $concrete, bool $shared = true): void
+{
+    if (self::$container === null) {
+        throw new \RuntimeException('容器尚未初始化。');
+    }
+
+    if (!self::$container instanceof ContainerBuilder) {
+        throw new \RuntimeException('当前容器不支持动态注册服务。');
+    }
+
+    $containerBuilder = self::$container;
+
+    if ($containerBuilder->isCompiled()) {
+        throw new \RuntimeException('容器已经编译，无法再注册新的服务。');
+    }
+
+    $definition = new Definition($concrete);
+    $definition->setShared($shared);
+    $definition->setLazy(true);
+
+    $containerBuilder->setDefinition($id, $definition);
+}
+```
+DEMO:
+
+```php
+// 注册一个延迟初始化的服务
+$container->lazy('heavy.service', HeavyService::class);
+
+// 此时不会创建实例
+$service = $container->get('heavy.service');
+
+// 第一次调用方法时才会初始化
+$service->doSomething();
+```
+
+### 总结
+通过以上扩展，你的 Container 类将支持多种服务注册方式，覆盖了大部分常见的依赖注入场景：
+- make: 单例服务 用于模拟 Laravel/Webman 的构建行为
+- singleton: 单例服务。
+- bind: 接口绑定实现。
+- factory: 工厂函数创建服务。
+- instance: 直接注册实例。
+- parameter: 注册配置参数。
+- tag: 为服务添加标签，方便批量获取。
+- lazy: 延迟初始化服务。
+这些方法可以根据实际需求选择性实现，建议优先实现make、 bind、factory 和 instance，以满足大部分开发场景。

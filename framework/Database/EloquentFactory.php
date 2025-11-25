@@ -14,7 +14,7 @@ declare(strict_types=1);
  * @Email: xuey863toy@gmail.com
  */
 
-namespace Framework\Utils;
+namespace Framework\Database;
 
 use Illuminate\Container\Container;
 use Illuminate\Database\Capsule\Manager as Capsule;
