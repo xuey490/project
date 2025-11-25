@@ -99,7 +99,7 @@ class Snowflake
 
     private function timeGen(): int
     {
-        return floor(microtime(true) * 1000);
+        return intval(microtime(true) * 1000);
     }
 
     private function tilNextMillis($lastTimestamp): int
