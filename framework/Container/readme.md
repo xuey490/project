@@ -210,9 +210,9 @@ Autowire 会自动注入构造函数所需的类型
 
 --------------------------------------------------------------------------
 
-除了 singleton，Container 类还可以实现多种服务注册方式，以满足不同的依赖注入需求。以下是几种常见的服务注册方式及其实现，结合Container 类进行扩展：
+除了 singleton , make，Container 类还可以实现多种服务注册方式，以满足不同的依赖注入需求。以下是几种常见的服务注册方式及其实现，结合Container 类进行扩展：
 
-1.绑定接口到实现（Bind Interface to Implementation）
+### 1.绑定接口到实现（Bind Interface to Implementation）
 将一个接口绑定到一个具体的实现类，容器会自动解析接口为对应的实现。
 实现思路
 - 使用 setDefinition 注册接口，并指定其实现类。
@@ -252,7 +252,7 @@ $container->bind(LoggerInterface::class, FileLogger::class);
 $logger = $container->get(LoggerInterface::class);
 ```
 
-2.绑定工厂函数（Bind Factory Function）
+### 2.绑定工厂函数（Bind Factory Function）
 通过一个工厂函数来创建服务实例，适用于需要复杂初始化逻辑的场景。
 实现思路
 - 使用 setFactory 指定一个闭包或可调用对象作为工厂。
@@ -297,7 +297,7 @@ $container->factory('db.connection', function () {
 // 获取服务
 $db = $container->get('db.connection');
 
-3.绑定实例（Bind Instance）
+### 3.绑定实例（Bind Instance）
 直接将一个已存在的对象实例注册到容器中，适用于预初始化的对象。
 实现思路
 - 使用 set 方法直接注册实例（Symfony 容器原生支持）。
@@ -327,7 +327,7 @@ $container->instance('redis', $redis);
 // 获取实例
 $redisInstance = $container->get('redis');
 
-4.绑定参数（Bind Parameter）
+### 4.绑定参数（Bind Parameter）
 注册一个参数（如配置值），供其他服务依赖注入时使用。
 实现思路
 - 使用 setParameter 方法注册参数。
@@ -376,7 +376,7 @@ return [
     ],
 ];
 ```
-5.绑定带标签的服务（Bind Tagged Services）
+### 5.绑定带标签的服务（Bind Tagged Services）
 为服务添加标签，方便批量获取同一类服务（如事件监听器、命令等）。
 实现思路
 - 在服务定义中添加标签。
@@ -419,7 +419,7 @@ foreach ($listeners as $id => $tags) {
 }
 ```
 
-6.绑定延迟服务（Bind Lazy Services）
+### 6.绑定延迟服务（Bind Lazy Services）
 延迟服务的初始化，直到第一次调用时才创建实例，适用于重量级服务。
 实现思路
 - 在服务定义中设置 setLazy(true)。
