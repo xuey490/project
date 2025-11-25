@@ -176,6 +176,11 @@ class XssFilterMiddleware
             $input = $this->escapeSql($input);
         }
 
+        // 3. 移除危险字符和控制字符
+        $str = preg_replace('/[\x00-\x1F\x7F]/', '', $str); // 移除 ASCII 控制字符
+        $str = preg_replace('/[<>{}()\/\\\]/', '', $str); // 移除危险符号
+
+
         return $input;
     }
 
