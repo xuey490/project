@@ -60,13 +60,7 @@ class Kernel
         $this->booted = true;
     }
 
-    /**
-     * 获取容器（修正返回类型）.
-     */
-    public function getContainer(): ContainerInterface
-    {
-        return $this->container;
-    }
+
 
     /**
      * 检查内核是否已启动.
@@ -76,13 +70,6 @@ class Kernel
         return $this->booted;
     }
 
-    /**
-     * 获取项目根目录.
-     */
-    public function getProjectDir(): string
-    {
-        return dirname(__DIR__, 2); // 从 framework/Core 到项目根
-    }
 
     // 1. 设置全局容器入口（供助手函数使用）
     private function setupContainerAlias(): void
