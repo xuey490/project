@@ -16,8 +16,6 @@ declare(strict_types=1);
 
 namespace Framework\Utils;
 
-use madong\exception\ApiException;
-
 /**
  * 雪花ID生成.
  */
@@ -99,7 +97,7 @@ class Snowflake
 
     private function timeGen(): int
     {
-        return floor(microtime(true) * 1000);
+        return intval(microtime(true) * 1000);
     }
 
     private function tilNextMillis($lastTimestamp): int
