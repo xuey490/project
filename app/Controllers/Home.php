@@ -210,8 +210,8 @@ class Home
 		//ThinkORM Model的写法
         #$users = (new Custom())->getTableName();
        	
-		#$list = $this->customDao->selectModel(['status'=>1] , 'id,name');
-	 #dump($users);
+		$list = $this->customDao->selectList(['status'=>1] , 'id,name');
+	 dump($list);
 		
 		
 		

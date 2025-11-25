@@ -20,9 +20,8 @@ return function (ContainerConfigurator $configurator) {
 		->public();
 		
 	#(new SessionServiceProvider())($configurator);
-	
-    $parameters = $configurator->parameters();
-    $parameters->set('database.engine', 'thinkORM'); // 可以在 .env 中被覆盖	
+    //$parameters = $configurator->parameters();
+    //$parameters->set('database.engine', env('ORM_DRIVER')?? 'thinkORM'); // 可以在 .env 中被覆盖	
 
     $services->set('test', \stdClass::class)->public();
 
@@ -32,7 +31,7 @@ return function (ContainerConfigurator $configurator) {
 
 
 	//$services->load('App\\Dao\\', '../app/Dao/');
-	
+
 	$services->load('App\\Dao\\', BASE_PATH. '/app/Dao/**/*.php')
 		->autowire()
 		->autoconfigure()

@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace App\Models;
 
 use Framework\Basic\BaseTpORMModel;
+use Framework\Basic\BaseLaORMModel;
 
 class Custom extends BaseTpORMModel
 {
