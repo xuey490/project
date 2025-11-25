@@ -57,13 +57,7 @@ abstract class BaseDao
     {
         // 1. 获取 ORM 模式
         if ($mode === null) {
-            // 尝试从容器参数获取，如果容器未设置则默认为 thinkORM
-            $container = App::getContainer();
-            if ($container->hasParameter('database.engine')) {
-                $mode = $container->getParameter('database.engine');
-            } else {
-                $mode = 'thinkORM';
-            }
+            $mode = config('database.engine' , 'thinkORM') ?? env('ORM_DRIVER');
         }
 
         // 2. 获取模型类
