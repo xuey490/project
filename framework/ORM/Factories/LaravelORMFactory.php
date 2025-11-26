@@ -22,7 +22,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
+#use Illuminate\Support\Str;
+use Framework\Utils\Arr;
 
 class LaravelORMFactory // implements ORMAdapterInterface
 {
@@ -68,75 +69,256 @@ class LaravelORMFactory // implements ORMAdapterInterface
     }
 
     /**
-     * 获取条数.
+     * 获取条数
+     *
+     * @param array $where
+     * @param bool  $search
+     *
+     * @return int
+     * @throws \Exception
      */
-    public function count(array $where = [], bool $search = true): int
+    public function count(array $where = [], bool $search = false): int
     {
-        return $this->search($where, $search)->count();
-    }
-
-    /**
-     * 查询列表.
-     */
-    public function selectList(array $where, string $field = '*', int $page = 0, int $limit = 0, string $order = '', array $with = [], bool $search = false): Collection
-    {
-        $query = $this->selectModel($where, $field, $page, $limit, $order, $with, $search);
-        return $query->get();
-    }
-
-    /**
-     * 构建查询模型 (返回 Builder).
-     */
-    public function selectModel(array $where, string $field = '*', int $page = 0, int $limit = 0, string $order = '', array $with = [], bool $search = false): Builder
-    {
+        // 获取查询构建器实例
+        $query = $this->getModel()->query();
         if ($search) {
-            $query = $this->search($where);
+            $query = $this->search($where); // search 返回的是一个查询构建器
         } else {
-            $query = $this->getModel()->query()->where($where);
+            $whereInConditions = [];
+            foreach ($where as $key => $condition) {
+                if (is_array($condition) && count($condition) === 3) {
+                    $operator = strtolower($condition[1]);
+                    if ($operator === 'in' || $operator === 'not in') {
+                        $whereInConditions[] = $condition;
+                        unset($where[$key]);//移除分离后的条件
+                    }
+                }
+            }
+            //普通条件格式直接传入构建
+            if (!empty($where)) {
+                $query->where($where);
+            }
+
+            //特殊条件格式额外处理
+            foreach ($whereInConditions as $condition) {
+                if (empty($condition[2])) {
+                    continue;
+                }
+                $operator = strtolower($condition[1]);
+                $value = Arr::normalize($condition[2]);
+                if ($operator === 'in') {
+                    $query->whereIn($condition[0], $value);
+                } elseif ($operator === 'not in') {
+                    $query->whereNotIn($condition[0], $value);
+                }
+            }
         }
 
-        // 字段选择
-        if ($field !== '*' && $field !== '') {
-            // Laravel select 接受数组或可变参数
-            $fieldArr = is_array($field) ? $field : explode(',', $field);
-            $query->select($fieldArr);
-        }
+        // 返回满足条件的记录数量
+        return $query->count();
+    }
 
-        // 分页 (Laravel Builder 使用 forPage 或 offset/limit)
+
+
+    /**
+     * 查询列表
+     *
+     * @param array      $where
+     * @param string     $field
+     * @param int        $page
+     * @param int        $limit
+     * @param string     $order
+     * @param array      $with
+     * @param bool       $search
+     * @param array|null $withoutScopes
+     *
+     * @return \Illuminate\Database\Eloquent\Collection|null
+     * @throws \Exception
+     */
+    public function selectList(array $where, string $field = '*', int $page = 0, int $limit = 0, string $order = '', array $with = [], bool $search = false, ?array $withoutScopes = null): ?\Illuminate\Database\Eloquent\Collection
+    {
+        // 使用 selectModel 方法获取查询构建器
+        $query = $this->selectModel($where, $field, $page, $limit, $order, $with, $search, $withoutScopes);
+
+        // 如果字段不是 '*'，则应用 selectRaw()
+        if ($field !== '*') {
+            $query->selectRaw($field); // 确保在查询构建器上调用
+        }
+        // 应用分页
         if ($page > 0 && $limit > 0) {
-            $query->forPage($page, $limit);
+            // 只返回数据部分
+            return $query->paginate($limit, ['*'], 'page', $page)->getCollection();
+        }
+        return $query->get(); // 返回所有数据
+    }
+
+    /**
+     * 获取某些条件数据
+     *
+     * @param array      $where
+     * @param string     $field
+     * @param int        $page
+     * @param int        $limit
+     * @param string     $order
+     * @param array      $with
+     * @param bool       $search
+     * @param array|null $withoutScopes
+     *
+     * @return \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder|\Illuminate\Pagination\LengthAwarePaginator|null
+     * @throws \Exception
+     */
+    public function selectModel(array $where, string $field = '*', int $page = 0, int $limit = 0, string $order = '', array $with = [], bool $search = false, ?array $withoutScopes = null): \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder|\Illuminate\Pagination\LengthAwarePaginator|null
+    {
+        // 获取模型的查询构建器
+        $query = $this->getModel()->query();
+
+        // 作用域处理
+        if (!empty($withoutScopes)) {
+            $this->applyScopeRemoval($query, $withoutScopes);
         }
 
-        // 排序
+        // 根据是否需要搜索来决定查询条件
+        if ($search) {
+            $query = $this->search($where); // search 返回的是一个查询构建器
+        } else {
+//            $query->where($where); // 应用 where 条件
+            $whereInConditions = [];
+            foreach ($where as $key => $condition) {
+                if (is_array($condition) && count($condition) === 3 && ($condition[1] === 'in' || $condition[1] === 'IN')) {
+                    $whereInConditions[] = $condition;
+                    unset($where[$key]);//移除分离后的条件
+                }
+            }
+            //普通条件格式直接传入构建
+            if (!empty($where)) {
+                $query->where($where);
+            }
+
+            //特殊条件格式额外处理
+            foreach ($whereInConditions as $condition) {
+                if (empty($condition[2])) {
+                    continue;
+                }
+                $value = Arr::normalize($condition[2]);
+                $query->whereIn($condition[0], $value);
+            }
+        }
+        // 应用字段选择
+        if ($field !== '*') {
+            $query->selectRaw($field); // 在这里应用 selectRaw
+        }
+        // 应用分页和其他查询条件
+        if ($page > 0 && $limit > 0) {
+            $query->paginate($limit, ['*'], 'page', $page);
+        }
         if ($order !== '') {
             $query->orderByRaw($order);
         }
-
-        // 关联查询
-        if (! empty($with)) {
+        if (!empty($with)) {
             $query->with($with);
         }
-
-        return $query;
+        return $query; // 返回查询构建器
     }
 
     /**
-     * 获取某些条件总数.
+     * 获取条数
+     *
+     * @param array $where
+     *
+     * @return int
+     * @throws Exception
      */
     public function getCount(array $where): int
     {
-        return $this->getModel()->where($where)->count();
+        // 获取模型的查询构建器
+        $query = $this->getModel()->query();
+
+        $whereInConditions = [];
+        foreach ($where as $key => $condition) {
+            if (is_array($condition) && count($condition) === 3) {
+                $operator = strtolower($condition[1]);
+                if ($operator === 'in' || $operator === 'not in') {
+                    $whereInConditions[] = $condition;
+                    unset($where[$key]);//移除分离后的条件
+                }
+            }
+        }
+        //普通条件格式直接传入构建
+        if (!empty($where)) {
+            $query->where($where);
+        }
+
+        //特殊条件格式额外处理
+        foreach ($whereInConditions as $condition) {
+            if (empty($condition[2])) {
+                continue;
+            }
+            $operator = strtolower($condition[1]);
+            $value = Arr::normalize($condition[2]);
+            if ($operator === 'in') {
+                $query->whereIn($condition[0], $value);
+            } elseif ($operator === 'not in') {
+                $query->whereNotIn($condition[0], $value);
+            }
+        }
+
+        return $query->count();
     }
 
+
     /**
-     * 获取唯一记录数量.
+     * 计算符合条件的唯一记录数量
+     *
+     * @param array  $where
+     * @param string $field
+     * @param bool   $search
+     *
+     * @return int
+     * @throws \Exception
      */
     public function getDistinctCount(array $where, string $field, bool $search = true): int
     {
-        $query = $search ? $this->search($where) : $this->getModel()->where($where);
+        // 构建查询
+        $query = $this->getModel()->query();
+
+        // 应用搜索条件
+        if ($search) {
+            $query = $this->search($where);
+        } else {
+            $whereInConditions = [];
+            foreach ($where as $key => $condition) {
+                if (is_array($condition) && count($condition) === 3) {
+                    $operator = strtolower($condition[1]);
+                    if ($operator === 'in' || $operator === 'not in') {
+                        $whereInConditions[] = $condition;
+                        unset($where[$key]);//移除分离后的条件
+                    }
+                }
+            }
+            //普通条件格式直接传入构建
+            if (!empty($where)) {
+                $query->where($where);
+            }
+
+            //特殊条件格式额外处理
+            foreach ($whereInConditions as $condition) {
+                if (empty($condition[2])) {
+                    continue;
+                }
+                $operator = strtolower($condition[1]);
+                $value = Arr::normalize($condition[2]);
+                if ($operator === 'in') {
+                    $query->whereIn($condition[0], $value);
+                } elseif ($operator === 'not in') {
+                    $query->whereNotIn($condition[0], $value);
+                }
+            }
+        }
+        // 获取唯一计数
         return $query->distinct()->count($field);
     }
-
+	
+	
     /**
      * 获取主键.
      */
@@ -154,377 +336,1036 @@ class LaravelORMFactory // implements ORMAdapterInterface
     }
 
     /**
-     * 获取一条数据.
-     * @param mixed $id
+     * 获取一条数据
+     *
+     * @param            $id
+     * @param array|null $field
+     * @param array|null $with
+     * @param string     $order
+     * @param array|null $withoutScopes
+     *
+     * @return \Illuminate\Database\Eloquent\Model|null
+     * @throws \Exception
      */
-    public function get($id, ?array $field = [], ?array $with = [], string $order = ''): mixed
+    public function get($id, ?array $field = null, ?array $with = [], string $order = '', ?array $withoutScopes = null): ?\Illuminate\Database\Eloquent\Model
     {
-        $pk = $this->getPk();
+        $where = is_array($id) ? $id : [$this->getPk() => $id];
+        $query = $this->getModel()->query();
 
-        if (is_array($id)) {
-            $where = $id;
-        } else {
-            $where = [$pk => $id];
+        $whereInConditions = [];
+        foreach ($where as $key => $condition) {
+            if (is_array($condition) && count($condition) === 3) {
+                $operator = strtolower($condition[1]);
+                if ($operator === 'in' || $operator === 'not in') {
+                    $whereInConditions[] = $condition;
+                    unset($where[$key]);//移除分离后的条件
+                }
+            }
+        }
+        //普通条件格式直接传入构建
+        if (!empty($where)) {
+            $query->where($where);
         }
 
-        $query = $this->getModel()->newQuery();
-        $query->where($where);
+        //特殊条件格式额外处理
+        foreach ($whereInConditions as $condition) {
+            if (empty($condition[2])) {
+                continue;
+            }
+            $operator = strtolower($condition[1]);
+            $value = Arr::normalize($condition[2]);
+            if ($operator === 'in') {
+                $query->whereIn($condition[0], $value);
+            } elseif ($operator === 'not in') {
+                $query->whereNotIn($condition[0], $value);
+            }
+        }
 
-        if (! empty($with)) {
+        $this->applyScopeRemoval($query, $withoutScopes);
+        // 添加关联加载
+        if (!empty($with)) {
             $query->with($with);
         }
-
+        // 添加排序条件
         if ($order !== '') {
             $query->orderByRaw($order);
         }
-
-        $select = $field ?? ['*'];
-        return $query->select($select)->first();
+        return $query->select($field ?? ['*'])->first();
     }
 
+
     /**
-     * 查询是否存在.
-     * @param mixed $map
+     * 查询一条数据是否存在
+     *
+     * @param        $map
+     * @param string $field
+     *
+     * @return bool
+     * @throws Exception
      */
     public function be($map, string $field = ''): bool
     {
-        if (! is_array($map) && empty($field)) {
+        // 如果 $map 不是数组且 $field 为空，使用主键
+        if (!is_array($map) && empty($field)) {
             $field = $this->getPk();
         }
-        $map = ! is_array($map) ? [$field => $map] : $map;
 
-        return $this->getModel()->where($map)->exists();
+        // 如果 $map 不是数组，将其转换为数组
+        $map = !is_array($map) ? [$field => $map] : $map;
+
+        // 使用 Eloquent 查询构建器检查记录是否存在
+        $query = $this->getModel()->query();
+
+        $whereInConditions = [];
+        foreach ($map as $key => $condition) {
+            if (is_array($condition) && count($condition) === 3) {
+                $operator = strtolower($condition[1]);
+                if ($operator === 'in' || $operator === 'not in') {
+                    $whereInConditions[] = $condition;
+                    unset($map[$key]);//移除分离后的条件
+                }
+            }
+        }
+        //普通条件格式直接传入构建
+        if (!empty($map)) {
+            $query->where($map);
+        }
+
+        //特殊条件格式额外处理
+        foreach ($whereInConditions as $condition) {
+            if (empty($condition[2])) {
+                continue;
+            }
+            $operator = strtolower($condition[1]);
+            $value = Arr::normalize($condition[2]);
+            if ($operator === 'in') {
+                $query->whereIn($condition[0], $value);
+            } elseif ($operator === 'not in') {
+                $query->whereNotIn($condition[0], $value);
+            }
+        }
+
+        return $query->exists();
     }
 
+
     /**
-     * 根据条件获取一条数据.
+     * 根据条件获取一条数据
+     *
+     * @param array       $where
+     * @param string|null $field
+     * @param array       $with
+     *
+     * @return Model|null
+     * @throws Exception
      */
     public function getOne(array $where, ?string $field = '*', array $with = []): ?Model
     {
-        $fieldArray = $field === '*' ? ['*'] : (is_string($field) ? explode(',', $field) : $field);
-        return $this->getModel()->with($with)->where($where)->select($fieldArray)->first();
+        // 将字段字符串转换为数组
+        $fieldArray = $field === '*' ? ['*'] : explode(',', $field);
+
+        // 使用 Eloquent 查询构建器获取一条数据
+        $query = $this->getModel()->query();
+
+        $whereInConditions = [];
+        foreach ($where as $key => $condition) {
+            if (is_array($condition) && count($condition) === 3) {
+                $operator = strtolower($condition[1]);
+                if ($operator === 'in' || $operator === 'not in') {
+                    $whereInConditions[] = $condition;
+                    unset($where[$key]);//移除分离后的条件
+                }
+            }
+        }
+        //普通条件格式直接传入构建
+        if (!empty($where)) {
+            $query->where($where);
+        }
+
+        //特殊条件格式额外处理
+        foreach ($whereInConditions as $condition) {
+            if (empty($condition[2])) {
+                continue;
+            }
+            $operator = strtolower($condition[1]);
+            $value = Arr::normalize($condition[2]);
+            if ($operator === 'in') {
+                $query->whereIn($condition[0], $value);
+            } elseif ($operator === 'not in') {
+                $query->whereNotIn($condition[0], $value);
+            }
+        }
+
+        // 添加关联加载
+        if (!empty($with)) {
+            $query->with($with);
+        }
+
+        return $query->select($fieldArray)->first();
     }
+
 
     /**
      * 获取某字段的值
-     * @param mixed $where
+     *
+     * @param             $where
+     * @param string|null $field
+     *
+     * @return mixed
+     * @throws Exception
      */
     public function value($where, ?string $field = null): mixed
     {
-        $pk = $this->getPk();
-        // 如果使用了搜索器逻辑，需要调用 search
-        // 这里假设 value 也要走 setWhere 的逻辑
-        return $this->search($this->setWhere($where))->value($field ?: $pk);
+        $pk = $this->getPk(); // 获取主键
+        $where = $this->setWhere($where); // 设置查询条件
+
+        $query = $this->getModel()->query();
+
+        $whereInConditions = [];
+        foreach ($where as $key => $condition) {
+            if (is_array($condition) && count($condition) === 3) {
+                $operator = strtolower($condition[1]);
+                if ($operator === 'in' || $operator === 'not in') {
+                    $whereInConditions[] = $condition;
+                    unset($where[$key]);//移除分离后的条件
+                }
+            }
+        }
+        //普通条件格式直接传入构建
+        if (!empty($where)) {
+            $query->where($where);
+        }
+
+        //特殊条件格式额外处理
+        foreach ($whereInConditions as $condition) {
+            if (empty($condition[2])) {
+                continue;
+            }
+            $operator = strtolower($condition[1]);
+            $value = Arr::normalize($condition[2]);
+            if ($operator === 'in') {
+                $query->whereIn($condition[0], $value);
+            } elseif ($operator === 'not in') {
+                $query->whereNotIn($condition[0], $value);
+            }
+        }
+
+        return $query->value($field ?? $pk); // 返回指定字段的值，默认为主键
     }
 
+
     /**
-     * 获取某个字段数组.
+     * 获取某个字段数组
+     *
+     * @param array  $where
+     * @param string $field
+     * @param string $key
+     *
+     * @return array
+     * @throws ReflectionException|Exception
      */
     public function getColumn(array $where, string $field, string $key = ''): array
     {
-        $query = $this->getModel()->where($where);
+        // 使用 Eloquent 查询构建器获取字段数组
+        $query = $this->getModel()->query();
+
+        $whereInConditions = [];
+        foreach ($where as $k => $condition) {
+            if (is_array($condition) && count($condition) === 3) {
+                $operator = strtolower($condition[1]);
+                if ($operator === 'in' || $operator === 'not in') {
+                    $whereInConditions[] = $condition;
+                    unset($where[$k]);//移除分离后的条件
+                }
+            }
+        }
+        //普通条件格式直接传入构建
+        if (!empty($where)) {
+            $query->where($where);
+        }
+
+        //特殊条件格式额外处理
+        foreach ($whereInConditions as $condition) {
+            if (empty($condition[2])) {
+                continue;
+            }
+            $operator = strtolower($condition[1]);
+            $value = Arr::normalize($condition[2]);
+            if ($operator === 'in') {
+                $query->whereIn($condition[0], $value);
+            } elseif ($operator === 'not in') {
+                $query->whereNotIn($condition[0], $value);
+            }
+        }
+
+
+        // 如果指定了键，则使用 keyBy 方法
         if ($key) {
             return $query->pluck($field, $key)->toArray();
         }
+
+        // 否则，直接获取字段数组
         return $query->pluck($field)->toArray();
     }
 
     /**
-     * 删除.
+     * 删除
+     *
+     * @param array|int|string $id
+     * @param string|null      $key
+     *
+     * @return mixed
+     * @throws Exception
      */
-    public function delete(array|int|string $id, ?string $key = null): mixed
+    public function delete(array|int|string $id, ?string $key = null): int
     {
-        if (is_array($id)) {
-            $where = $id;
-        } else {
-            $where = [is_null($key) ? $this->getPk() : $key => $id];
+        try {
+            $query = $this->getModel()->query();
+            if (is_array($id)) {
+                if (array_is_list($id)) {
+                    //主键列表批量删除
+                    return $this->getModel()->destroy($id)->count();
+                } else {
+                    foreach ($id as $field => $value) {
+                        $query->where($field, $value);
+                    }
+                }
+            } else {
+                $query->where($key ?: $this->getPk(), $id);
+            }
+            $models = $query->get();
+            foreach ($models as $model) {
+                $model->delete();//触发事件
+            }
+            return $models->count();
+        } catch (Exception $e) {
+            throw new Exception("删除失败:" . $e->getMessage(), $e->getCode(), $e);
         }
-
-        return $this->getModel()->where($where)->delete();
     }
 
     /**
-     * 销毁记录 (Destroy 是根据主键删除).
+     * 删除记录
+     *
+     * @param mixed $id
+     * @param bool  $force
+     *
+     * @return bool
+     * @throws Exception
      */
     public function destroy(mixed $id, bool $force = false): bool
     {
-        $model = $this->getModel();
-        // Eloquent destroy 方法接收 ID 或 数组
-        $count = $model::destroy($id);
-        return $count > 0;
+        // 使用 Eloquent 的 destroy 方法删除记录
+        return $this->getModel()->destroy($id, $force) > 0;
     }
 
     /**
-     * 更新.
+     * 更新
+     *
+     * @param string|int|array $id
+     * @param array            $data
+     * @param string|null      $key
+     *
+     * @return mixed
+     * @throws Exception
      */
-    public function update(array|int|string $id, array $data, ?string $key = null): mixed
+    public function update(string|int|array $id, array $data, ?string $key = null): mixed
     {
-        if (is_array($id)) {
-            $where = $id;
-        } else {
-            $where = [is_null($key) ? $this->getPk() : $key => $id];
-        }
+        $where             = is_array($id) ? $id : [is_null($key) ? $this->getPk() : $key => $id];
+        $query             = $this->getModel()->query();
+        $whereInConditions = [];
+        $whereInKeys       = [];
 
-        // Eloquent 的 update 返回受影响行数 (int)
-        return $this->getModel()->where($where)->update($data);
-    }
-
-    /**
-     * 批量更新.
-     */
-    public function batchUpdate(array $ids, array $data, ?string $key = null): mixed
-    {
-        return $this->getModel()
-            ->whereIn(is_null($key) ? $this->getPk() : $key, $ids)
-            ->update($data);
-    }
-
-    /**
-     * 保存/新增.
-     */
-    public function save(array $data): mixed
-    {
-        return $this->getModel()->create($data);
-    }
-
-    /**
-     * 批量插入.
-     */
-    public function saveAll(array $data): bool
-    {
-        // Eloquent insert 返回 bool
-        return $this->getModel()->insert($data);
-    }
-
-    /**
-     * 获取字段值
-     * @param mixed $value
-     */
-    public function getFieldValue($value, string $field, ?string $valueKey = null, ?array $where = []): mixed
-    {
-        if ($valueKey) {
-            $where[$valueKey] = $value;
-        } else {
-            $where[$this->getPk()] = $value;
-        }
-        return $this->getModel()->where($where)->value($field);
-    }
-
-    public function search(array $where = [], bool $search = true): Builder|Model
-    {
-        if ($where) {
-            return $this->withSearchSelect($where, $search);
-        }
-        return $this->getModel();
-    }
-
-    // =========================================================================
-    // 数值计算与业务辅助
-    // =========================================================================
-
-    public function sum(array $where, string $field, bool $search = false): float
-    {
-        if ($search) {
-            return (float) $this->search($where)->sum($field);
-        }
-        return (float) $this->getModel()->where($where)->sum($field);
-    }
-
-    public function bcInc($key, string $incField, string $inc, ?string $keyField = null, int $acc = 2): bool
-    {
-        return $this->bc($key, $incField, $inc, $keyField, 1, $acc);
-    }
-
-    public function bcDec($key, string $decField, string $dec, ?string $keyField = null, int $acc = 2): bool
-    {
-        return $this->bc($key, $decField, $dec, $keyField, 2, $acc);
-    }
-
-    /**
-     * 高精度计算 (PHP侧计算，保持与 ThinkORMFactory 一致).
-     * @param mixed $key
-     */
-    public function bc($key, string $field, string $value, ?string $keyField = null, int $type = 1, int $acc = 2): bool
-    {
-        $result = $keyField === null ? $this->get($key) : $this->getOne([$keyField => $key]);
-
-        if (! $result) {
-            return false;
-        }
-
-        $currentVal = $result->{$field} ?? 0;
-        $newValue   = 0;
-
-        if ($type === 1) {
-            // 加法
-            $newValue = bcadd((string) $currentVal, (string) $value, $acc);
-        } elseif ($type === 2) {
-            // 减法
-            if ((float) $currentVal < (float) $value) {
-                return false;
+        // 分离 IN 条件
+        foreach ($where as $key => $condition) {
+            if (!is_array($condition)) {
+                //条件不是数组直接跳过
+                continue;
             }
-            $newValue = bcsub((string) $currentVal, (string) $value, $acc);
-        }
-
-        $result->{$field} = $newValue;
-        return $result->save();
-    }
-
-    public function decStockIncSales(array $where, int $num, string $stock = 'stock', string $sales = 'sales'): bool
-    {
-        $product = $this->getModel()->where($where)->first();
-        if ($product) {
-            // 使用 DB::raw 实现原子更新，或者分别 update
-            // Laravel 的 increment/decrement 是立即执行的
-            // 同时更新两个字段建议用 update
-            return (bool) $product->update([
-                $stock => DB::raw("`{$stock}` - {$num}"),
-                $sales => DB::raw("`{$sales}` + {$num}"),
-            ]);
-        }
-        return false;
-    }
-
-    public function incStockDecSales(array $where, int $num, string $stock = 'stock', string $sales = 'sales'): bool
-    {
-        $product = $this->getModel()->where($where)->first();
-        if ($product) {
-            $currentSales = $product->{$sales};
-            $salesNum     = $num;
-            if ($num > $currentSales) {
-                $salesNum = $currentSales;
+            if ($this->isInCondition($condition)) {
+                $whereInKeys[]       = $key;
+                $whereInConditions[] = $condition;
             }
-
-            return (bool) $product->update([
-                $stock => DB::raw("`{$stock}` + {$num}"),
-                $sales => DB::raw("`{$sales}` - {$salesNum}"),
-            ]);
         }
-        return true;
+
+        // 移除已处理的 IN 条件
+        foreach ($whereInKeys as $key) {
+            unset($where[$key]);
+        }
+
+        // 处理普通条件
+        if (!empty($where)) {
+            $query->where($where);
+        }
+
+        // 处理 IN/NOT IN 条件
+        foreach ($whereInConditions as $condition) {
+            list($column, $operator, $value) = $condition;
+            $normalizedValue = is_array($value) ? $value : [$value];
+            $query->where(function ($q) use ($column, $operator, $normalizedValue) {
+                $op = strtolower($operator);
+                if ($op === 'in') {
+                    $q->whereIn($column, $normalizedValue);
+                } elseif ($op === 'not in') {
+                    $q->whereNotIn($column, $normalizedValue);
+                }
+            });
+        }
+        return $query->update($data);
     }
 
-    public function getMax(array $where = [], string $field = ''): mixed
-    {
-        return $this->getModel()->where($where)->max($field);
-    }
-
-    public function getMin(array $where = [], string $field = ''): mixed
-    {
-        return $this->getModel()->where($where)->min($field);
-    }
-
+    /**
+     * setWhere
+     *
+     * @param             $where
+     * @param string|null $key
+     *
+     * @return array
+     * @throws Exception
+     */
     protected function setWhere($where, ?string $key = null): array
     {
-        if (! is_array($where)) {
+        // 如果 $where 不是数组，则构建数组
+        if (!is_array($where)) {
             $where = [is_null($key) ? $this->getPk() : $key => $where];
         }
         return $where;
     }
 
     /**
-     * 构建搜索查询.
+     * 批量更新
+     *
+     * @param array       $ids
+     * @param array       $data
+     * @param string|null $key
+     *
+     * @return mixed
+     * @throws Exception
      */
-    protected function withSearchSelect(array $where, bool $search): Builder
+    public function batchUpdate(array $ids, array $data, ?string $key = null): bool
     {
-        [$withScopes, $scopeValues, $otherWhere] = $this->getSearchData($where);
-
-        $query = $this->getModel()->newQuery();
-
-        // 应用 Scopes
-        foreach ($withScopes as $key) {
-            // Laravel 调用 scope 的方式: $query->scopeName($value) -> 调用时写 $query->name($value)
-            // 例如: 定义了 scopePhone, 调用时 $query->phone($val)
-            $scopeMethod = Str::camel($key);
-            $value       = $scopeValues[$key] ?? null;
-
-            // 动态调用 Scope
-            $query->{$scopeMethod}($value);
-        }
-
-        // 应用普通 Where
-        if (! empty($otherWhere)) {
-            // filterWhere 过滤字段
-            $filteredWhere = $this->filterWhere($otherWhere);
-            if (! empty($filteredWhere)) {
-                $query->where($filteredWhere);
-            }
-        }
-
-        return $query;
+        return $this->getModel()->whereIn(is_null($key) ? $this->getPk() : $key, $ids)->update($data);
     }
-
-    protected function filterWhere(array $where = []): array
-    {
-        // Laravel 获取字段列表比较麻烦，通常使用 $fillable
-        // 或者直接查 Schema (性能低)。
-        // 这里假设 $model->getFillable() 已经定义。
-        // 如果没有定义 fillable，为了安全起见，建议不做过滤或者自行实现 getTableFields 缓存
-
-        $fillable = $this->getModel()->getFillable();
-
-        // 如果 fillable 为空 ( guarded = [] )，则不过滤，假设全部通过
-        if (empty($fillable)) {
-            return $where;
-        }
-
-        $fields = $fillable;
-        // 加上主键和时间戳
-        $fields[] = $this->getPk();
-        if ($this->getModel()->usesTimestamps()) {
-            $fields[] = $this->getModel()->getCreatedAtColumn();
-            $fields[] = $this->getModel()->getUpdatedAtColumn();
-        }
-
-        foreach ($where as $key => $item) {
-            // $item 结构可能是 [$field, '=', $val]
-            $fieldName = $item[0] ?? null;
-            if ($fieldName && ! in_array($fieldName, $fields)) {
-                unset($where[$key]);
-            }
-        }
-        return $where;
-    }
-
-    // =========================================================================
-    // 搜索器逻辑
-    // =========================================================================
 
     /**
-     * 解析搜索条件
-     * 适配 Laravel Scopes: scopeName($query, $value).
+     * 保存返回模型
+     *
+     * @param array $data
+     *
+     * @return Model|null
+     * @throws Exception
+     */
+    public function save(array $data): ?Model
+    {
+        return $this->getModel()->create($data);
+    }
+
+    /**
+     * 批量插入
+     *
+     * @param array $data
+     *
+     * @return bool
+     */
+    public function saveAll(array $data): bool
+    {
+        if (empty($data)) {
+            return false;
+        }
+
+        try {
+            $models = $this->getModel()->newCollection();
+
+            foreach ($data as $item) {
+                $models->push($this->getModel()->newInstance($item));
+            }
+
+            $savedAll = true;
+            $models->each(function ($model) use (&$savedAll) {
+                if (!$model->save()) {
+                    $savedAll = false;
+                }
+            });
+
+            return $savedAll;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * 获取某字段内的值
+     *
+     * @param             $value
+     * @param string      $field
+     * @param string|null $valueKey
+     * @param array|null  $where
+     *
+     * @return mixed
+     * @throws Exception
+     */
+    public function getFieldValue($value, string $field, ?string $valueKey = null, ?array $where = []): mixed
+    {
+        // 如果提供了 $valueKey，则构建查询条件
+        if ($valueKey) {
+            $where[$valueKey] = $value; // 将 valueKey 和 value 加入条件
+        } else {
+            $where[$this->getPk()] = $value; // 默认使用主键作为条件
+        }
+
+        // 使用 Eloquent 查询构建器获取字段值
+        $query = $this->getModel()->query();
+
+        $whereInConditions = [];
+        foreach ($where as $key => $condition) {
+            if (is_array($condition) && count($condition) === 3) {
+                $operator = strtolower($condition[1]);
+                if ($operator === 'in' || $operator === 'not in') {
+                    $whereInConditions[] = $condition;
+                    unset($where[$key]);//移除分离后的条件
+                }
+            }
+        }
+        //普通条件格式直接传入构建
+        if (!empty($where)) {
+            $query->where($where);
+        }
+
+        //特殊条件格式额外处理
+        foreach ($whereInConditions as $condition) {
+            if (empty($condition[2])) {
+                continue;
+            }
+            $operator = strtolower($condition[1]);
+            $value = Arr::normalize($condition[2]);
+            if ($operator === 'in') {
+                $query->whereIn($condition[0], $value);
+            } elseif ($operator === 'not in') {
+                $query->whereNotIn($condition[0], $value);
+            }
+        }
+
+        return $query->value($field);
+    }
+
+
+    /**
+     * 获取搜索器和搜索条件key,以及不在搜索器的条件数组
+     *
+     * @param array $where
+     *
+     * @return array[]
+     * @throws ReflectionException
      */
     private function getSearchData(array $where): array
     {
-        $withScopes  = []; // 存储需要调用的 Scope 名称
-        $scopeValues = []; // 存储 Scope 对应的参数
-        $otherWhere  = []; // 普通 Where 条件
-
-        $model = $this->getModel();
-        // 使用 modelInstance 获取类名确保准确
-        $className = get_class($model);
-
-        // 检查方法是否存在需要反射或 method_exists
-        // Laravel Scope 方法名规则: scope + Name
+        $with       = [];
+        $withValues = []; // 用于存储与 $with 对应的值
+        $otherWhere = [];
+        $model      = $this->getModel();
+        $responses  = new \ReflectionClass($model);
 
         foreach ($where as $key => $value) {
-            // Laravel 中 Scope 是驼峰命名，例如 scopeStatus
-            $method = 'scope' . Str::studly($key);
-
-            if (method_exists($model, $method)) {
-                $withScopes[]      = $key; // 记录原始 key，调用时转 studly
-                $scopeValues[$key] = $value;
+            $method = 'scope' . self::studly($key);
+            if ($responses->hasMethod($method)) {
+                $with[]           = $key; // 将搜索器方法的键加入 $with
+                $withValues[$key] = $value; // 将对应的值存储到 $withValues
             } else {
-                // 过滤非数据库字段的逻辑需要谨慎，Laravel 默认没有 getTableFields
-                // 这里保留基本的过滤逻辑
-                if (! in_array($key, ['timeKey', 'store_stock', 'integral_time'])) {
-                    if (! is_array($value)) {
-                        $otherWhere[] = [$key, '=', $value];
+                // 过滤不在搜索器中的条件
+                if (!in_array($key, ['timeKey', 'store_stock', 'integral_time'])) {
+                    if (!is_array($value)) {
+                        $otherWhere[] = [$key, '=', $value]; // 单个条件
                     } elseif (count($value) === 3) {
-                        $otherWhere[] = $value;
+                        $otherWhere[] = $value; // 复杂条件
                     }
                 }
             }
         }
-        return [$withScopes, $scopeValues, $otherWhere];
+        return [$with, $withValues, $otherWhere]; // 返回 $with, $withValues 和 $otherWhere
     }
+
+    /**
+     * 根据搜索器获取内容
+     *
+     * @param array $where
+     * @param bool  $search
+     *
+     * @return \Illuminate\Database\Query\Builder
+     * @throws Exception
+     */
+    protected function withSearchSelect(array $where, bool $search): mixed
+    {
+        [$with, $withValues, $otherWhere] = $this->getSearchData($where);
+        $query = $this->getModel()->query();
+        foreach ($with as $item) {
+            $func = self::studly($item);
+            if (method_exists($this->getModel(), 'scope' . $func)) {
+                $value = $withValues[$item] ?? null;
+                if ($value !== null) {
+                    $query->$func($value);
+                }
+            }
+        }
+        $filteredWhere = $this->filterWhere($otherWhere);
+        if (!empty($filteredWhere)) {
+            $query->where($filteredWhere);
+        }
+        return $query; // 返回查询构建器
+    }
+
+    /**
+     * 过滤数据表中不存在的字段
+     *
+     * @param array $where
+     *
+     * @return array
+     * @throws Exception
+     */
+    protected function filterWhere(array $where = []): array
+    {
+        $fields = $this->getModel()->getFields(); // 获取模型的可填充字段
+        foreach ($where as $key => $item) {
+            // 检查键是否在可填充字段中
+            if (!in_array($key, $fields)) {
+                unset($where[$key]); // 过滤掉不存在的字段
+            }
+        }
+        return $where; // 返回过滤后的条件
+    }
+
+    /**
+     * 搜索
+     *
+     * @param array $where
+     * @param bool  $search
+     *
+     * @return mixed
+     * @throws Exception
+     */
+    public function search(array $where = [], bool $search = true): mixed
+    {
+        if ($where) {
+            return $this->withSearchSelect($where, $search); // 返回查询构建器
+        } else {
+            return $this->getModel(); // 返回模型实例
+        }
+    }
+
+    /**
+     * 求和
+     *
+     * @param array  $where
+     * @param string $field
+     * @param bool   $search
+     *
+     * @return float
+     * @throws Exception
+     */
+    public function sum(array $where, string $field, bool $search = false): float
+    {
+        // 构建查询
+        $query = $this->getModel()->query();
+        // 应用搜索条件
+        if ($search) {
+            $query = $this->search($where);
+        } else {
+            $whereInConditions = [];
+            foreach ($where as $key => $condition) {
+                if (is_array($condition) && count($condition) === 3) {
+                    $operator = strtolower($condition[1]);
+                    if ($operator === 'in' || $operator === 'not in') {
+                        $whereInConditions[] = $condition;
+                        unset($where[$key]);//移除分离后的条件
+                    }
+                }
+            }
+            //普通条件格式直接传入构建
+            if (!empty($where)) {
+                $query->where($where);
+            }
+
+            //特殊条件格式额外处理
+            foreach ($whereInConditions as $condition) {
+                if (empty($condition[2])) {
+                    continue;
+                }
+                $operator = strtolower($condition[1]);
+                $value = Arr::normalize($condition[2]);
+                if ($operator === 'in') {
+                    $query->whereIn($condition[0], $value);
+                } elseif ($operator === 'not in') {
+                    $query->whereNotIn($condition[0], $value);
+                }
+            }
+        }
+        // 计算总和并返回
+        return (float)$query->sum($field);
+    }
+
+
+    /**
+     * 高精度加法（修正精度问题）
+     *
+     * @param mixed $key 主键值或条件值
+     * @param string $incField 要增加的字段
+     * @param string $inc 增加的值
+     * @param string|null $keyField 条件字段名，默认为'id'
+     * @param int $acc 精度（小数位数）
+     *
+     * @return bool
+     * @throws Exception
+     */
+    public function bcInc(mixed $key, string $incField, string $inc, string $keyField = null, int $acc = 2): bool
+    {
+        // 获取模型实例
+        $model = $this->getModel();
+        // 构建查询条件
+        $query = $keyField ? $model->where($keyField, $key) : $model->where('id', $key);
+        // 执行增量操作，使用合适的精度 DECIMAL(10, $acc)
+        return $query->update([$incField => Db::raw("COALESCE($incField, 0) + CAST($inc AS DECIMAL(10, $acc))")]) > 0;
+    }
+
+    /**
+     * 高精度 减法
+     *
+     * @param             $key
+     * @param string      $decField
+     * @param string      $dec
+     * @param string|null $keyField
+     * @param int         $acc
+     *
+     * @return bool
+     * @throws ReflectionException
+     */
+    public function bcDec($key, string $decField, string $dec, string $keyField = null, int $acc = 2): bool
+    {
+        return $this->bc($key, $decField, $dec, $keyField, 2, $acc);
+    }
+
+    /**
+     * 高精度计算并保存
+     *
+     * @param             $key
+     * @param string      $field
+     * @param string      $value
+     * @param string|null $keyField
+     * @param int         $type
+     * @param int         $acc
+     *
+     * @return bool
+     * @throws ReflectionException
+     */
+    public function bc($key, string $field, string $value, string $keyField = null, int $type = 1, int $acc = 2): bool
+    {
+        // 获取记录
+        $result = $keyField === null ? $this->get($key) : $this->getOne([$keyField => $key]);
+        if (!$result) return false;
+        $newValue = 0;
+        if ($type === 1) {
+            // 加法
+            $newValue = bcadd($result->{$field}, $value, $acc);
+        } elseif ($type === 2) {
+            // 减法
+            if ($result->{$field} < $value) return false; // 检查是否足够减去
+            $newValue = bcsub($result->{$field}, $value, $acc);
+        }
+        // 更新字段
+        $result->{$field} = $newValue;
+        // 保存更新
+        return $result->save();
+    }
+
+    /**
+     * 减库存加销量
+     *
+     * @param array  $where
+     * @param int    $num
+     * @param string $stock
+     * @param string $sales
+     *
+     * @return bool
+     * @throws Exception
+     */
+    public function decStockIncSales(array $where, int $num, string $stock = 'stock', string $sales = 'sales'): bool
+    {
+        $query = $this->getModel()->query();
+
+        $whereInConditions = [];
+        foreach ($where as $key => $condition) {
+            if (is_array($condition) && count($condition) === 3) {
+                $operator = strtolower($condition[1]);
+                if ($operator === 'in' || $operator === 'not in') {
+                    $whereInConditions[] = $condition;
+                    unset($where[$key]);//移除分离后的条件
+                }
+            }
+        }
+        //普通条件格式直接传入构建
+        if (!empty($where)) {
+            $query->where($where);
+        }
+
+        //特殊条件格式额外处理
+        foreach ($whereInConditions as $condition) {
+            if (empty($condition[2])) {
+                continue;
+            }
+            $operator = strtolower($condition[1]);
+            $value = Arr::normalize($condition[2]);
+            if ($operator === 'in') {
+                $query->whereIn($condition[0], $value);
+            } elseif ($operator === 'not in') {
+                $query->whereNotIn($condition[0], $value);
+            }
+        }
+
+        $product = $query->first();
+        if ($product) {
+            // 重新构建查询以执行更新操作
+            $updateQuery = $this->getModel()->query();
+
+            // 重新应用条件
+            if (!empty($where)) {
+                $updateQuery->where($where);
+            }
+            foreach ($whereInConditions as $condition) {
+                if (empty($condition[2])) {
+                    continue;
+                }
+                $operator = strtolower($condition[1]);
+                $value = Arr::normalize($condition[2]);
+                if ($operator === 'in') {
+                    $updateQuery->whereIn($condition[0], $value);
+                } elseif ($operator === 'not in') {
+                    $updateQuery->whereNotIn($condition[0], $value);
+                }
+            }
+
+            return $updateQuery->decrement($stock, $num)->increment($sales, $num);
+        }
+        return false;
+    }
+
+    /**
+     * 加库存减销量
+     *
+     * @param array  $where
+     * @param int    $num
+     * @param string $stock
+     * @param string $sales
+     *
+     * @return bool
+     * @throws Exception
+     */
+    public function incStockDecSales(array $where, int $num, string $stock = 'stock', string $sales = 'sales'): bool
+    {
+        $query = $this->getModel()->query();
+
+        $whereInConditions = [];
+        foreach ($where as $key => $condition) {
+            if (is_array($condition) && count($condition) === 3) {
+                $operator = strtolower($condition[1]);
+                if ($operator === 'in' || $operator === 'not in') {
+                    $whereInConditions[] = $condition;
+                    unset($where[$key]);//移除分离后的条件
+                }
+            }
+        }
+        //普通条件格式直接传入构建
+        if (!empty($where)) {
+            $query->where($where);
+        }
+
+        //特殊条件格式额外处理
+        foreach ($whereInConditions as $condition) {
+            if (empty($condition[2])) {
+                continue;
+            }
+            $operator = strtolower($condition[1]);
+            $value = Arr::normalize($condition[2]);
+            if ($operator === 'in') {
+                $query->whereIn($condition[0], $value);
+            } elseif ($operator === 'not in') {
+                $query->whereNotIn($condition[0], $value);
+            }
+        }
+
+        $product = $query->first();
+        if ($product) {
+            // 重新构建查询以执行更新操作
+            $updateQuery1 = $this->getModel()->query();
+            $updateQuery2 = $this->getModel()->query();
+
+            // 重新应用条件
+            if (!empty($where)) {
+                $updateQuery1->where($where);
+                $updateQuery2->where($where);
+            }
+            foreach ($whereInConditions as $condition) {
+                if (empty($condition[2])) {
+                    continue;
+                }
+                $operator = strtolower($condition[1]);
+                $value = Arr::normalize($condition[2]);
+                if ($operator === 'in') {
+                    $updateQuery1->whereIn($condition[0], $value);
+                    $updateQuery2->whereIn($condition[0], $value);
+                } elseif ($operator === 'not in') {
+                    $updateQuery1->whereNotIn($condition[0], $value);
+                    $updateQuery2->whereNotIn($condition[0], $value);
+                }
+            }
+
+            $updateQuery1->increment($stock, $num);
+            $updateQuery2->decrement($sales, $num);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 获取条件数据中的某个值的最大值
+     *
+     * @param array  $where
+     * @param string $field
+     *
+     * @return mixed
+     * @throws Exception
+     */
+    public function getMax(array $where = [], string $field = ''): mixed
+    {
+        $query = $this->getModel()->query();
+
+        $whereInConditions = [];
+        foreach ($where as $key => $condition) {
+            if (is_array($condition) && count($condition) === 3) {
+                $operator = strtolower($condition[1]);
+                if ($operator === 'in' || $operator === 'not in') {
+                    $whereInConditions[] = $condition;
+                    unset($where[$key]);//移除分离后的条件
+                }
+            }
+        }
+        //普通条件格式直接传入构建
+        if (!empty($where)) {
+            $query->where($where);
+        }
+
+        //特殊条件格式额外处理
+        foreach ($whereInConditions as $condition) {
+            if (empty($condition[2])) {
+                continue;
+            }
+            $operator = strtolower($condition[1]);
+            $value = Arr::normalize($condition[2]);
+            if ($operator === 'in') {
+                $query->whereIn($condition[0], $value);
+            } elseif ($operator === 'not in') {
+                $query->whereNotIn($condition[0], $value);
+            }
+        }
+
+        return $query->max($field);
+    }
+
+    /**
+     * 获取条件数据中的某个值的最小值
+     *
+     * @param array  $where
+     * @param string $field
+     *
+     * @return mixed
+     * @throws Exception
+     */
+    public function getMin(array $where = [], string $field = ''): mixed
+    {
+        $query = $this->getModel()->query();
+
+        $whereInConditions = [];
+        foreach ($where as $key => $condition) {
+            if (is_array($condition) && count($condition) === 3) {
+                $operator = strtolower($condition[1]);
+                if ($operator === 'in' || $operator === 'not in') {
+                    $whereInConditions[] = $condition;
+                    unset($where[$key]);//移除分离后的条件
+                }
+            }
+        }
+        //普通条件格式直接传入构建
+        if (!empty($where)) {
+            $query->where($where);
+        }
+
+        //特殊条件格式额外处理
+        foreach ($whereInConditions as $condition) {
+            if (empty($condition[2])) {
+                continue;
+            }
+            $operator = strtolower($condition[1]);
+            $value = Arr::normalize($condition[2]);
+            if ($operator === 'in') {
+                $query->whereIn($condition[0], $value);
+            } elseif ($operator === 'not in') {
+                $query->whereNotIn($condition[0], $value);
+            }
+        }
+
+        return $query->min($field);
+    }
+
+    private function studly(string $string): string
+    {
+        // 用下划线分隔单词
+        $words = preg_split('/[\s_]+/', $string);
+        // 将每个单词的首字母大写并连接
+        $studlyCase = array_map('ucfirst', $words);
+        // 返回连接后的结果
+        return implode('', $studlyCase);
+    }
+
+    /**
+     * 执行作用域移除操作
+     *
+     * @param            $query
+     * @param array|null $scopes
+     */
+    protected function applyScopeRemoval($query, ?array $scopes): void
+    {
+        if (empty($scopes)) return;
+        foreach ($scopes as $scope) {
+            // 全局作用域移除
+            if (is_string($scope) && class_exists($scope)) {
+                $query->withoutGlobalScope($scope);
+            } // 本地作用域移除
+            elseif (is_string($scope)) {
+                $query->withoutNamedScope($scope);
+            } // 闭包动态移除
+            elseif ($scope instanceof \Closure) {
+                $scope($query);
+            }
+        }
+    }
+
+    /**
+     * 是否in条件
+     *
+     * @param array $condition
+     *
+     * @return bool
+     */
+    protected function isInCondition(array $condition): bool
+    {
+        return count($condition) === 3
+            && in_array(strtolower($condition[1] ?? ''), ['in', 'not in'], true);
+    }
+    /**
+     * 检测表是否存在
+     * @param $table
+     * @return bool
+     */
+    public function tableExists($table): bool
+    {
+        return Db::schema()->hasTable($table);
+    }
+	
+	
 }

@@ -26,6 +26,7 @@ use Framework\Attributes\Auth;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
 use Framework\Attributes\Route;
 
+use Framework\Core\App;
 
 
 use Framework\Database\ORMFactory;
@@ -205,12 +206,12 @@ class Home
         #dump($users);	
 			
 		//ThinkORM Model的写法
-        #$users =App::make( Custom::class);
+        $user =App::make( Custom::class);
       
 		//ThinkORM Model的写法
-        #$users = (new Custom())->getTableName();
+        #$user = (new Custom())->getTableName();
        	
-		 $list = $this->customDao->selectList(['status'=>1] , 'id,name');
+		 $list = $this->customDao->getTableName() ; //$this->customDao->count(['enabled'=>1]);
 		 dump($list);
 		
 		
