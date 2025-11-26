@@ -21,6 +21,10 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface as SymfonyContainerInterface;
 use Symfony\Component\DependencyInjection\Dumper\PhpDumper;
 use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
+use Symfony\Component\DependencyInjection\Definition;
+use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
+use Symfony\Component\DependencyInjection\Compiler\PassConfig;
+use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\Dotenv\Dotenv;
 
 class Container implements SymfonyContainerInterface
@@ -44,7 +48,6 @@ class Container implements SymfonyContainerInterface
         }
 
         // 加载 .env 文件
-        $dotenv  = new Dotenv();
         $envFile = BASE_PATH . '/.env';
         if (file_exists($envFile)) {
             (new Dotenv())->load($envFile);
@@ -391,7 +394,7 @@ class Container implements SymfonyContainerInterface
         return self::$container->has($id);
     }
 
-    public function set(string $id, mixed $service): void
+    public function set(string $id, ?object $service): void
     {
         // ⚠️ 注意：编译后的容器会抛出异常！
         self::$container->set($id, $service);
@@ -433,7 +436,7 @@ class Container implements SymfonyContainerInterface
         return self::$container->getParameter($name);
     }
 
-    public function getParameterBag()
+    public function getParameterBag(): ParameterBagInterface
     {
         return self::$container->getParameterBag();
     }
@@ -448,12 +451,12 @@ class Container implements SymfonyContainerInterface
         return self::$container->isCompiled();
     }
 
-    public function getCompilerPassConfig()
+    public function getCompilerPassConfig(): PassConfig
     {
         return self::$container->getCompilerPassConfig();
     }
 
-    public function addCompilerPass($pass, string $type = 'beforeOptimization', int $priority = 0): static
+    public function addCompilerPass(CompilerPassInterface $pass, string $type = PassConfig::TYPE_BEFORE_OPTIMIZATION, int $priority = 0): static
     {
         self::$container->addCompilerPass($pass, $type, $priority);
         return $this;

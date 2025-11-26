@@ -18,7 +18,7 @@ namespace Framework\Security;
 
 use Framework\Utils\JwtFactory;
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response; // 之前实现的 JWT 工厂
+use Symfony\Component\HttpFoundation\Response;
 
 class AuthGuard
 {
@@ -38,7 +38,7 @@ class AuthGuard
      * @return array             用户信息
      * @throws \RuntimeException 验证失败
      */
-    public function check(Request $request, ?array $requiredRoles = null): array|Response
+    public function check(Request $request, ?array $requiredRoles = null): mixed
     {
         $token = $this->extractToken($request);
         if (! $token) {

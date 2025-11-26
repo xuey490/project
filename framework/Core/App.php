@@ -16,6 +16,7 @@ declare(strict_types=1);
 
 namespace Framework\Core;
 
+use Framework\Container\Container;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 # use Psr\Container\ContainerInterface;
@@ -110,7 +111,7 @@ class App
             return $container->get($id);
         }
 
-        if (method_exists($container, 'make')) {
+        if ($container instanceof Container) {
             return $container->make($id, $params);
         }
 
@@ -204,7 +205,7 @@ class App
      * @param string $name  参数名
      * @param mixed  $value 参数值
      */
-    public static function parameter(string $name, mixed $value): void
+    public static function parameter(string $name, array|bool|float|int|string|\UnitEnum|null $value): void
     {
         $container = self::getContainer();
         if ($container instanceof Container) {

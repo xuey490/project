@@ -91,7 +91,7 @@ class Snowflake
 
     public function nextFixedLengthId(int $length): string
     {
-        $id = $this->nextId();
+        $id = (string)$this->nextId();
         return str_pad($id, $length, '0', STR_PAD_LEFT);
     }
 

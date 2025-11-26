@@ -92,7 +92,7 @@ class ThinkORMFactory implements ModelFactoryInterface
                 if ($cfg !== null && method_exists($cfg, 'get')) {
                     $appDebug = (bool) $cfg->get('app.debug');
                 }
-            } catch (Throwable $_) {
+            } catch (\Throwable $_) {
                 $appDebug = false;
             }
         }
@@ -105,7 +105,7 @@ class ThinkORMFactory implements ModelFactoryInterface
                         'time'    => (string) $time . 's',
                         'explain' => $explain ?? [],
                     ]);
-                } catch (Throwable $_) {
+                } catch (\Throwable $_) {
                     // 忽略记录过程中的异常
                 }
             });

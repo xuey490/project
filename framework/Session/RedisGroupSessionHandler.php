@@ -34,7 +34,7 @@ use Symfony\Component\HttpFoundation\Session\Storage\Handler\RedisSessionHandler
  */
 class RedisGroupSessionHandler extends RedisSessionHandler
 {
-    protected \Redis $redis;
+    protected object $redis;
 
     protected int $ttlLocal;
 
@@ -48,7 +48,7 @@ class RedisGroupSessionHandler extends RedisSessionHandler
 
     protected string $groupPrefix = '';
 
-    public function __construct(\Redis $redis, array $options = [])
+    public function __construct(object $redis, array $options = [])
     {
         // 处理自定义 option（不要把 group_prefix 传给父类）
         if (isset($options['group_prefix'])) {
