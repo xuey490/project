@@ -39,6 +39,9 @@ final class CookieServiceProvider implements ServiceProviderInterface
             ])
             ->public();
         $services->set('cookie', CookieManager::class)
+            ->args([
+                $cookieConfig,
+            ])        
             ->public();
     }
 

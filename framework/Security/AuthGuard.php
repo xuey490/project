@@ -17,6 +17,7 @@ declare(strict_types=1);
 namespace Framework\Security;
 
 use Framework\Utils\JwtFactory;
+use Framework\Utils\CookieManager;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -47,9 +48,6 @@ class AuthGuard
 
         try {
             $parsed = $this->jwt->parse($token);
-            if (! $parsed) {
-                return $this->unauthorized('Invalid or expired token');
-            }
 
             $claims   = $parsed->claims();
             $userId   = $claims->get('uid');
@@ -70,8 +68,11 @@ class AuthGuard
 
             // --- 自动续期 ---
             $ttl = $exp - $now;
-            if ($ttl < $this->refreshThreshold) { // 剩余不到 5 分钟
-                $newToken             = $this->jwt->refresh($token);
+            if ($ttl < $this->refreshThreshold) {
+                $refreshResult = $this->jwt->refresh($token);
+                $newToken      = is_array($refreshResult)
+                    ? ($refreshResult['token'] ?? null)
+                    : (is_string($refreshResult) ? $refreshResult : null);
                 $this->refreshedToken = $newToken;
                 if ($newToken) {
                     $request->attributes->set('_new_token', $newToken);
@@ -125,13 +126,16 @@ class AuthGuard
     private function extractToken(Request $request): ?string
     {
         $header = $request->headers->get('Authorization');
-        if ($header && str_starts_with($header, 'Bearer ')) {
+        if (is_string($header) && str_starts_with($header, 'Bearer ')) {
             return substr($header, 7);
         }
 
-        $cookie = app('cookie')->get($request, 'token');
-        if ($cookie) {
-            return $cookie;
+        $cookieManager = app('cookie');
+        if ($cookieManager instanceof CookieManager) {
+            $cookie = $cookieManager->get($request, 'token');
+            if (is_string($cookie) && $cookie !== '') {
+                return $cookie;
+            }
         }
 
         return null;
