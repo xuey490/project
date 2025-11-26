@@ -22,7 +22,7 @@ class Custom extends \Framework\Utils\BaseModel
     protected $pk = 'id';
 	
     // 表名、字段等设置继承自基类或自动识别
-    #protected $name = 'custom'; //for tp
+    protected $name = 'sys_admin'; //for tp
 	
-	protected $table = 'sys_admin'; 
+	#protected $table = 'sys_admin'; 
 }

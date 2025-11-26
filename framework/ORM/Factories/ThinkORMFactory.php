@@ -8,7 +8,7 @@ declare(strict_types=1);
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
- * @Filename: %filename%
+ * @Filename: ThinkORMFactory.php
  * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
@@ -18,10 +18,13 @@ namespace Framework\ORM\Factories;
 
 use Framework\Core\App;
 use Framework\ORM\Exception\Exception;
+use Framework\Utils\Arr;
 use think\Collection;
 use think\db\Query;
-use think\helper\Str;
+use think\facade\Db;
 use think\Model;
+use think\Paginator;
+use Throwable;
 
 class ThinkORMFactory
 {
@@ -31,14 +34,13 @@ class ThinkORMFactory
 
     /**
      * 构造函数.
-     * @param null|Model|string $model 模型类名或实例
+     * @param Model|string|null $model 模型类名或实例
      */
     public function __construct(Model|string|null $model = null)
     {
-        // 如果传入的是对象，直接持有实例并获取类名
         if (is_object($model)) {
             $this->modelInstance = $model;
-            $this->modelClass    = get_class($model);
+            $this->modelClass = get_class($model);
         } else {
             $this->modelClass = $model;
         }
@@ -49,70 +51,162 @@ class ThinkORMFactory
      */
     public function getModel(): Model
     {
-        // 如果已经有实例，直接返回（注意：ThinkPHP模型是复用的，如果需要全新查询对象，
-        // 外部调用链通常会触发 where() 返回新的 Query 对象，所以这里返回单例是安全的，
-        // 除非模型内部有状态污染。稳妥起见，若需要隔离，可 return clone $this->modelInstance）
         if ($this->modelInstance) {
             return $this->modelInstance;
         }
 
         try {
             $class = $this->modelClass;
-            if (! class_exists($class)) {
+            if (!class_exists($class)) {
                 throw new Exception($class . ' 不是一个有效的模型类');
             }
-            // 使用 App::make 解析模型，支持模型自身的依赖注入
+            // 使用 App::make 解析模型
             $this->modelInstance = App::make($class);
             return $this->modelInstance;
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             throw new Exception('模型加载失败: ' . $e->getMessage());
         }
     }
 
-    // =========================================================================
-    // 实现 ORMAdapterInterface 及通用业务逻辑
-    // =========================================================================
-
-    public function count(array $where = [], bool $search = true): int
+    /**
+     * 核心优化：统一查询条件构建器
+     * 适配 ThinkPHP 的 Query 对象
+     */
+    private function buildQuery(array $where, bool $search = false, ?array $withoutScopes = null): Query
     {
-        return $this->search($where, $search)->count();
-    }
+        // 1. 获取基础查询对象 (ThinkPHP中通常用 db() 或 直接静态调用)
+        $query = $this->getModel()->db();
 
-    public function selectList(array $where, string $field = '*', int $page = 0, int $limit = 0, string $order = '', array $with = [], bool $search = false): ?Collection
-    {
-        return $this->selectModel($where, $field, $page, $limit, $order, $with, $search)->select();
-    }
-
-    public function selectModel(array $where, string $field = '*', int $page = 0, int $limit = 0, string $order = '', array $with = [], bool $search = false): Model|Query
-    {
-        if ($search) {
-            $query = $this->search($where);
-        } else {
-            $query = $this->getModel()->where($where);
+        // 2. 移除全局作用域 (ThinkPHP SoftDelete 是通过 withoutField 'delete_time' 或 removeOption 实现)
+        // ThinkPHP 的 Global Scope 机制与 Laravel 不同，通常是通过 base query 或 global scope 类
+        if (!empty($withoutScopes)) {
+            $this->applyScopeRemoval($query, $withoutScopes);
         }
 
-        return $query->field($field)
-            ->when($page && $limit, function ($q) use ($page, $limit) {
-                $q->page($page, $limit);
-            })
-            ->when($order !== '', function ($q) use ($order) {
-                $q->order($order);
-            })
-            ->when(! empty($with), function ($q) use ($with) {
-                $q->with($with);
-            });
+        // 3. 如果启用搜索器模式 (ThinkPHP withSearch)
+        if ($search) {
+            return $this->applySearchScopes($query, $where);
+        }
+
+        // 4. 标准条件处理
+        $normalWhere = [];
+        
+        foreach ($where as $key => $condition) {
+            // 处理特殊数组格式: ['field', 'in', [1,2]]
+            if (is_array($condition) && count($condition) === 3) {
+                $operator = strtolower((string)$condition[1]);
+                if (in_array($operator, ['in', 'not in'], true)) {
+                    if (empty($condition[2])) {
+                        continue;
+                    }
+                    $field = $condition[0];
+                    $values = Arr::normalize($condition[2]);
+                    
+                    if ($operator === 'in') {
+                        $query->whereIn($field, $values);
+                    } else {
+                        $query->whereNotIn($field, $values);
+                    }
+                    continue; 
+                }
+                // 处理 ['field', '=', 'val'] 格式，ThinkPHP 原生支持
+                $query->where([$condition]);
+                continue;
+            }
+            
+            // 正常的键值对条件
+            $normalWhere[$key] = $condition;
+        }
+
+        if (!empty($normalWhere)) {
+            $query->where($normalWhere);
+        }
+
+        return $query;
     }
 
+    /**
+     * 获取条数
+     */
+    public function count(array $where = [], bool $search = false): int
+    {
+        return $this->buildQuery($where, $search)->count();
+    }
+
+    /**
+     * 查询列表
+     */
+    public function selectList(array $where, string $field = '*', int $page = 0, int $limit = 0, string $order = '', array $with = [], bool $search = false, ?array $withoutScopes = null): ?Collection
+    {
+        // 获取 Query 对象
+        $query = $this->selectModel($where, $field, $page, $limit, $order, $with, $search, $withoutScopes);
+
+        // 如果 selectModel 已经处理了分页 (ThinkPHP 翻页会返回 Paginator 对象)
+        if ($query instanceof Paginator) {
+            // 获取 Collection 数据集合
+            return $query->getCollection();
+        }
+
+        // 正常的列表查询
+        return $query->select();
+    }
+
+    /**
+     * 获取查询构建器或分页结果
+     * @return Query|Paginator
+     */
+    public function selectModel(array $where, string $field = '*', int $page = 0, int $limit = 0, string $order = '', array $with = [], bool $search = false, ?array $withoutScopes = null): Query|Paginator
+    {
+        $query = $this->buildQuery($where, $search, $withoutScopes);
+
+        // 字段选择
+        if ($field !== '*') {
+            $query->field($field);
+        }
+
+        // 关联预加载
+        if (!empty($with)) {
+            $query->with($with);
+        }
+
+        // 排序
+        if ($order !== '') {
+            $query->orderRaw($order);
+        }
+
+        // 分页 (ThinkPHP page 方法: page(页码, 每页数量))
+        if ($page > 0 && $limit > 0) {
+            // 这里为了返回 Paginator 对象以便获取更多分页信息，使用 paginate
+            // 如果仅需要数据，也可以 use page($page, $limit)->select()
+            return $query->paginate([
+                'list_rows' => $limit,
+                'page'      => $page,
+            ]);
+        }
+
+        return $query;
+    }
+
+    /**
+     * 获取条数 (别名)
+     */
     public function getCount(array $where): int
     {
-        return $this->getModel()->where($where)->count();
+        return $this->buildQuery($where)->count();
     }
 
-    public function getDistinctCount(array $where, $field, bool $search = true): mixed
+    /**
+     * 计算符合条件的唯一记录数量
+     */
+    public function getDistinctCount(array $where, string $field, bool $search = true): int
     {
-        $query  = $search ? $this->search($where) : $this->getModel()->where($where);
-        $result = $query->field('COUNT(distinct(' . $field . ')) as count')->find();
-        return $result['count'] ?? 0;
+        // ThinkPHP: count('DISTINCT field')
+        return (int) $this->buildQuery($where, $search)->count('DISTINCT ' . $field);
+    }
+
+    public function getPk(): string
+    {
+        return $this->getModel()->getPk();
     }
 
     public function getTableName(): string
@@ -120,300 +214,418 @@ class ThinkORMFactory
         return $this->getModel()->getName();
     }
 
-    public function get($id, ?array $field = [], ?array $with = [], string $order = ''): mixed
+    /**
+     * 获取一条数据
+     */
+    public function get($id, ?array $field = null, ?array $with = [], string $order = '', ?array $withoutScopes = null): ?Model
     {
-        if (is_array($id)) {
-            $where = $id;
-        } else {
-            $where = [$this->getPk() => $id];
+        $where = is_array($id) ? $id : [$this->getPk() => $id];
+        
+        $query = $this->buildQuery($where, false, $withoutScopes);
+
+        if (!empty($with)) {
+            $query->with($with);
         }
 
-        return $this->getModel()->where($where)
-            ->when(! empty($with), function ($q) use ($with) {
-                $q->with($with);
-            })
-            ->when($order !== '', function ($q) use ($order) {
-                $q->order($order);
-            })
-            ->field($field ?? ['*'])
-            ->find();
+        if ($order !== '') {
+            $query->orderRaw($order);
+        }
+
+        return $query->field($field ?? '*')->find();
     }
 
+    /**
+     * 查询一条数据是否存在
+     */
     public function be($map, string $field = ''): bool
     {
-        if (! is_array($map) && empty($field)) {
+        if (!is_array($map) && empty($field)) {
             $field = $this->getPk();
         }
-        $map = ! is_array($map) ? [$field => $map] : $map;
-        return 0 < $this->getModel()->where($map)->count();
+        $map = !is_array($map) ? [$field => $map] : $map;
+
+        // ThinkPHP 使用 count() > 0 或 value() 判断
+        return $this->buildQuery($map)->count() > 0;
     }
 
-    public function getOne(array $where, ?string $field = '*', array $with = []): array|Model|null
+    /**
+     * 根据条件获取一条数据
+     */
+    public function getOne(array $where, ?string $field = '*', array $with = []): ?Model
     {
-        // 注意：get 方法接收的 field 是 array，这里如果是 string 需要分割
-        // 但下面的 get() 实现里 field 默认是 array，这里为了兼容原逻辑做个转换
-        $fieldArr = is_string($field) ? explode(',', $field) : $field;
-        return $this->get($where, $fieldArr, $with);
-    }
+        $query = $this->buildQuery($where);
 
-    public function value($where, ?string $field = ''): mixed
-    {
-        $pk = $this->getPk();
-        return $this->search($this->setWhere($where))->value($field ?: $pk);
-    }
-
-    public function getColumn(array $where, string $field, string $key = ''): array
-    {
-        return $this->getModel()->where($where)->column($field, $key);
-    }
-
-    public function delete(array|int|string $id, ?string $key = null): mixed
-    {
-        if (is_array($id)) {
-            $where = $id;
-        } else {
-            $where = [is_null($key) ? $this->getPk() : $key => $id];
+        if (!empty($with)) {
+            $query->with($with);
         }
 
-        return $this->getModel()->where($where)->delete();
+        return $query->field($field)->find();
     }
 
+    /**
+     * 获取某字段的值
+     */
+    public function value($where, ?string $field = null): mixed
+    {
+        $pk = $this->getPk();
+        $where = $this->setWhere($where);
+        
+        return $this->buildQuery($where)->value($field ?? $pk);
+    }
+
+    /**
+     * 获取某个字段数组
+     */
+    public function getColumn(array $where, string $field, string $key = ''): array
+    {
+        $query = $this->buildQuery($where);
+        return $query->column($field, $key ?: null);
+    }
+
+    /**
+     * 删除
+     */
+    public function delete(array|int|string $id, ?string $key = null): int
+    {
+        try {
+            // ThinkPHP destroy 支持 主键、数组主键、闭包条件
+            if (is_array($id) && array_is_list($id) && is_null($key)) {
+                return (int) $this->getModel()->destroy($id);
+            }
+
+            $query = $this->getModel()->db();
+            if (is_array($id)) {
+                $query->where($id);
+            } else {
+                $query->where($key ?: $this->getPk(), $id);
+            }
+
+            // delete 返回影响行数
+            return (int) $query->delete();
+        } catch (Throwable $e) {
+            throw new Exception("删除失败:" . $e->getMessage(), (int)$e->getCode(), $e);
+        }
+    }
+
+    /**
+     * 销毁记录 (直接通过主键)
+     */
     public function destroy(mixed $id, bool $force = false): bool
     {
         return $this->getModel()->destroy($id, $force);
     }
 
-    public function update(array|int|string $id, array $data, ?string $key = null): mixed
+    /**
+     * 更新
+     */
+    public function update(string|int|array $id, array $data, ?string $key = null): mixed
     {
-        if (is_array($id)) {
-            $where = $id;
-        } else {
-            $where = [is_null($key) ? $this->getPk() : $key => $id];
-        }
-        // 修正：静态调用 update 需要模型类名，这里改用实例调用 save 或 update
-        return $this->getModel()->update($data, $where);
+        $where = is_array($id) ? $id : [is_null($key) ? $this->getPk() : $key => $id];
+        
+        // ThinkPHP update 返回影响行数 (int) 或 Model
+        // 使用 Query 对象的 update 方法返回 int
+        return $this->buildQuery($where)->update($data);
     }
 
-    public function batchUpdate(array $ids, array $data, ?string $key = null): mixed
+    protected function setWhere($where, ?string $key = null): array
     {
-        return $this->getModel()
-            ->whereIn(is_null($key) ? $this->getPk() : $key, $ids)
-            ->update($data);
-    }
-
-    public function save(array $data): mixed
-    {
-        return $this->getModel()->create($data);
-    }
-
-    public function saveAll(array $data): Collection
-    {
-        return $this->getModel()->saveAll($data);
-    }
-
-    public function getFieldValue($value, string $filed, ?string $valueKey = '', ?array $where = []): mixed
-    {
-        // 假设模型里有这个自定义方法，否则这里会报错
-        // 如果是通用方法，应改为:
-        // return $this->getModel()->where($where)->where($filed, $value)->value($valueKey ?: $this->getPk());
-        return $this->getModel()->getFieldValue($value, $filed, $valueKey, $where);
-    }
-
-    public function search(array $where = [], bool $search = true): Model|Query
-    {
-        if ($where) {
-            return $this->withSearchSelect($where, $search);
-        }
-        return $this->getModel();
-    }
-
-    // =========================================================================
-    // 数值计算与业务辅助
-    // =========================================================================
-
-    public function sum(array $where, string $field, bool $search = false): float
-    {
-        if ($search) {
-            return $this->search($where)->sum($field);
-        }
-        return $this->getModel()->where($where)->sum($field);
-    }
-
-    public function bcInc($key, string $incField, string $inc, ?string $keyField = null, int $acc = 2): bool
-    {
-        return $this->bc($key, $incField, $inc, $keyField, 1, $acc);
-    }
-
-    public function bcDec($key, string $decField, string $dec, ?string $keyField = null, int $acc = 2): bool
-    {
-        return $this->bc($key, $decField, $dec, $keyField, 2, $acc);
-    }
-
-    public function bc($key, string $incField, string $inc, ?string $keyField = null, int $type = 1, int $acc = 2): bool
-    {
-        if ($keyField === null) {
-            // 使用本类的 get 方法
-            $result = $this->get($key);
-        } else {
-            $result = $this->getOne([$keyField => $key]);
-        }
-
-        if (! $result) {
-            return false;
-        }
-
-        // $result 是 Model 对象
-        $currentVal = $result->{$incField} ?? 0;
-        $new        = 0;
-
-        if ($type === 1) {
-            $new = bcadd((string) $currentVal, (string) $inc, $acc);
-        } elseif ($type === 2) {
-            if ($currentVal < $inc) {
-                return false;
-            }
-            $new = bcsub((string) $currentVal, (string) $inc, $acc);
-        }
-
-        $result->{$incField} = $new;
-        return $result->save() !== false;
-    }
-
-    public function decStockIncSales(array $where, int $num, string $stock = 'stock', string $sales = 'sales'): bool
-    {
-        $isQuota = false;
-        if (isset($where['type']) && $where['type']) {
-            $isQuota = true;
-            if (count($where) == 2) {
-                unset($where['type']);
-            }
-        }
-
-        $field   = $isQuota ? "{$stock},quota" : $stock;
-        $product = $this->getModel()->where($where)->field($field)->find();
-
-        if ($product) {
-            // 注意：update() 返回的是受影响行数(int) 或 Model对象，这里根据原逻辑直接返回更新结果
-            // ThinkPHP链式调用 dec/inc 后调用 update() 会执行 SQL
-            return (bool) $this->getModel()->where($where)
-                ->when($isQuota, function ($query) use ($num) {
-                    $query->dec('quota', $num);
-                })
-                ->dec($stock, $num)
-                ->inc($sales, $num)
-                ->update();
-        }
-        return false;
-    }
-
-    public function incStockDecSales(array $where, int $num, string $stock = 'stock', string $sales = 'sales'): mixed
-    {
-        $isQuota = false;
-        if (isset($where['type']) && $where['type']) {
-            $isQuota = true;
-            if (count($where) == 2) {
-                unset($where['type']);
-            }
-        }
-
-        $salesOne = $this->getModel()->where($where)->value($sales);
-        if ($salesOne !== null) { // value 可能返回 null
-            $salesNum = $num;
-            if ($num > $salesOne) {
-                $salesNum = $salesOne;
-            }
-            return $this->getModel()->where($where)
-                ->when($isQuota, function ($query) use ($num) {
-                    $query->inc('quota', $num);
-                })
-                ->inc($stock, $num)
-                ->dec($sales, $salesNum)
-                ->update();
-        }
-        return true;
-    }
-
-    public function getMax(array $where = [], string $field = ''): mixed
-    {
-        return $this->getModel()->where($where)->max($field);
-    }
-
-    public function getMin(array $where = [], string $field = ''): mixed
-    {
-        return $this->getModel()->where($where)->min($field);
-    }
-
-    protected function getPk()
-    {
-        return $this->getModel()->getPk();
-    }
-
-    protected function setWhere($where, ?string $key = null): mixed
-    {
-        if (! is_array($where)) {
+        if (!is_array($where)) {
             $where = [is_null($key) ? $this->getPk() : $key => $where];
         }
         return $where;
     }
 
-    protected function withSearchSelect($where, $search): Model|Query
+    /**
+     * 批量更新
+     */
+    public function batchUpdate(array $ids, array $data, ?string $key = null): bool
     {
-        [$with, $otherWhere] = $this->getSearchData($where);
+        return (bool) $this->getModel()
+            ->whereIn(is_null($key) ? $this->getPk() : $key, $ids)
+            ->update($data);
+    }
 
-        $query = $this->getModel()->withSearch($with, $where);
+    /**
+     * 保存返回模型
+     */
+    public function save(array $data): ?Model
+    {
+        return $this->getModel()->create($data);
+    }
 
-        if ($search) {
-            $query->where($this->filterWhere($otherWhere));
+    /**
+     * 批量插入
+     */
+    public function saveAll(array $data): bool
+    {
+        if (empty($data)) {
+            return false;
         }
+        
+        // ThinkPHP saveAll 返回 Collection
+        $result = $this->getModel()->saveAll($data);
+        return !$result->isEmpty();
+    }
+
+    /**
+     * 获取某字段内的值
+     */
+    public function getFieldValue($value, string $field, ?string $valueKey = null, ?array $where = []): mixed
+    {
+        if ($valueKey) {
+            $where[$valueKey] = $value;
+        } else {
+            $where[$this->getPk()] = $value;
+        }
+
+        return $this->buildQuery($where)->value($field);
+    }
+
+    /**
+     * 辅助方法：应用搜索器逻辑 (ThinkPHP withSearch)
+     */
+    private function applySearchScopes(Query $query, array $where): Query
+    {
+        [$searchFields, $searchData, $otherWhere] = $this->getSearchData($where);
+
+        // 1. 调用 ThinkPHP 的 withSearch
+        if (!empty($searchFields)) {
+            $query->withSearch($searchFields, $searchData);
+        }
+
+        // 2. 过滤并应用剩余条件
+        $filteredWhere = $this->filterWhere($otherWhere);
+        if (!empty($filteredWhere)) {
+            // 递归处理一下 $filteredWhere 里的 IN 条件，
+            // 但因为 $otherWhere 已经是结构化的了，直接给 where 即可
+            // 如果存在 ['id', 'in', [...]] 这种格式，需要 buildQuery 的逻辑
+            // 这里简化处理：复用 buildQuery 的部分逻辑，或者直接循环
+            foreach ($filteredWhere as $key => $val) {
+                 if (is_array($val) && count($val) === 3 && in_array(strtolower($val[1]), ['in', 'not in'])) {
+                     $op = strtolower($val[1]);
+                     $v = Arr::normalize($val[2]);
+                     $op === 'in' ? $query->whereIn($val[0], $v) : $query->whereNotIn($val[0], $v);
+                 } else {
+                     $query->where([$key => $val]);
+                 }
+            }
+        }
+
         return $query;
+    }
+
+    /**
+     * 获取搜索器和搜索条件
+     * 适配 ThinkPHP: searchFieldNameAttr
+     */
+    private function getSearchData(array $where): array
+    {
+        $searchFields = [];
+        $searchData = [];
+        $otherWhere = [];
+        $model = $this->getModel();
+        
+        foreach ($where as $key => $value) {
+            // ThinkPHP 搜索器方法名规则：searchFieldNameAttr
+            $method = 'search' . self::studly($key) . 'Attr';
+            
+            if (method_exists($model, $method)) {
+                $searchFields[] = $key;
+                $searchData[$key] = $value;
+            } else {
+                // 保留特殊字段逻辑
+                if (!in_array($key, ['timeKey', 'store_stock', 'integral_time'])) {
+                    if (!is_array($value)) {
+                        $otherWhere[$key] = $value;
+                    } else {
+                        // 复杂条件保留，key 可能为数字索引
+                        $otherWhere[] = $value;
+                    }
+                }
+            }
+        }
+        return [$searchFields, $searchData, $otherWhere];
+    }
+
+    /**
+     * 根据搜索器获取内容 (内部使用)
+     */
+    protected function withSearchSelect(array $where, bool $search): Query
+    {
+        return $this->buildQuery($where, $search);
     }
 
     protected function filterWhere(array $where = []): array
     {
+        // ThinkPHP 获取表字段: $model->getTableFields()
+        // 获取允许写入的字段通常用 getFieldType 结合判断，或者简单的 getTableFields
         $fields = $this->getModel()->getTableFields();
+
+        if (empty($fields)) {
+            return $where; 
+        }
+
         foreach ($where as $key => $item) {
-            if (isset($item[0]) && ! in_array($item[0], $fields)) {
+            if (is_int($key)) {
+                // 处理 [['id', '=', 1]] 格式
+                if (is_array($item) && isset($item[0]) && !in_array($item[0], $fields)) {
+                     // 字段不存在，跳过
+                     // 注意：这里可能需要 unset($where[$key])，视业务宽容度而定
+                }
+                continue;
+            }
+            
+            if (!in_array($key, $fields)) {
                 unset($where[$key]);
             }
         }
         return $where;
     }
 
-    // =========================================================================
-    // 搜索器逻辑
-    // =========================================================================
-
-    private function getSearchData(array $where): array
+    /**
+     * 搜索
+     */
+    public function search(array $where = [], bool $search = true): Model|Query
     {
-        $with       = [];
-        $otherWhere = [];
-
-        // 获取当前持有的模型类名
-        // 如果 modelInstance 已存在，直接取其类名；否则取 modelClass
-        $className = $this->modelInstance ? get_class($this->modelInstance) : $this->modelClass;
-
-        // 防止 $className 为空或无效（尽管 getModel 已校验，但这里可能直接被 search 调用）
-        if (! $className || ! class_exists($className)) {
-            // 尝试初始化一下
-            $this->getModel();
-            $className = get_class($this->modelInstance);
+        if ($where) {
+            return $this->buildQuery($where, $search);
         }
+        return $this->getModel();
+    }
 
-        $responses  = new \ReflectionClass($className);
-        foreach ($where as $key => $value) {
-            $method = 'search' . Str::studly($key) . 'Attr';
-            if ($responses->hasMethod($method)) {
-                $with[] = $key;
-            } else {
-                if (! in_array($key, ['timeKey', 'store_stock', 'integral_time'])) {
-                    if (! is_array($value)) {
-                        $otherWhere[] = [$key, '=', $value];
-                    } elseif (count($value) === 3) {
-                        $otherWhere[] = $value;
-                    }
+    /**
+     * 求和
+     */
+    public function sum(array $where, string $field, bool $search = false): float
+    {
+        return (float) $this->buildQuery($where, $search)->sum($field);
+    }
+
+    /**
+     * 高精度加法
+     */
+    public function bcInc(mixed $key, string $incField, string $inc, ?string $keyField = null, int $acc = 2): bool
+    {
+        $pk = $keyField ?: $this->getPk();
+        $query = $this->getModel()->where($pk, $key);
+        
+        // ThinkPHP Db::raw
+        return $query->update([
+            $incField => Db::raw("COALESCE($incField, 0) + CAST($inc AS DECIMAL(20, $acc))")
+        ]) > 0;
+    }
+
+    /**
+     * 高精度 减法
+     */
+    public function bcDec($key, string $decField, string $dec, ?string $keyField = null, int $acc = 2): bool
+    {
+        return $this->bc($key, $decField, $dec, $keyField, 2, $acc);
+    }
+
+    /**
+     * 高精度计算并保存 (应用层计算)
+     */
+    public function bc($key, string $field, string $value, ?string $keyField = null, int $type = 1, int $acc = 2): bool
+    {
+        $result = $keyField === null ? $this->get($key) : $this->getOne([$keyField => $key]);
+        if (!$result) return false;
+        
+        $current = (string) ($result->{$field} ?? '0');
+        $newValue = '0';
+
+        if ($type === 1) {
+            $newValue = bcadd($current, $value, $acc);
+        } elseif ($type === 2) {
+            if (bccomp($current, $value, $acc) < 0) return false;
+            $newValue = bcsub($current, $value, $acc);
+        }
+        
+        $result->{$field} = $newValue;
+        return $result->save();
+    }
+
+    /**
+     * 减库存加销量 (原子更新)
+     * 适配 ThinkPHP: dec() / inc()
+     */
+    public function decStockIncSales(array $where, int $num, string $stock = 'stock', string $sales = 'sales'): bool
+    {
+        $query = $this->buildQuery($where);
+
+        // ThinkPHP 链式操作: where(...)->dec(字段, 值)->inc(字段, 值)->update()
+        // 必须加上 where stock >= num 保证安全
+        $query->where($stock, '>=', $num);
+
+        $result = $query->dec($stock, $num)
+              ->inc($sales, $num)
+              ->update();
+        
+        return $result > 0;
+    }
+
+    /**
+     * 加库存减销量 (原子更新)
+     */
+    public function incStockDecSales(array $where, int $num, string $stock = 'stock', string $sales = 'sales'): bool
+    {
+        $query = $this->buildQuery($where);
+
+        // 可选：检查销量是否足够减
+        $query->where($sales, '>=', $num);
+
+        $result = $query->inc($stock, $num)
+              ->dec($sales, $num)
+              ->update();
+
+        return $result > 0;
+    }
+
+    /**
+     * 获取最大值
+     */
+    public function getMax(array $where = [], string $field = ''): mixed
+    {
+        return $this->buildQuery($where)->max($field);
+    }
+
+    /**
+     * 获取最小值
+     */
+    public function getMin(array $where = [], string $field = ''): mixed
+    {
+        return $this->buildQuery($where)->min($field);
+    }
+
+    private static function studly(string $string): string
+    {
+        $string = str_replace(['-', '_'], ' ', $string);
+        return str_replace(' ', '', ucwords($string));
+    }
+
+    protected function applyScopeRemoval(Query $query, ?array $scopes): void
+    {
+        if (empty($scopes)) return;
+        // ThinkPHP 的 Global Scope 移除逻辑比较特殊
+        // 如果是软删除，通常使用 removeOption('soft_delete') 或 withTrashed()
+        // 这里做一个简单的模拟兼容
+        foreach ($scopes as $scope) {
+            if ($scope === 'soft_delete' || str_contains($scope, 'SoftDelete')) {
+                // 假设是想查询包含已删除的数据
+                if (method_exists($query, 'withTrashed')) {
+                    $query->withTrashed();
                 }
             }
         }
-        return [$with, $otherWhere];
+    }
+
+    public function tableExists($table): bool
+    {
+        // ThinkPHP 检测表存在: Db::query 或 schema
+        try {
+            return Db::execute("SHOW TABLES LIKE '{$table}'") > 0;
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 }

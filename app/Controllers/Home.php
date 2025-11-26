@@ -130,7 +130,7 @@ class Home
 	##[Auth(required: true, roles: ['admin', 'editor'])]
 	
 
-    public function index(Request $request , int $page)
+    public function index(Request $request)
     {
         // ✅ 此时 app() 已可用！
 
@@ -334,7 +334,7 @@ $list = $this->customDao->selectList(
     public function xss(Request $request): Response
     {
         // 如果是 JSON 请求，使用过滤后的数据
-        $data = MiddlewareXssFilter::getFilteredJsonBody($request);
+        //$data = \Framework\Middleware\XssFilterMiddleware::getFilteredJsonBody($request);
 
         // if ($data === null) {
         // 可能是表单提交，用 $request->request->all()

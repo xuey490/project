@@ -582,7 +582,7 @@ class LaravelORMFactory
     /**
      * 高精度加法
      */
-    public function bcInc(mixed $key, string $incField, string $inc, string $keyField = null, int $acc = 2): bool
+    public function bcInc(mixed $key, string $incField, string $inc, ?string $keyField = null, int $acc = 2): bool
     {
         $model = $this->getModel();
         $query = $keyField ? $model->where($keyField, $key) : $model->where($model->getKeyName(), $key);
@@ -596,7 +596,7 @@ class LaravelORMFactory
     /**
      * 高精度 减法
      */
-    public function bcDec($key, string $decField, string $dec, string $keyField = null, int $acc = 2): bool
+    public function bcDec($key, string $decField, string $dec, ?string $keyField = null, int $acc = 2): bool
     {
         return $this->bc($key, $decField, $dec, $keyField, 2, $acc);
     }
@@ -604,7 +604,7 @@ class LaravelORMFactory
     /**
      * 高精度计算并保存 (应用层计算)
      */
-    public function bc($key, string $field, string $value, string $keyField = null, int $type = 1, int $acc = 2): bool
+    public function bc($key, string $field, string $value, ?string $keyField = null, int $type = 1, int $acc = 2): bool
     {
         $result = $keyField === null ? $this->get($key) : $this->getOne([$keyField => $key]);
         if (!$result) return false;
