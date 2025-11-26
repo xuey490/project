@@ -130,7 +130,7 @@ class Home
 	##[Auth(required: true, roles: ['admin', 'editor'])]
 	
 
-    public function index(Request $request)
+    public function index(Request $request , int $page)
     {
         // ✅ 此时 app() 已可用！
 
@@ -211,12 +211,22 @@ class Home
 		//ThinkORM Model的写法
         #$user = (new Custom())->getTableName();
        	
-		 $list = $this->customDao->getTableName() ; //$this->customDao->count(['enabled'=>1]);
-		 dump($list);
+		# $list = $this->customDao->getTableName() ; //$this->customDao->count(['enabled'=>1]);
+		 
 		
+$currentPage = max(1, (int) $request->query->get('page', 1));
+
+#dump($page);
+$limit = 2;
+
+$list = $this->customDao->selectList(
+    ['enabled' => 1],
+    '*',
+    $currentPage,
+    $limit
+)->toArray();
 		
-		
-		
+	dump($list);	
 		
 		
 		

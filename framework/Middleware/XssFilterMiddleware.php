@@ -79,7 +79,7 @@ class XssFilterMiddleware
         // 4. 过滤 FILES (文件名和临时文件名)
         if ($request->files->count() > 0) {
             $filteredFiles = $this->filterFiles($request->files->all());
-            $request->files = new InputBag($filteredFiles);
+            //$request->files = new InputBag($filteredFiles);
         }
 
         return $next($request);
@@ -97,8 +97,7 @@ class XssFilterMiddleware
                 $data = json_decode($content, true);
                 if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
                     $filteredData = $this->filterArray($data);
-                    // 将过滤后的数组重新编码为JSON字符串，并设置回请求内容
-                    $request->setContent(json_encode($filteredData, JSON_UNESCAPED_UNICODE));
+                    $request->request = new InputBag($filteredData);
                 }
             }
         }
@@ -177,8 +176,8 @@ class XssFilterMiddleware
         }
 
         // 3. 移除危险字符和控制字符
-        $str = preg_replace('/[\x00-\x1F\x7F]/', '', $str); // 移除 ASCII 控制字符
-        $str = preg_replace('/[<>{}()\/\\\]/', '', $str); // 移除危险符号
+        $str = preg_replace('/[\x00-\x1F\x7F]/', '', $input); // 移除 ASCII 控制字符
+        $str = preg_replace('/[<>{}()\/\\\]/', '', $input); // 移除危险符号
 
 
         return $input;
