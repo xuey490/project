@@ -12,7 +12,7 @@ namespace App\Models;
 use Framework\Basic\BaseTpORMModel;
 use Framework\Basic\BaseLaORMModel;
 
-class Custom extends BaseTpORMModel
+class Custom extends BaseLaORMModel
 {
     /**
      * 数据表主键
@@ -22,7 +22,7 @@ class Custom extends BaseTpORMModel
     protected $pk = 'id';
 	
     // 表名、字段等设置继承自基类或自动识别
-    #protected $table = 'custom'; 
+    #protected $name = 'custom'; //for tp
 	
-	protected $name = 'custom'; //for tp
+	protected $table = 'sys_admin'; 
 }

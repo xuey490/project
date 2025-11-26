@@ -37,9 +37,12 @@ class BaseLaORMModel extends Model
      */
     public $incrementing = false;
 
-    const CREATED_AT = 'create_time';
-    const UPDATED_AT = 'update_time';
+    const CREATED_AT = 'created_at';
+    const UPDATED_AT = 'updated_at';
+    const DELETED_AT = 'deleted_at';
 
+	protected $appends = [];
+	
     /**
      * 模型日期字段的存储格式。
      *
@@ -67,6 +70,7 @@ class BaseLaORMModel extends Model
      * @var Snowflake|null
      */
     private static ?Snowflake $snowflake = null;
+
 
     protected static function boot()
     {
@@ -101,7 +105,17 @@ class BaseLaORMModel extends Model
     }
 
     /**
-     * 兼容tp写法
+     * 获取主键名称
+     *
+     * @return string
+     */
+    public function getPk(): string
+    {
+        return $this->getKeyName();
+    }
+
+    /**
+     * 获取模型字段数据 兼容tp写法
      *
      * @param string $field
      *
@@ -113,7 +127,7 @@ class BaseLaORMModel extends Model
     }
 
     /**
-     * 兼容 TP
+     * 写入模型字段数据 兼容 TP 
      *
      * @param string $name
      * @param mixed  $value
@@ -123,8 +137,9 @@ class BaseLaORMModel extends Model
         $this->attributes[$name] = $value;
     }
 
+
     /**
-     * 获取当前模型的字段列表
+     * 获取模型的字段列表
      *
      * @return array
      */
@@ -132,10 +147,11 @@ class BaseLaORMModel extends Model
     {
         try {
             $tableName     = $this->getTable();
-            $connection    = DB::connection();
+            $connection    = $this->getConnection();	//or DB::connection();
             $prefix        = $connection->getTablePrefix();
             $fullTableName = $prefix . $tableName;
-            $fields        = DB::select("SHOW COLUMNS FROM `{$fullTableName}`");
+			//$fields        = DB::select("SHOW COLUMNS FROM `{$fullTableName}`");
+            $fields        = $connection->select("SHOW COLUMNS FROM `{$fullTableName}`");
             return array_map(function ($column) {
                 return $column->Field;
             }, $fields);
@@ -143,6 +159,7 @@ class BaseLaORMModel extends Model
             return [];
         }
     }
+
 
     /**
      * 兼容tp 重写动态输出隐藏
@@ -156,6 +173,53 @@ class BaseLaORMModel extends Model
         $this->dynamicHidden = array_merge($this->dynamicHidden, $fields);
         return $this; // 支持链式调用
     }
+
+
+    /**
+     * 追加创建时间 created_at
+     *
+     * @return string|null
+     */
+    public function getCreatedDateAttribute(): ?string
+    {
+        if ($this->getAttribute($this->getCreatedAtColumn())) {
+            try {
+                $timestamp = $this->getRawOriginal($this->getCreatedAtColumn());
+                if (empty($timestamp)) {
+                    return null;
+                }
+                $carbonInstance = Carbon::createFromTimestamp($timestamp);
+                return $carbonInstance->setTimezone(config('app.time_zone'))->format('Y-m-d H:i:s');
+            } catch (\Exception $e) {
+                return null;
+            }
+        }
+        return null;
+    }
+	
+    /**
+     * 追加更新时间 updated_at
+     *
+     * @return string|null
+     */
+    public function getUpdatedDateAttribute(): ?string
+    {
+        if ($this->getAttribute($this->getUpdatedAtColumn())) {
+            try {
+                $timestamp = $this->getRawOriginal($this->getUpdatedAtColumn());
+                if (empty($timestamp)) {
+                    return null;
+                }
+                $carbonInstance = Carbon::createFromTimestamp($timestamp);
+                return $carbonInstance->setTimezone(config('app.time_zone'))->format('Y-m-d H:i:s');
+            } catch (\Exception $e) {
+                return null;
+            }
+        }
+        return null;
+    }
+	
+
 
     public function getCreateTimeAttribute($value): string
     {
@@ -179,6 +243,15 @@ class BaseLaORMModel extends Model
                 return;
             }
             $table     = $model->getTable();
+			
+            //$service = Container::make(SysRecycleBinService::class);
+            $config  = $service->getTableConfig($table);
+
+            // 检查是否启用回收站
+            if (!$config['enabled'] || $model->isSoftDeleteEnabled() || $config['strategy'] === 'logical') {
+                return;
+            }
+			
             $tableData = $model->getAttributes();
             $prefix    = $model->getConnection()->getTablePrefix();
             /*if (self::shouldStoreInRecycleBin($table)) {
@@ -254,6 +327,7 @@ class BaseLaORMModel extends Model
     {
         return [
             'data'         => json_encode($tableData),
+			'original_id'  => $tableData['id'] ?? '',
             'table_name'   => $table,
             'table_prefix' => $prefix,
             'enabled'      => 0,
