@@ -44,7 +44,8 @@ return function (ContainerConfigurator $configurator) {
 	// === 再进行 class_alias 切换 ORM Model ===
 	if ($engine === 'laravelORM') {
 		class_alias(
-			\Illuminate\Database\Eloquent\Model::class,
+			//\Illuminate\Database\Eloquent\Model::class, #原始基类
+			\Framework\Basic\BaseLaORMModel::class,	//封装类
 			\Framework\Utils\BaseModel::class,
 			true
 		);
@@ -52,7 +53,8 @@ return function (ContainerConfigurator $configurator) {
 
 	if ($engine === 'thinkORM') {
 		class_alias(
-			\think\Model::class,
+			//\think\Model::class, #原始基类
+			\Framework\Basic\BaseTpORMModel::class,	//封装类
 			\Framework\Utils\BaseModel::class,
 			true
 		);
