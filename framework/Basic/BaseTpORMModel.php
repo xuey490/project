@@ -180,6 +180,7 @@ class BaseTpORMModel extends Model
 
     private static function shouldStoreInRecycleBin($table): bool
     {
+        return true;
         // return config('app.store_in_recycle_bin') && !in_array($table, config('app.exclude_from_recycle_bin'));
     }
 
@@ -190,7 +191,7 @@ class BaseTpORMModel extends Model
             'table_name'   => $table,
             'table_prefix' => $prefix,
             'enabled'      => 0,
-            'ip'           => request()->getRealIp(),
+            'ip'           => app('request')->getClientIp(),
             'operate_id'   => getCurrentUser(),
         ];
     }

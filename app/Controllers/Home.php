@@ -211,12 +211,22 @@ class Home
 		//ThinkORM Model的写法
         #$user = (new Custom())->getTableName();
        	
-		 $list = $this->customDao->getTableName() ; //$this->customDao->count(['enabled'=>1]);
-		 dump($list);
+		# $list = $this->customDao->getTableName() ; //$this->customDao->count(['enabled'=>1]);
+		 
 		
+$currentPage = max(1, (int) $request->query->get('page', 1));
+
+#dump($page);
+$limit = 2;
+
+$list = $this->customDao->selectList(
+    ['enabled' => 1],
+    '*',
+    $currentPage,
+    $limit
+)->toArray();
 		
-		
-		
+	dump($list);	
 		
 		
 		
@@ -324,7 +334,7 @@ class Home
     public function xss(Request $request): Response
     {
         // 如果是 JSON 请求，使用过滤后的数据
-        $data = MiddlewareXssFilter::getFilteredJsonBody($request);
+        //$data = \Framework\Middleware\XssFilterMiddleware::getFilteredJsonBody($request);
 
         // if ($data === null) {
         // 可能是表单提交，用 $request->request->all()

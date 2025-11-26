@@ -80,7 +80,10 @@ class Kernel
     // 2. 初始化时区（从配置获取）
     private function setupTimezone(): void
     {
-        $timezone = app('config')->get('app.time_zone', 'UTC');
+        $timezone = (string) config('app.time_zone', 'UTC');
+        if (!in_array($timezone, timezone_identifiers_list(), true)) {
+            $timezone = 'UTC';
+        }
         date_default_timezone_set($timezone);
     }
 
@@ -137,7 +140,7 @@ class Kernel
                     $error['line'] ?? 0
                 );
                 $exceptionHandler->report($e);
-                $exceptionHandler->render($e)->send();
+                //$exceptionHandler->render($e)->send();
                 // return ;
                 exit(1);
             }

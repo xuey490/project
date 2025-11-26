@@ -16,15 +16,14 @@ declare(strict_types=1);
 
 namespace Framework\Core;
 
-use Framework\Config\ConfigLoader;
 use Framework\Container\Container;
-use Framework\Core\Exception\Handler;
 use Framework\Middleware\MiddlewareDispatcher;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Controller\ArgumentResolver;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\Routing\RouteCollection;
 
 /**
@@ -40,8 +39,6 @@ final class Framework
     private const CONTROLLER_NAMESPACE = 'App\Controllers';
 
     private const ROUTE_CACHE_FILE = BASE_PATH . '/storage/cache/routes.php';
-
-    private const DATABASE_CONFIG_FILE = BASE_PATH . '/config/database.php';
 
     private const DIR_PERMISSION = 0755; // 目录默认权限
 
@@ -165,10 +162,6 @@ final class Framework
             $this->logRequestAndResponse($this->request, $response, $start);
             return $response;
         } catch (\Throwable $e) {
-            try {
-                $this->logger?->logException($e, $this->request);
-            } catch (\Throwable $_) {
-            }
 
             return $this->handleException($e);
         } finally {
@@ -550,19 +543,21 @@ final class Framework
     {
         $statusCode = Response::HTTP_INTERNAL_SERVER_ERROR;
 
-        if ($e instanceof Handler) {
-            try {
-                $statusCode = $e->getStatusCode();
-            } catch (\Throwable $_) {
-                $statusCode = Response::HTTP_INTERNAL_SERVER_ERROR;
+        if ($e instanceof HttpExceptionInterface) {
+            $statusCode = (int) $e->getStatusCode();
+        } else {
+            $code = (int) $e->getCode();
+            if ($code >= 400 && $code <= 599) {
+                $statusCode = $code;
             }
         }
+
 
         // 准备模板所需的所有变量（直接传递具体值，不依赖模板函数）
         $templateVars = [
             // 异常信息
             'exception_class'   => get_class($e),
-            'exception_code'    => $e->getCode(),
+            'exception_code'    => $statusCode,
             'exception_message' => $e->getMessage(),
             'exception_file'    => $e->getFile(),
             'exception_line'    => $e->getLine(),

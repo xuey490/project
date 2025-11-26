@@ -15,16 +15,13 @@ declare(strict_types=1);
  */
 
 namespace Framework\Middleware;
-
-use Framework\Utils\RedisFactory; // 引入Redis 助手
-use Redis;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 class CircuitBreakerMiddleware implements MiddlewareInterface
 {
-    private \Redis $redis; // 依赖一个 \Redis 实例
+    private object $redis;
 
     /** @var int 失败阈值 */
     private int $failureThreshold;
@@ -41,8 +38,8 @@ class CircuitBreakerMiddleware implements MiddlewareInterface
      * @param string $serviceName      熔断器名称 (例如: 'default', 'payment_api')
      */
     public function __construct(
-        \Redis $redisClient,       // 1. 在这里注入一个已经连接好的 \Redis 实例
-        int $failureThreshold = 5, // 建议默认值稍高
+        object $redisClient,
+        int $failureThreshold = 5,
         int $timeout = 10,
         string $serviceName = 'default'
     ) {
