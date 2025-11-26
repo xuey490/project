@@ -26,6 +26,7 @@
         "illuminate/container": "^12.39",
         "illuminate/database": "^12.39",
         "illuminate/events": "^12.39",
+        "illuminate/pagination": "^12.40",
         "intervention/image": "^3.11",
         "lcobucci/clock": "^3.5",
         "lcobucci/jwt": "^5.6",
