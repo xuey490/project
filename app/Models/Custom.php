@@ -9,10 +9,10 @@ declare(strict_types=1);
 
 namespace App\Models;
 
-use Framework\Basic\BaseTpORMModel;
-use Framework\Basic\BaseLaORMModel;
+#use Framework\Basic\BaseTpORMModel;
+#use Framework\Basic\BaseLaORMModel;
 
-class Custom extends BaseLaORMModel
+class Custom extends \Framework\Utils\BaseModel
 {
     /**
      * 数据表主键
