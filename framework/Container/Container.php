@@ -109,7 +109,31 @@ class Container implements SymfonyContainerInterface
             self::$providers->bootProviders(self::$container);
         }
     }
+	
+    /**
+     * 内部助手：获取 ContainerBuilder，如果当前不是 Builder 则抛出异常
+     * 用于解决 IDE 警告和运行时逻辑错误
+     */
+    private function getBuilder(): ContainerBuilder
+    {
+        if (self::$container instanceof ContainerBuilder) {
+            return self::$container;
+        }
+        throw new \RuntimeException('Current container is not an instance of ContainerBuilder (it might be compiled or cached).');
+    }
+	
+    /**
+     * 内部助手：获取安全的容器实例
+     */
+    private static function getContainer(): SymfonyContainerInterface
+    {
+        if (self::$container === null) {
+            self::init();
+        }
+        return self::$container; // @phpstan-ignore-line
+    }
 
+	
     /**
      * 1. 简单的 make 实现，用于模拟 Laravel/Webman 的构建行为.
      * @param string $abstract   类名
@@ -205,7 +229,7 @@ class Container implements SymfonyContainerInterface
             );
         }
 
-        $containerBuilder = self::$container;
+        $containerBuilder =  $this->getBuilder(); // 确保是 Builder or self::$container;
 
         if ($containerBuilder->isCompiled()) {
             throw new \RuntimeException('容器已经编译，无法再注册新的服务。');
@@ -235,7 +259,7 @@ class Container implements SymfonyContainerInterface
 			throw new \RuntimeException('当前容器不支持动态注册服务。');
 		}
 
-		$containerBuilder = self::$container;
+		$containerBuilder = $this->getBuilder(); //self::$container;
 
 		if ($containerBuilder->isCompiled()) {
 			throw new \RuntimeException('容器已经编译，无法再注册新的服务。');
@@ -388,7 +412,7 @@ class Container implements SymfonyContainerInterface
     {
         return self::$container->get($id, $invalidBehavior);
     }
-
+	
     public function has(string $id): bool
     {
         return self::$container->has($id);
@@ -441,10 +465,19 @@ class Container implements SymfonyContainerInterface
         return self::$container->getParameterBag();
     }
 
-    public function compile(bool $resolveEnvPlaceholders = false): void
+    public function compile1(bool $resolveEnvPlaceholders = false): void
     {
         self::$container->compile($resolveEnvPlaceholders);
     }
+	
+    // 优化：compile 方法增加类型检查
+    public function compile(bool $resolveEnvPlaceholders = false): void
+    {
+        // 只有 Builder 才能编译
+        if (self::$container instanceof ContainerBuilder) {
+            self::$container->compile($resolveEnvPlaceholders);
+        }
+    }	
 
     public function isCompiled(): bool
     {
