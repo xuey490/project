@@ -97,8 +97,8 @@ class Home
         #dump(($this->db)('config')->where('id' , 1)->select()->toArray());
 		
 		//ThinkORM Model的写法
-        $users = Admin::select()->toArray();
-        dump($users);	
+        //$users = Admin::select()->toArray();
+        //dump($users);	
 		
 		
 		/*
@@ -213,7 +213,7 @@ class Home
        	
 		# $list = $this->customDao->getTableName() ; //$this->customDao->count(['enabled'=>1]);
 		 
-		
+/*		
 $currentPage = max(1, (int) $request->query->get('page', 1));
 
 #dump($page);
@@ -227,7 +227,7 @@ $list = $this->customDao->selectList(
 )->toArray();
 		
 	dump($list);	
-		
+*/		
 		
 		
 		
