@@ -410,7 +410,7 @@ class Container implements SymfonyContainerInterface
     // ========== 代理所有 Symfony ContainerInterface 方法 ==========
     public function get(string $id, int $invalidBehavior = self::EXCEPTION_ON_INVALID_REFERENCE): ?object
     {
-        return self::$container->get($id, $invalidBehavior);
+        return self::$container->get($id, intval($invalidBehavior));
     }
 	
     public function has(string $id): bool
@@ -465,11 +465,6 @@ class Container implements SymfonyContainerInterface
         return self::$container->getParameterBag();
     }
 
-    public function compile1(bool $resolveEnvPlaceholders = false): void
-    {
-        self::$container->compile($resolveEnvPlaceholders);
-    }
-	
     // 优化：compile 方法增加类型检查
     public function compile(bool $resolveEnvPlaceholders = false): void
     {

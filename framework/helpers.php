@@ -17,7 +17,6 @@ declare(strict_types=1);
 use Framework\Cache\ThinkCache;
 use Framework\Container\Container;
 use Framework\Core\App;
-use Framework\Core\Framework;
 use Framework\Event\Dispatcher;
 use Framework\Security\CsrfTokenManager;
 use Framework\Validation\ThinkValidatorFactory;
@@ -131,7 +130,7 @@ if (! function_exists('app')) {
      * @param  array                     $params 可选构造参数
      * @return ContainerInterface|object
      */
-    function app(?string $id = null, array $params = [])
+    function app(?string $id = null, ?array $params = []): mixed
     {
         if ($id === null) {
             return App::getContainer();

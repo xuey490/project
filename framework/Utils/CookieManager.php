@@ -65,7 +65,7 @@ class CookieManager
 
     public function __construct(?string $configPath = null)
     {
-        $configPath = $configPath ?? __DIR__ . '/../../config/cookie.php';
+        $configPath = $configPath ?? BASE_PATH . '/config/cookie.php';
 
         if (! file_exists($configPath)) {
             throw new \RuntimeException("Cookie config not found: {$configPath}");
