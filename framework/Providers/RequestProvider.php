@@ -35,6 +35,11 @@ final class RequestProvider implements ServiceProviderInterface
         // 注册 RequestStack（用于在工厂中获取当前请求）
         $services->set(RequestStack::class);
 
+
+        // 1. 注册 Request 服务（确保全局使用同一个请求实例）
+        $services->set(\Symfony\Component\HttpFoundation\Request::class)
+            ->factory([\Symfony\Component\HttpFoundation\Request::class, 'createFromGlobals'])->public(); // 通过工厂方法创建请求实例
+
         // 1. 注册 Request 服务（确保全局使用同一个请求实例）
         $services->set('request', Request::class)
             ->factory([Request::class, 'createFromGlobals'])->public(); // 通过工厂方法创建请求实例
