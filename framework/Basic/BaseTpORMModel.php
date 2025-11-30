@@ -79,7 +79,34 @@ class BaseTpORMModel extends Model
     public static function getTableName(): string
     {
         $self = new static();
-        return $self->getConfig('prefix') . $self->name ?? $self->table;
+        $prefix = (string) $self->getConfig('prefix');
+        if (!empty($self->table)) {
+            return $self->table;
+        }
+        return $prefix . (string) $self->name;
+    }
+
+    public function __construct(array $data = [])
+    {
+        parent::__construct($data);
+        $prefix = (string) $this->getConfig('prefix');
+        
+        if (!empty($this->table) && empty($this->name)) {
+            $t = (string) $this->table;
+            if ($prefix !== '' && strncmp($t, $prefix, strlen($prefix)) === 0) {
+                $this->name = substr($t, strlen($prefix));
+                
+            } else {
+                $this->name = $t;
+                if ($prefix !== '') {
+                    $this->table = $prefix . $t;
+                }
+            }
+        }
+        
+        if (!empty($this->name) && empty($this->table)) {
+            $this->table = ($prefix !== '' ? $prefix . $this->name : $this->name);
+        }
     }
 
     /**
