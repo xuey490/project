@@ -254,29 +254,30 @@ if (! function_exists('env')) {
     }
 }
 
+
 if (! function_exists('config')) {
     /**
-     * 配置项读取（支持点语法）.
+     * 配置项读取（支持点语法）
      */
     function config(?string $key = null, mixed $default = null): mixed
     {
-        static $config = null;
+        /** @var \Framework\Config\Config $configService */
+        $configService = Container::getInstance()->get('config');
 
-        if ($config === null) {
-            $container = Container::getInstance();
-            /** @var array $config */
-            $config = $container->get('config')->loadAll() ?? [];
-        }
+        // 使用配置服务里的配置数组作为最终数据源
+        $config = $configService->loadAll() ?? [];
 
+        // 不传 key 时返回全部配置
         if ($key === null) {
             return $config;
         }
 
+        // 支持: config('app.env') / config('cache.stores.redis.host')
         $segments = explode('.', $key);
-        $value    = $config;
+        $value = $config;
 
         foreach ($segments as $segment) {
-            if (! is_array($value) || ! array_key_exists($segment, $value)) {
+            if (!is_array($value) || !array_key_exists($segment, $value)) {
                 return $default;
             }
             $value = $value[$segment];
