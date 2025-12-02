@@ -99,31 +99,7 @@ return function (ContainerConfigurator $configurator) {
 
     // ✅ 3. 启动所有 Provider（boot）
 	\Framework\Container\Container::setProviderManager($providerManager);
-	
-	
-	
 
-
-
-	/*
-    // 工厂服务 0.4.1 版本使用
-	$services->set(Framework\Factory\ThinkORMFactory::class)
-		->args([
-			$databseConfig,
-			service('log'),        // SQL 日志
-			service('log'),        // 慢 SQL 日志
-			200
-		])
-		->public();
-
-	// DbManager 使用工厂创建
-	$services->set(\think\DbManager::class)
-		->factory([ service(Framework\Factory\ThinkORMFactory::class), 'create' ])
-		->public();
-
-	// 你框架里的统一 service id
-	$services->alias('thinkorm', \think\DbManager::class);
-	*/
 	
 	
 
