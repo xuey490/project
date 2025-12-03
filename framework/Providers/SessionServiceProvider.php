@@ -16,7 +16,7 @@ declare(strict_types=1);
 
 namespace Framework\Providers;
 
-use Framework\Config\ConfigService;
+// use Framework\Config\ConfigService;
 use Framework\Container\ServiceProviderInterface;
 use Framework\Session\FileSessionHandler;
 use Framework\Session\RedisGroupSessionHandler;
@@ -40,7 +40,9 @@ final class SessionServiceProvider implements ServiceProviderInterface
     {
         $services = $configurator->services();
 
-        $load =  new ConfigService(config_path());
+		$cacheFile = BASE_PATH . '/storage/cache/config_cache.php';
+		$cache = new \Framework\Config\Cache\ConfigCache($cacheFile, 300);
+		$load = new \Framework\Config\ConfigService( BASE_PATH . '/config', $cache, null , ['routes.php', 'services.php']);
 
         // === 1. 加载配置 ===
         $redisConfig   = $load->get('redis');  // require \dirname(__DIR__, 2) . '/config/redis.php';

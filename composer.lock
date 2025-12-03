@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "31c110e2006ce46602964ebe0f2282d4",
+    "content-hash": "e420275e644a29a52c66908a1a542677",
     "packages": [
         {
             "name": "brick/math",
@@ -5524,17 +5524,56 @@
             "time": "2025-11-12T01:36:20+00:00"
         },
         {
-            "name": "xuey490/log",
+            "name": "xuey490/config",
             "version": "1.0.1",
             "source": {
                 "type": "git",
-                "url": "https://github.com/xuey490/log.git",
-                "reference": "b28b583872513356414d12a01f919b9a94665a81"
+                "url": "https://github.com/xuey490/config.git",
+                "reference": "75c203b9a96087758054fbc0ca3f27b974633996"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/xuey490/log/zipball/b28b583872513356414d12a01f919b9a94665a81",
-                "reference": "b28b583872513356414d12a01f919b9a94665a81",
+                "url": "https://api.github.com/repos/xuey490/config/zipball/75c203b9a96087758054fbc0ca3f27b974633996",
+                "reference": "75c203b9a96087758054fbc0ca3f27b974633996",
+                "shasum": ""
+            },
+            "require": {
+                "php": ">=8.1"
+            },
+            "require-dev": {
+                "friendsofphp/php-cs-fixer": "^3.6",
+                "phpstan/phpstan": "^2.0",
+                "phpunit/phpunit": "^11.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Framework\\Config\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "FssPHP Configuration loader library,supporting PHP/JSON/INI with caching (namespace Framework\\Config)",
+            "support": {
+                "issues": "https://github.com/xuey490/config/issues",
+                "source": "https://github.com/xuey490/config/tree/1.0.1"
+            },
+            "time": "2025-12-03T12:13:43+00:00"
+        },
+        {
+            "name": "xuey490/log",
+            "version": "1.0.2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/xuey490/log.git",
+                "reference": "b8cf26ec5d74e6c36007d6e32faeef3b5e9ea1ee"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/xuey490/log/zipball/b8cf26ec5d74e6c36007d6e32faeef3b5e9ea1ee",
+                "reference": "b8cf26ec5d74e6c36007d6e32faeef3b5e9ea1ee",
                 "shasum": ""
             },
             "require": {
@@ -5571,7 +5610,7 @@
                 "issues": "https://github.com/xuey490/project/issues",
                 "source": "https://github.com/xuey490/project"
             },
-            "time": "2025-12-03T11:26:32+00:00"
+            "time": "2025-12-03T11:43:35+00:00"
         },
         {
             "name": "xuey490/storage",
