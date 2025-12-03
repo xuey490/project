@@ -14,7 +14,7 @@ declare(strict_types=1);
  * @Email: xuey863toy@gmail.com
  */
 
-namespace Framework\Log;
+namespace Framework\Utils;
 
 /*
 快速测试日志类

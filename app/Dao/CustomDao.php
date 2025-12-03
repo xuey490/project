@@ -17,6 +17,6 @@ class CustomDao extends BaseDao
     public function getActiveUsers()
     {
         // 调用底层的 selectList (通过 __call 转发给 ThinkORMFactory)
-        return $this->selectList(['status' => 1], '*', 1, 10, 'id desc')->toArray();
+        return $this->selectList(['status' => 1], '*', 0, 2, 'id desc')->toArray();
     }
 }
