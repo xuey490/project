@@ -17,7 +17,7 @@ class Config extends Model
     // 移除这行，让 ORM 自动根据模型类名推断表名并应用前缀
 	//如果thinkphp，这是用$name 不用表前缀，$table必须有表前缀，$table='oa_config';
 	//如果Illuminate，必须$table='config' 用$name 直接报错;
-    protected $table = 'config';
+    protected $table = 'sys_config';
 
     protected $pk = 'id'; // 主键名称
 

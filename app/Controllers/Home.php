@@ -33,6 +33,10 @@ use Framework\Database\ORMFactory;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Support\Facades\DB;
 
+
+//use Framework\Config\Config ;
+#use Framework\Config\Cache\ConfigCache;
+
 #use think\facade\Db;
 
 ##[Auth(roles: ['admin'])]
@@ -49,7 +53,9 @@ class Home
 	
 	
     public function __construct(
-        private CsrfTokenManager $csrf,private RequestStack $requestStack,
+        private CsrfTokenManager $csrf,
+		private RequestStack $requestStack,
+		private Request $request,
 		private CookieManager $cookie, 
 		private ORMFactory $db,
 		CustomDao $customDao,
@@ -211,24 +217,39 @@ class Home
 		//ThinkORM Model的写法
         #$user = (new Custom())->getTableName();
        	
-		# $list = $this->customDao->getTableName() ; //$this->customDao->count(['enabled'=>1]);
-		 
-/*		
+		$list1 = $this->customDao->getActiveUsers() ; //$this->customDao->count(['enabled'=>1]);
+		 dump($list1);
+		 #dump($user->getTable());
+
 $currentPage = max(1, (int) $request->query->get('page', 1));
 
 #dump($page);
-$limit = 2;
+$limit = 3;
 
-$list = $this->customDao->selectList(
-    ['enabled' => 1],
+$list = $this->customDao->selectModel(
+    ['status' => 1],
     '*',
     $currentPage,
     $limit
 )->toArray();
+
+//->paginate(3, ['*'], 'page', 1)->toArray();
+
+//dump ($this->customDao->get(['status' => 1]));
+
+dump($list);
+
+#$model = new Custom();
+#echo $model->getTableName(); // 应该输出 oa_custom
+
+		dump(config('cache.stores.redis.host'));
 		
-	dump($list);	
-*/		
+		$cacheFile = BASE_PATH . '/storage/test.php';
+		$cache = new \Framework\Config\Cache\ConfigCache($cacheFile, 300); // TTL 300s
+		$config = new \Framework\Config\Config( BASE_PATH . '/config', $cache, null , ['routes.php', 'services.php']);
 		
+		dump($all = $config->load());
+		dump($config->get('database'));
 		
 		
 		// echo storage_path('logs/sql.log');
@@ -341,7 +362,7 @@ $list = $this->customDao->selectList(
         //	$data = $request->request->all();
         // }
 
-        $name = $request->get('name');
+        $name = $this->request->get('name');
 
         // $data 中的字符串已自动 XSS 过滤
         // $name = $data['name'] ?? '';

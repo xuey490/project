@@ -17,7 +17,7 @@ declare(strict_types=1);
 namespace Framework\Providers;
 
 use Framework\Container\ServiceProviderInterface;
-use Framework\Log\LoggerCache;
+use Framework\Utils\LoggerCache;
 use Framework\Log\LoggerService;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
@@ -29,12 +29,15 @@ final class LoggerServiceProvider implements ServiceProviderInterface
     {
         $services = $configurator->services();
         // 注册 log 服务
+		
+		$logConfig = require BASE_PATH . '/config/log.php';
+		
         $services->set('log', LoggerService::class)
-            ->autowire()	// 不带args参数
+            ->args([$logConfig])
             ->public();
 
         $services->set('log_cache', LoggerCache::class)
-            ->autowire()
+            ->args([$logConfig])
             ->public();
     }
 

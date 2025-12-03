@@ -20,10 +20,11 @@ namespace Framework\Basic;
 use Illuminate\Support\Carbon;
 use Framework\Basic\Exception\Exception;
 use Framework\Utils\Snowflake;
-use Framework\Core\App;
-use Illuminate\Support\Facades\DB;
+#use Framework\Core\App;
+#use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use RuntimeException;
 
 class BaseLaORMModel extends Model
 {
@@ -137,6 +138,26 @@ class BaseLaORMModel extends Model
         $this->attributes[$name] = $value;
     }
 
+    public function getTable(): string
+    {
+        if (!empty($this->table)) {
+            return $this->table;
+        }
+        if (property_exists($this, 'name') && !empty($this->name)) {
+            return (string) $this->name;
+        }
+        return parent::getTable();
+    }
+
+    /**
+     * 获取模型定义的数据库表名【全称】.
+     */
+    public static function getTableName(): string
+    {
+        $self = new static();
+
+        return $self->getTable();
+    }
 
     /**
      * 获取模型的字段列表
@@ -244,7 +265,7 @@ class BaseLaORMModel extends Model
             }
             $table     = $model->getTable();
 			
-            //$service = Container::make(SysRecycleBinService::class);
+            $service = App(SysRecycleBinService::class);
             $config  = $service->getTableConfig($table);
 
             // 检查是否启用回收站
@@ -260,7 +281,7 @@ class BaseLaORMModel extends Model
                 $systemRecycleBinService->save($data);
             }*/
         } catch (\Exception $e) {
-            throw new Exception($e->getMessage());
+            throw new \RuntimeException($e->getMessage());
         }
     }
 
@@ -295,7 +316,7 @@ class BaseLaORMModel extends Model
     }
 
     /**
-     *  实力话雪花算法
+     *  实例化雪花算法
      *
      * @return Snowflake
      */
@@ -331,7 +352,7 @@ class BaseLaORMModel extends Model
             'table_name'   => $table,
             'table_prefix' => $prefix,
             'enabled'      => 0,
-            'ip'           => request()->getRealIp(),
+            'ip'           => app('request')->getRealIp(),
             'operate_id'   => getCurrentUser(),
         ];
     }

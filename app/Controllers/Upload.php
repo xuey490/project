@@ -9,7 +9,7 @@
 
 namespace App\Controllers;
 
-use Framework\Utils\FileUploader;
+
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
@@ -19,9 +19,7 @@ class Upload
 {
     private Environment $twig;
 
-    private FileUploader $uploader;
-
-    public function __construct(Environment $twig, FileUploader $uploader)
+    public function __construct(Environment $twig)
     {
         $this->twig     = $twig;
         //$this->uploader = $uploader;
