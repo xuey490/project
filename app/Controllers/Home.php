@@ -242,13 +242,13 @@ dump($list);
 #$model = new Custom();
 #echo $model->getTableName(); // 应该输出 oa_custom
 
-		dump(config('cache.stores.redis.host'));
+		//dump(config('cache.stores.redis.host'));
 		
 		$cacheFile = BASE_PATH . '/storage/test.php';
 		$cache = new \Framework\Config\Cache\ConfigCache($cacheFile, 300); // TTL 300s
-		$config = new \Framework\Config\Config( BASE_PATH . '/config', $cache, null , ['routes.php', 'services.php']);
+		$config = new \Framework\Config\ConfigService( BASE_PATH . '/config', $cache, null , ['routes.php', 'services.php']);
 		
-		dump($all = $config->load());
+		//dump($all = $config->load());
 		dump($config->get('database'));
 		
 		
@@ -285,7 +285,7 @@ dump($list);
 		#$logger1->log('默认日志文件');
 				
 		// 使用自定义参数 app(\Framework\Log\LoggerCache::class) 或app('\Framework\Log\LoggerCache') 带引号做为字符串参数
-		$logger2 = app(\Framework\Log\LoggerCache::class, [
+		$logger2 = app(\Framework\Utils\LoggerCache::class, [
 			'channel' => 'payment',
 			'logFile' => BASE_PATH .'/storage/logs/payment.log',
 		]);

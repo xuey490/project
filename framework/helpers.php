@@ -265,7 +265,7 @@ if (! function_exists('config')) {
         $configService = Container::getInstance()->get('config');
 
         // 使用配置服务里的配置数组作为最终数据源
-        $config = $configService->loadAll() ?? [];
+        $config = $configService->load() ?? [];
 
         // 不传 key 时返回全部配置
         if ($key === null) {

@@ -54,7 +54,8 @@
         "twig/twig": "^3.14",
         "vlucas/phpdotenv": "5.5",
         "workerman/workerman": "^5.1",
-        "xuey490/log": "^1.0.1",
+        "xuey490/log": "^1.0.2",
+        "xuey490/config": "^1.0.1",
         "xuey490/storage": "^1.1.0"
     },
     "require-dev": {
