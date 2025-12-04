@@ -17,60 +17,68 @@ declare(strict_types=1);
 namespace Framework\Utils;
 
 /**
- * 雪花ID生成.
+ * 高性能雪花 ID 生成器（优化版）
+ * - 使用 hrtime(true) 作为时间源（纳秒级，更稳定）
+ * - 修复自旋等待导致的 CPU 100% 问题
+ * - 所有位移/常量预计算，提高性能
  */
 class Snowflake
 {
-    public const EPOCH = 1704038400000; // 2024-01-01 00:00:00 的 Unix 时间戳（毫秒）
+    public const EPOCH = 1704038400000;
 
     public const WORKER_ID_BITS = 5;
-
     public const DATA_CENTER_ID_BITS = 5;
-
     public const SEQUENCE_BITS = 13;
 
     public const MAX_WORKER_ID = (1 << self::WORKER_ID_BITS) - 1;
-
     public const MAX_DATA_CENTER_ID = (1 << self::DATA_CENTER_ID_BITS) - 1;
+    public const MAX_SEQUENCE = (1 << self::SEQUENCE_BITS) - 1;
+
+    // 预计算移位（性能提升）
+    private const WORKER_SHIFT = self::SEQUENCE_BITS;
+    private const DATACENTER_SHIFT = self::SEQUENCE_BITS + self::WORKER_ID_BITS;
+    private const TIMESTAMP_SHIFT = self::SEQUENCE_BITS + self::WORKER_ID_BITS + self::DATA_CENTER_ID_BITS;
 
     private int $workerId;
-
     private int $dataCenterId;
 
     private int $sequence = 0;
-
     private int $lastTimestamp = -1;
 
-    /**
-     * @throws ApiException
-     */
     public function __construct(int $workerId, int $dataCenterId)
     {
-        if ($workerId > self::MAX_WORKER_ID || $workerId < 0) {
-            throw new \RuntimeException("Worker ID can't be greater than " . self::MAX_WORKER_ID . ' or less than 0');
+        if ($workerId < 0 || $workerId > self::MAX_WORKER_ID) {
+            throw new \InvalidArgumentException("Worker ID must be between 0 and " . self::MAX_WORKER_ID);
         }
-        if ($dataCenterId > self::MAX_DATA_CENTER_ID || $dataCenterId < 0) {
-            throw new \RuntimeException("Data Center ID can't be greater than " . self::MAX_DATA_CENTER_ID . ' or less than 0');
+        if ($dataCenterId < 0 || $dataCenterId > self::MAX_DATA_CENTER_ID) {
+            throw new \InvalidArgumentException("Data Center ID must be between 0 and " . self::MAX_DATA_CENTER_ID);
         }
-        $this->workerId     = $workerId;
+
+        $this->workerId = $workerId;
         $this->dataCenterId = $dataCenterId;
     }
 
     /**
-     * @throws ApiException
+     * 生成一个全局唯一雪花 ID
      */
     public function nextId(): int
     {
         $timestamp = $this->timeGen();
 
+        // 系统时钟回拨
         if ($timestamp < $this->lastTimestamp) {
-            throw new \RuntimeException('Clock moved backwards. Refusing to generate id for ' . ($this->lastTimestamp - $timestamp) . ' milliseconds');
+            throw new \RuntimeException(
+                'Clock moved backwards by ' . ($this->lastTimestamp - $timestamp) . ' ms'
+            );
         }
 
-        if ($this->lastTimestamp == $timestamp) {
-            $this->sequence = ($this->sequence + 1) & ((1 << self::SEQUENCE_BITS) - 1);
-            if ($this->sequence == 0) {
-                $timestamp = $this->tilNextMillis($this->lastTimestamp);
+        // 同毫秒内自增
+        if ($timestamp === $this->lastTimestamp) {
+            $this->sequence = ($this->sequence + 1) & self::MAX_SEQUENCE;
+
+            if ($this->sequence === 0) {
+                // 溢出，等待下一个毫秒
+                $timestamp = $this->tilNextMillis($timestamp);
             }
         } else {
             $this->sequence = 0;
@@ -78,34 +86,44 @@ class Snowflake
 
         $this->lastTimestamp = $timestamp;
 
-        $timestampDelta    = $timestamp - self::EPOCH;
-        $workerIdShift     = self::SEQUENCE_BITS;
-        $dataCenterIdShift = self::WORKER_ID_BITS      + self::SEQUENCE_BITS;
-        $timestampShift    = self::DATA_CENTER_ID_BITS + self::WORKER_ID_BITS + self::SEQUENCE_BITS;
+        $delta = $timestamp - self::EPOCH;
 
-        return ($timestampDelta << $timestampShift)
-            | ($this->dataCenterId << $dataCenterIdShift)
-            | ($this->workerId << $workerIdShift)
+        // 高性能位运算拼接
+        return ($delta << self::TIMESTAMP_SHIFT)
+            | ($this->dataCenterId << self::DATACENTER_SHIFT)
+            | ($this->workerId << self::WORKER_SHIFT)
             | $this->sequence;
     }
 
+    /**
+     * 固定长度 ID
+     */
     public function nextFixedLengthId(int $length): string
     {
-        $id = (string)$this->nextId();
-        return str_pad($id, $length, '0', STR_PAD_LEFT);
+        return str_pad((string)$this->nextId(), $length, '0', STR_PAD_LEFT);
     }
 
+    /**
+     * 使用 hrtime() 生成更精准的毫秒时间戳
+     */
     private function timeGen(): int
     {
-        return intval(microtime(true) * 1000);
+        return intval(hrtime(true) / 1_000_000);
     }
 
-    private function tilNextMillis($lastTimestamp): int
+    /**
+     * 等待下一毫秒（避免 CPU 自旋）
+     */
+    private function tilNextMillis(int $lastTimestamp): int
     {
         $timestamp = $this->timeGen();
+
         while ($timestamp <= $lastTimestamp) {
+            // 避免空转导致 CPU 100%
+            usleep(50);
             $timestamp = $this->timeGen();
         }
+
         return $timestamp;
     }
 }

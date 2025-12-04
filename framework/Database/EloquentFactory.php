@@ -22,7 +22,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Facade;
 use Psr\Log\LoggerInterface;
 
-class EloquentFactory implements ModelFactoryInterface
+class EloquentFactory implements DatabaseInterface
 {
     protected array $config;
 

@@ -19,7 +19,7 @@ namespace Framework\Database;
 /**
  * ORM 模型工厂接口.
  */
-interface ModelFactoryInterface
+interface DatabaseInterface
 {
     public function make(string $modelClass): mixed;
 }

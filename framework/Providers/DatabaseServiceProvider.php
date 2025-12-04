@@ -17,14 +17,14 @@ declare(strict_types=1);
 namespace Framework\Providers;
 
 use Framework\Container\ServiceProviderInterface;
-use Framework\Database\ORMFactory;
+use Framework\Database\DatabaseFactory;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 
-final class ORMServiceProvider implements ServiceProviderInterface
+final class DatabaseServiceProvider implements ServiceProviderInterface
 {
     public function register(ContainerConfigurator $configurator): void
     {
@@ -33,8 +33,8 @@ final class ORMServiceProvider implements ServiceProviderInterface
         $dbConfig = require BASE_PATH . '/config/database.php';
         $ormType  = $dbConfig['engine'] ?? 'thinkORM';
 
-        // 注册 ORMFactory
-        $services->set(ORMFactory::class)
+        // 注册 DatabaseFactory
+        $services->set(DatabaseFactory::class)
             ->args([
                 $dbConfig,
                 $ormType,
@@ -43,7 +43,7 @@ final class ORMServiceProvider implements ServiceProviderInterface
             ->public();
 
         // 别名 "orm"
-        $services->set('orm', ORMFactory::class)
+        $services->set('orm', DatabaseFactory::class)
             ->args([
                 $dbConfig,
                 $ormType,

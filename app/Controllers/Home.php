@@ -29,9 +29,13 @@ use Framework\Attributes\Route;
 use Framework\Core\App;
 
 
-use Framework\Database\ORMFactory;
+use Framework\Database\DatabaseFactory;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+use Framework\Utils\Snowflake;
 
 
 //use Framework\Config\Config ;
@@ -57,8 +61,9 @@ class Home
 		private RequestStack $requestStack,
 		private Request $request,
 		private CookieManager $cookie, 
-		private ORMFactory $db,
+		private DatabaseFactory $db,
 		CustomDao $customDao,
+
 		#private DB $db1,
 		#private DbManager $db1
 		//SessionServiceProvider 已经注册的服务名是 'session'， 容器会自动注入 Session 实例
@@ -208,8 +213,8 @@ class Home
 
 		
 		//ThinkORM Model的写法
-        #$users = Config::select();
-        #dump($users);	
+        $users = Config::select();
+        dump($users);	
 			
 		//ThinkORM Model的写法
         $user =App::make( Custom::class);
@@ -217,8 +222,8 @@ class Home
 		//ThinkORM Model的写法
         #$user = (new Custom())->getTableName();
        	
-		$list1 = $this->customDao->getActiveUsers() ; //$this->customDao->count(['enabled'=>1]);
-		 dump($list1);
+		//$list1 = $this->customDao->getActiveUsers() ; //$this->customDao->count(['enabled'=>1]);
+		// dump($list1);
 		 #dump($user->getTable());
 
 $currentPage = max(1, (int) $request->query->get('page', 1));
@@ -230,10 +235,13 @@ $list = $this->customDao->selectModel(
     ['status' => 1],
     '*',
     $currentPage,
-    $limit
-)->toArray();
+    $limit,
+);
 
-//->paginate(3, ['*'], 'page', 1)->toArray();
+
+//->toArray(); TP 
+
+//->paginate(3, ['*'], 'page', 1)->toArray(); //Laravel
 
 //dump ($this->customDao->get(['status' => 1]));
 
@@ -243,16 +251,27 @@ dump($list);
 #echo $model->getTableName(); // 应该输出 oa_custom
 
 		//dump(config('cache.stores.redis.host'));
-		
+		/*
 		$cacheFile = BASE_PATH . '/storage/test.php';
 		$cache = new \Framework\Config\Cache\ConfigCache($cacheFile, 300); // TTL 300s
 		$config = new \Framework\Config\ConfigService( BASE_PATH . '/config', $cache, null , ['routes.php', 'services.php']);
-		
+
 		//dump($all = $config->load());
-		dump($config->get('database'));
 		
-		
+		*/
+		//dump(app('config')->get('database'));
 		// echo storage_path('logs/sql.log');
+		
+		
+		
+$snow = new Snowflake(2, 3);
+
+$id = $snow->nextId();
+
+echo $id . PHP_EOL;
+		
+		
+		
 
         // 日志测试
         // $logger = app('log');
@@ -351,6 +370,68 @@ dump($list);
         return new Response("<h1>Welcome to My Framework!__{$userId}</h1>");
     }
 
+
+
+    // 基础游标分页（默认按 id 降序排序）
+    public function config(Request $request)
+    {
+        // 1. 最简单的用法：默认每页 15 条，按 id 降序
+        $users = Custom::toBase()->pluck('id')->toArray();
+        
+        // 2. 自定义每页条数（例如每页 10 条）
+        // $users = Custom::cursorPaginate(10);
+        
+        // 3. 带查询条件的游标分页（筛选 + 分页）
+        // $users = Custom::where('status', 1) // 只查状态为1的用户
+        //             ->where('age', '>', 18) // 年龄大于18
+        //             ->cursorPaginate(10);
+        
+        // 4. 自定义排序字段（必须包含唯一标识，避免重复/遗漏）
+        // 注意：排序字段需与游标分页兼容，推荐用「主键 + 其他字段」
+        // $users = Custom::orderBy('created_at', 'desc') // 先按创建时间降序
+        //             ->orderBy('id', 'desc') // 再按 id 降序（唯一标识，确保排序唯一性）
+        //             ->cursorPaginate(10);
+		
+		$query = Custom::query() //->orderBy('create_time', 'desc') 
+            // 2. 必须追加 id 排序（唯一标识，避免多条记录排序字段相同）
+            ->orderBy('id', 'DESC') 
+            // 3. 保持查询条件一致（如果有筛选条件，确保每次请求都包含）
+            ->where('status', 1) // 示例：如果有筛选条件，必须保留
+			->cursorPaginate(1)->toArray();
+
+
+$query1 = Schema::table('custom', fn(Blueprint $t) =>
+    $t->index(['address','email'])
+)->get();
+
+		dump($query1);
+		
+		/*
+        // 返回分页数据（包含游标链接，前端可直接使用）
+        return new Response(
+			json_encode([
+				'data' => $query->items(), // 当前页数据
+				'pagination' => [
+					'next_page_url' => $query->nextPageUrl(), // 下一页链接（带游标参数）
+					'has_more' => $query->hasMorePages() // 是否还有更多数据
+				]
+			]) 
+		);
+		*/
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
     // http://localhost:8000/home/xss?name=mike<script>alert('ok');</script>
     public function xss(Request $request): Response
     {
@@ -362,7 +443,7 @@ dump($list);
         //	$data = $request->request->all();
         // }
 
-        $name = $this->request->get('name');
+        $name = $request->get('name');
 
         // $data 中的字符串已自动 XSS 过滤
         // $name = $data['name'] ?? '';

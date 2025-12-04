@@ -25,7 +25,7 @@ use think\Model;
  * ThinkORM 模型工厂实现类
  * 使用 __invoke 自动实例化模型.
  */
-class ThinkORMFactory implements ModelFactoryInterface
+class ThinkORMFactory implements DatabaseInterface
 {
     /**
      * @var array 全局数据库连接配置（可选）

@@ -26,7 +26,7 @@ use think\Model;
 use think\Paginator;
 use Throwable;
 
-class ThinkORMFactory
+class ThinkphpORMFactory
 {
     private mixed $modelClass;
 
@@ -74,55 +74,67 @@ class ThinkORMFactory
      */
     private function buildQuery(array $where, bool $search = false, ?array $withoutScopes = null): Query
     {
-        // 1. 获取基础查询对象 (ThinkPHP中通常用 db() 或 直接静态调用)
         $query = $this->getModel()->db();
-
-        // 2. 移除全局作用域 (ThinkPHP SoftDelete 是通过 withoutField 'delete_time' 或 removeOption 实现)
-        // ThinkPHP 的 Global Scope 机制与 Laravel 不同，通常是通过 base query 或 global scope 类
         if (!empty($withoutScopes)) {
             $this->applyScopeRemoval($query, $withoutScopes);
         }
-
-        // 3. 如果启用搜索器模式 (ThinkPHP withSearch)
         if ($search) {
             return $this->applySearchScopes($query, $where);
         }
+        if (!empty($where)) {
+            $this->applyConditions($query, $where);
+        }
+        return $query;
+    }
 
-        // 4. 标准条件处理
-        $normalWhere = [];
-        
+    private function splitWhere(array $where): array
+    {
+        $special = [];
         foreach ($where as $key => $condition) {
-            // 处理特殊数组格式: ['field', 'in', [1,2]]
             if (is_array($condition) && count($condition) === 3) {
-                $operator = strtolower((string)$condition[1]);
-                if (in_array($operator, ['in', 'not in'], true)) {
-                    if (empty($condition[2])) {
-                        continue;
-                    }
-                    $field = $condition[0];
-                    $values = Arr::normalize($condition[2]);
-                    
-                    if ($operator === 'in') {
-                        $query->whereIn($field, $values);
-                    } else {
-                        $query->whereNotIn($field, $values);
-                    }
-                    continue; 
+                $op = strtolower((string)($condition[1] ?? ''));
+                if ($op === 'in' || $op === 'not in') {
+                    $special[] = $condition;
+                    unset($where[$key]);
                 }
-                // 处理 ['field', '=', 'val'] 格式，ThinkPHP 原生支持
-                $query->where([$condition]);
+            }
+        }
+        return [$where, $special];
+    }
+
+    private function applyConditions(Query $query, array $where): void
+    {
+        [$normal, $special] = $this->splitWhere($where);
+        if (!empty($normal)) {
+            $query->where($normal);
+        }
+        foreach ($special as $condition) {
+            if (empty($condition[2])) {
                 continue;
             }
-            
-            // 正常的键值对条件
-            $normalWhere[$key] = $condition;
+            $operator = strtolower((string)$condition[1]);
+            $value = Arr::normalize($condition[2]);
+            if ($operator === 'in') {
+                $query->whereIn($condition[0], $value);
+            } elseif ($operator === 'not in') {
+                $query->whereNotIn($condition[0], $value);
+            }
         }
+    }
 
-        if (!empty($normalWhere)) {
-            $query->where($normalWhere);
+    private function applyFields(Query $query, array|string $field): void
+    {
+        $isWildcard = ($field === '*' || ($field === ['*']));
+        if ($isWildcard) {
+            return;
         }
-
-        return $query;
+        if (is_array($field)) {
+            $query->field($field);
+            return;
+        }
+        if (!empty($field)) {
+            $query->field($field);
+        }
     }
 
     /**
@@ -136,18 +148,14 @@ class ThinkORMFactory
     /**
      * 查询列表
      */
-    public function selectList(array $where, string $field = '*', int $page = 0, int $limit = 0, string $order = '', array $with = [], bool $search = false, ?array $withoutScopes = null): ?Collection
+    public function selectList(array $where, array|string $field = '*', int $page = 0, int $limit = 0, string $order = '', array $with = [], bool $search = false, ?array $withoutScopes = null): ?Collection
     {
-        // 获取 Query 对象
         $query = $this->selectModel($where, $field, $page, $limit, $order, $with, $search, $withoutScopes);
 
-        // 如果 selectModel 已经处理了分页 (ThinkPHP 翻页会返回 Paginator 对象)
         if ($query instanceof Paginator) {
-            // 获取 Collection 数据集合
             return $query->getCollection();
         }
 
-        // 正常的列表查询
         return $query->select();
     }
 
@@ -155,29 +163,22 @@ class ThinkORMFactory
      * 获取查询构建器或分页结果
      * @return Query|Paginator
      */
-    public function selectModel(array $where, string $field = '*', int $page = 0, int $limit = 0, string $order = '', array $with = [], bool $search = false, ?array $withoutScopes = null): Query|Paginator
+    public function selectModel(array $where, array|string $field = '*', int $page = 0, int $limit = 0, string $order = '', array $with = [], bool $search = false, ?array $withoutScopes = null): Query|Paginator
     {
         $query = $this->buildQuery($where, $search, $withoutScopes);
 
-        // 字段选择
-        if ($field !== '*') {
-            $query->field($field);
-        }
+        $this->applyFields($query, $field);
 
         // 关联预加载
         if (!empty($with)) {
             $query->with($with);
         }
 
-        // 排序
         if ($order !== '') {
             $query->orderRaw($order);
         }
 
-        // 分页 (ThinkPHP page 方法: page(页码, 每页数量))
         if ($page > 0 && $limit > 0) {
-            // 这里为了返回 Paginator 对象以便获取更多分页信息，使用 paginate
-            // 如果仅需要数据，也可以 use page($page, $limit)->select()
             return $query->paginate([
                 'list_rows' => $limit,
                 'page'      => $page,
@@ -217,10 +218,9 @@ class ThinkORMFactory
     /**
      * 获取一条数据
      */
-    public function get($id, ?array $field = null, ?array $with = [], string $order = '', ?array $withoutScopes = null): ?Model
+    public function get($id, array|string|null $field = null, ?array $with = [], string $order = '', ?array $withoutScopes = null): ?Model
     {
         $where = is_array($id) ? $id : [$this->getPk() => $id];
-        
         $query = $this->buildQuery($where, false, $withoutScopes);
 
         if (!empty($with)) {
@@ -231,7 +231,8 @@ class ThinkORMFactory
             $query->orderRaw($order);
         }
 
-        return $query->field($field ?? '*')->find();
+        $this->applyFields($query, $field ?? '*');
+        return $query->find();
     }
 
     /**
@@ -251,7 +252,7 @@ class ThinkORMFactory
     /**
      * 根据条件获取一条数据
      */
-    public function getOne(array $where, ?string $field = '*', array $with = []): ?Model
+    public function getOne(array $where, array|string|null $field = '*', array $with = []): ?Model
     {
         $query = $this->buildQuery($where);
 
@@ -259,7 +260,8 @@ class ThinkORMFactory
             $query->with($with);
         }
 
-        return $query->field($field)->find();
+        $this->applyFields($query, $field ?? '*');
+        return $query->find();
     }
 
     /**
@@ -387,30 +389,13 @@ class ThinkORMFactory
     private function applySearchScopes(Query $query, array $where): Query
     {
         [$searchFields, $searchData, $otherWhere] = $this->getSearchData($where);
-
-        // 1. 调用 ThinkPHP 的 withSearch
         if (!empty($searchFields)) {
             $query->withSearch($searchFields, $searchData);
         }
-
-        // 2. 过滤并应用剩余条件
         $filteredWhere = $this->filterWhere($otherWhere);
         if (!empty($filteredWhere)) {
-            // 递归处理一下 $filteredWhere 里的 IN 条件，
-            // 但因为 $otherWhere 已经是结构化的了，直接给 where 即可
-            // 如果存在 ['id', 'in', [...]] 这种格式，需要 buildQuery 的逻辑
-            // 这里简化处理：复用 buildQuery 的部分逻辑，或者直接循环
-            foreach ($filteredWhere as $key => $val) {
-                 if (is_array($val) && count($val) === 3 && in_array(strtolower($val[1]), ['in', 'not in'])) {
-                     $op = strtolower($val[1]);
-                     $v = Arr::normalize($val[2]);
-                     $op === 'in' ? $query->whereIn($val[0], $v) : $query->whereNotIn($val[0], $v);
-                 } else {
-                     $query->where([$key => $val]);
-                 }
-            }
+            $this->applyConditions($query, $filteredWhere);
         }
-
         return $query;
     }
 
@@ -457,8 +442,6 @@ class ThinkORMFactory
 
     protected function filterWhere(array $where = []): array
     {
-        // ThinkPHP 获取表字段: $model->getTableFields()
-        // 获取允许写入的字段通常用 getFieldType 结合判断，或者简单的 getTableFields
         $fields = $this->getModel()->getTableFields();
 
         if (empty($fields)) {
@@ -467,10 +450,8 @@ class ThinkORMFactory
 
         foreach ($where as $key => $item) {
             if (is_int($key)) {
-                // 处理 [['id', '=', 1]] 格式
                 if (is_array($item) && isset($item[0]) && !in_array($item[0], $fields)) {
-                     // 字段不存在，跳过
-                     // 注意：这里可能需要 unset($where[$key])，视业务宽容度而定
+                    unset($where[$key]);
                 }
                 continue;
             }
@@ -621,9 +602,9 @@ class ThinkORMFactory
 
     public function tableExists($table): bool
     {
-        // ThinkPHP 检测表存在: Db::query 或 schema
         try {
-            return Db::execute("SHOW TABLES LIKE '{$table}'") > 0;
+            $res = Db::query("SHOW TABLES LIKE ?", [$table]);
+            return !empty($res);
         } catch (\Throwable $e) {
             return false;
         }
