@@ -19,7 +19,7 @@ namespace Framework\ORM\Adapter;
 use Framework\Core\App;
 use Framework\ORM\Exception\Exception;
 use Framework\ORM\Factories\LaravelORMFactory;
-use Framework\ORM\Factories\ThinkORMFactory;
+use Framework\ORM\Factories\ThinkphpORMFactory;
 
 class ORMAdapterFactory
 {
@@ -30,11 +30,11 @@ class ORMAdapterFactory
      */
     public static function createAdapter(string $mode, mixed $model = null): mixed
     {
-        // 对应 ThinkORMFactory 构造函数的参数名
+        // 对应 ThinkphpORMFactory 构造函数的参数名
         $params = ['model' => $model];
-
+		#dump($mode);
         return match ($mode) {
-            'thinkORM'   => App::make(ThinkORMFactory::class, $params),
+            'thinkORM'   => App::make(ThinkphpORMFactory::class, $params),
             'laravelORM' => App::make(LaravelORMFactory::class, $params),
             default      => throw new Exception('Invalid ORM type: ' . $mode),
         };

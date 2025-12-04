@@ -16,9 +16,9 @@ declare(strict_types=1);
 
 namespace Framework\Database;
 
-final class ORMFactory implements ModelFactoryInterface
+final class DatabaseFactory implements DatabaseInterface
 {
-    private ModelFactoryInterface $impl;
+    private DatabaseInterface $impl;
 
     /**
      * @param array  $config  数据库配置
