@@ -81,7 +81,7 @@ class EloquentFactory implements DatabaseInterface
     public function make(string $modelClass): mixed
     {
         if (class_exists($modelClass) && is_subclass_of($modelClass, Model::class)) {
-            dump($modelClass);
+            //dump($modelClass);
             return new $modelClass();
         }
 
