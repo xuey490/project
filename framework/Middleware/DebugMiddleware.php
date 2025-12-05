@@ -28,7 +28,8 @@ class DebugMiddleware implements MiddlewareInterface
     {
         $this->debug = $debug ?? false;
     }
-
+	
+	
     /**
      * 中间件入口.
      */
@@ -38,29 +39,42 @@ class DebugMiddleware implements MiddlewareInterface
         if ($this->debug) {
             $requestDebugInfo = $this->dumpRequest($request);
         }
-
         // === 执行下一个中间件 / 控制器 ===
         $response = $next($request);
 
         // === 响应阶段 ===
         $responseDebugInfo  = '';
-        $frameworkDebugInfo = ''; // [NEW] 为框架信息初始化变量
+        $frameworkDebugInfo = '';
+        
         if ($this->debug) {
+            // [NEW] 检测是否为 Ajax 请求
+            // 1. 使用 Symfony 标准方法 isXmlHttpRequest (检测 X-Requested-With 头)
+            // 2. 补充检测 Accept 头是否明确只请求 JSON (针对 fetch API 未带 Header 的情况)
+            $isAjax = $request->isXmlHttpRequest() || 
+                      str_contains($request->headers->get('Accept', ''), 'application/json');
+
+            // 如果是 Ajax 请求，直接返回，不注入调试信息
+            if ($isAjax) {
+                return $response;
+            }
+
             // 收集响应信息
             $responseDebugInfo = $this->dumpResponse($response);
 
-            // [NEW] 收集框架运行时信息
+            // 收集框架运行时信息
             $frameworkDebugInfo = $this->dumpFrameworkInfo();
 
-            // 检查响应是否应该注入 Debug 面板
-            $body        = (string) $response->getContent();
-            $contentType = $response->headers->get('Content-Type', '');
+            $body = (string) $response->getContent();
 
             // 更可靠的 HTML 检测
-            // [MODIFIED] 更可靠的 HTML 检测，并明确排除 JSON
             $isHtml = false;
 
-            if (stripos($body, '<html')      !== false
+            // 排除 JSON 响应 (Content-Type)
+            $contentType = $response->headers->get('Content-Type', '');
+            if (stripos($contentType, 'application/json') !== false) {
+                $isHtml = false;
+            } elseif (
+                stripos($body, '<html')      !== false
                 || stripos($body, '</body>') !== false
                 || stripos($body, '<div')    !== false
                 || stripos($body, '<h')      !== false
@@ -69,9 +83,9 @@ class DebugMiddleware implements MiddlewareInterface
                 $isHtml = true;
             }
 
-            // [MODIFIED] 只有在 $isHtml 为 true 并且有 *任何* 调试内容时才注入
+            // [MODIFIED] 判断条件增加：必须不是 Ajax 请求 (前面已拦截，这里作为双重保险逻辑也可)
             if ($isHtml && ($requestDebugInfo || $responseDebugInfo || $frameworkDebugInfo)) {
-                // [MODIFIED] 构建美化且可折叠的 HTML，传入新信息
+                // 构建美化且可折叠的 HTML
                 $debugHtml = $this->buildDebugPanel($requestDebugInfo, $responseDebugInfo, $frameworkDebugInfo);
 
                 // 注入到 </body> 标签前
