@@ -238,7 +238,7 @@ $list = $this->customDao->selectModel(
     '*',
     $currentPage,
     $limit,
-)->get()->toArray() ;
+) ;
 
 
 //->toArray(); TP 
@@ -272,9 +272,21 @@ $id = $snow->nextId();
 
 echo $id . PHP_EOL;
 		
-		
-		
+    // 查询构造器
+    $count = $this->db->make('config')->count();
 
+    // 模型
+    $configModel = $this->db->make(\App\Models\Config::class);
+
+    $user2 = $configModel->find(1);
+
+    // 或如果你的 __invoke 支持
+    $user3 = ($this->db)(\App\Models\Config::class)->find(1);		
+	
+    $user4 =($this->db)('App\Models\Config')->find(1);
+    #dump($user2);
+    dump($user4);
+    
         // 日志测试
         // $logger = app('log');
         // $logger->info('Homepage visited--------------------');
