@@ -15,6 +15,8 @@ declare(strict_types=1);
  */
 
 namespace Framework\Database;
+use Psr\Log\LoggerInterface;
+
 
 final class DatabaseFactory implements DatabaseInterface
 {
@@ -28,7 +30,7 @@ final class DatabaseFactory implements DatabaseInterface
     {
         switch ($ormType) {
             case 'laravelORM':
-                $this->impl = new EloquentFactory($config, $logger);
+                $this->impl = new EloquentFactory($config, app('log'));
                 break;
             case 'thinkORM':
             default:

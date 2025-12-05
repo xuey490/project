@@ -40,7 +40,7 @@ return function (ContainerConfigurator $configurator) {
 	/*orm 别名切换*/
 	$databseConfig  = require BASE_PATH . '/config/database.php';
 	$engine = $databseConfig['engine'];
-	
+
 	// === 再进行 class_alias 切换 ORM Model ===
 	if ($engine === 'laravelORM') {
 		class_alias(

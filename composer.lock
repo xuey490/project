@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "e420275e644a29a52c66908a1a542677",
+    "content-hash": "4e24c43c132df4ae624a144156c2982f",
     "packages": [
         {
             "name": "brick/math",
@@ -580,6 +580,54 @@
                 "source": "https://github.com/laravel/framework"
             },
             "time": "2025-05-13T15:08:45+00:00"
+        },
+        {
+            "name": "illuminate/config",
+            "version": "v12.41.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/illuminate/config.git",
+                "reference": "7adbf5cc27081d4613e1fa2f4f53e2a4fc91ad53"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/illuminate/config/zipball/7adbf5cc27081d4613e1fa2f4f53e2a4fc91ad53",
+                "reference": "7adbf5cc27081d4613e1fa2f4f53e2a4fc91ad53",
+                "shasum": ""
+            },
+            "require": {
+                "illuminate/collections": "^12.0",
+                "illuminate/contracts": "^12.0",
+                "php": "^8.2"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-master": "12.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Illuminate\\Config\\": ""
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Taylor Otwell",
+                    "email": "taylor@laravel.com"
+                }
+            ],
+            "description": "The Illuminate Config package.",
+            "homepage": "https://laravel.com",
+            "support": {
+                "issues": "https://github.com/laravel/framework/issues",
+                "source": "https://github.com/laravel/framework"
+            },
+            "time": "2025-10-26T17:11:19+00:00"
         },
         {
             "name": "illuminate/container",
@@ -5525,16 +5573,16 @@
         },
         {
             "name": "xuey490/config",
-            "version": "1.0.1",
+            "version": "1.0.4",
             "source": {
                 "type": "git",
                 "url": "https://github.com/xuey490/config.git",
-                "reference": "75c203b9a96087758054fbc0ca3f27b974633996"
+                "reference": "3336ec4907cf295bfbdac09c45bfd997ccb6f8c2"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/xuey490/config/zipball/75c203b9a96087758054fbc0ca3f27b974633996",
-                "reference": "75c203b9a96087758054fbc0ca3f27b974633996",
+                "url": "https://api.github.com/repos/xuey490/config/zipball/3336ec4907cf295bfbdac09c45bfd997ccb6f8c2",
+                "reference": "3336ec4907cf295bfbdac09c45bfd997ccb6f8c2",
                 "shasum": ""
             },
             "require": {
@@ -5558,9 +5606,9 @@
             "description": "FssPHP Configuration loader library,supporting PHP/JSON/INI with caching (namespace Framework\\Config)",
             "support": {
                 "issues": "https://github.com/xuey490/config/issues",
-                "source": "https://github.com/xuey490/config/tree/1.0.1"
+                "source": "https://github.com/xuey490/config/tree/1.0.4"
             },
-            "time": "2025-12-03T12:13:43+00:00"
+            "time": "2025-12-03T16:39:25+00:00"
         },
         {
             "name": "xuey490/log",
