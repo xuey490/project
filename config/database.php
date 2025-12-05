@@ -1,6 +1,6 @@
 <?php
 return [
-	'engine'	=> 'laravelORM' , //env('ORM_DRIVER') ?? 'thinkORM' , // 'thinkORM' or 'laravelORM'
+	'engine'	=> 'thinkORM' , //env('ORM_DRIVER') ?? 'thinkORM' , // 'thinkORM' or 'laravelORM'
     // 默认使用的数据库连接配置
     'default'         => 'mysql',
     // 自定义时间查询规则
