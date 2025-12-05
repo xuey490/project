@@ -14,13 +14,14 @@ return [
     // 数据库连接配置信息
     'connections'     => [
         'mysql' => [
-			//Illuminate\Database driver必须
-			'driver' => 'mysql',
+			//Illuminate\Database driver必须指定
+			//'driver' => 'mysql',
             // 数据库类型
             'type'               =>  'mysql',
             // 服务器地址 // ThinkORM 可定义多个别名
             'hostname'           =>  '127.0.0.1',
-			#'host'     			 =>  '127.0.0.1',  
+            //Illuminate\Database host必须指定
+			//'host'     			 =>  '127.0.0.1',  
             // 数据库名
             'database'           =>  'oa',
             // 用户名

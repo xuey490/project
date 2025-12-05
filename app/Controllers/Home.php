@@ -31,7 +31,7 @@ use Framework\Core\App;
 
 use Framework\Database\DatabaseFactory;
 use Illuminate\Database\Capsule\Manager as Capsule;
-use Illuminate\Support\Facades\DB;
+#use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
@@ -189,10 +189,10 @@ class Home
 		// Laravel 风格查询
 		//use Illuminate\Support\Facades\DB;
 		/*
-		$sql = DB::table('config')->where('id', 1)->toSql();
+		$count = DB::table('config')->where('id', 1)->count();
 		DB::beginTransaction();
 		try {
-			$config = DB::table('config')
+			$config2 = DB::table('config')
 				->orderBy('id', 'desc')
 				->limit(10)
 				->get();
@@ -202,6 +202,8 @@ class Home
 			throw $e;
 		}		
 		*/
+		
+		#dump($config2);
 
 		//$session = $request->getSession();
 		//$session->set('test', 'workerman');	
@@ -213,8 +215,8 @@ class Home
 
 		
 		//ThinkORM Model的写法
-        $users = Config::select();
-        dump($users);	
+        #$users = Config::select()->get()->toArray();
+        #dump($users);	
 			
 		//ThinkORM Model的写法
         $user =App::make( Custom::class);
@@ -236,11 +238,11 @@ $list = $this->customDao->selectModel(
     '*',
     $currentPage,
     $limit,
-);
+)->get()->toArray() ;
 
 
 //->toArray(); TP 
-
+// ->get()->toArray();
 //->paginate(3, ['*'], 'page', 1)->toArray(); //Laravel
 
 //dump ($this->customDao->get(['status' => 1]));
