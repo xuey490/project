@@ -74,7 +74,7 @@ final class MiddlewaresProvider implements ServiceProviderInterface
             ->args([
                 '$enabled'      => true,
                 '$allowedHtml'  => [], // ['b', 'i', 'u', 'a', 'p', 'br', 'strong', 'em'], 按需调整
-				'$enableSqlInjectionProtection' => true, //
+				//'$enableSqlInjectionProtection' => true, //
             ])
             ->autowire()
             ->public();
