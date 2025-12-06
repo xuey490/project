@@ -31,6 +31,19 @@ class UserRepository extends BaseRepository
         } else {
             return $query->order('vip_level', 'desc')->select();
         }
+		
+        // 现在的语法糖写法：
+        $query = ($this)(); 
+
+        return $query->where('status', 1)->select();
+		
+    }
+	
+    public function checkLog()
+    {
+        // 内部临时调用其他表
+        // 等价于 $this->factory->make('app_logs')
+        return ($this)('app_logs')->count();
     }
 	
     /**

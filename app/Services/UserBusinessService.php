@@ -33,6 +33,28 @@ class UserBusinessService
                     'balance'  => '0.00', // 初始余额
                     'status'   => 1
                 ]);
+				
+				
+
+				// 方式 1：不传参，直接操作 User 模型
+				// 这里返回的就是 Laravel Builder 或 Think Query
+				$query = ($this->userRepo)(); 
+
+				$users = $query->where('status', 1)
+							   ->where('age', '>', 20)
+							   ->limit(5)
+							   ->get(); // 或 select()
+
+				// 也可以直接写在一行
+				$list = ($this->userRepo)()->where('email', 'like', '%@gmail.com')->count();
+				
+				
+				// 临时获取一个 'orders' 表的操作对象
+				$orderQuery = ($this->userRepo)('orders'); 
+				// 或者
+				$orderModel = ($this->userRepo)(\App\Models\Order::class);
+
+				$orderCount = $orderQuery->count();
 
                 // 获取用户ID (兼容数组或对象返回)
                 $userId = $user['id'] ?? $user->id;
@@ -59,6 +81,8 @@ class UserBusinessService
             return ['status' => 'fail', 'msg' => $e->getMessage()];
         }
     }
+
+
 
     /**
      * 演示 2: 高精度聚合查询 & 原生 SQL
