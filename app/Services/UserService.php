@@ -11,7 +11,9 @@ namespace App\Services;
 
 use PDO;
 
-class UserService
+use Framework\Basic\BaseService;
+
+class UserService extends BaseService
 {
     /*
     private $pdo;

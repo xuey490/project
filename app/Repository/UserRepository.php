@@ -13,7 +13,7 @@ use Framework\Repository\BaseRepository;
 class UserRepository extends BaseRepository
 {
     // 指定该仓库操作的模型 (完整类名)
-    protected string $modelClass = \App\Model\User::class;
+    protected string $modelClass = \App\Models\User::class;
 
     // 如果需要扩展特定的复杂业务逻辑，可以在这里写
     // 比如：查找活跃的 VIP 用户
@@ -31,6 +31,55 @@ class UserRepository extends BaseRepository
         } else {
             return $query->order('vip_level', 'desc')->select();
         }
+    }
+	
+    /**
+     * 场景：复杂子查询
+     * 目标：查找所有“有最近30天内有过消费记录”的用户，并分页
+     * 
+     * 这里演示如何在 Repository 内部处理 ORM 语法差异，对外只暴露结果
+     */
+    public function findActiveShoppers(int $days = 30, int $perPage = 15): mixed
+    {
+        $query = $this->newQuery();
+        $date = date('Y-m-d H:i:s', strtotime("-{$days} days"));
+
+        // 这里的逻辑通常差异较大，建议用 if 分支或原生 SQL
+        if ($this->isEloquent) {
+            // === Laravel Eloquent 风格 ===
+            // 假设有一个 orders 关联关系
+            $query->whereHas('orders', function ($q) use ($date) {
+                $q->where('created_at', '>=', $date);
+            })->orderBy('id', 'desc');
+        } else {
+            // === ThinkORM 风格 ===
+            // 假设 orders 表存在
+            $query->whereExists(function ($q) use ($date) {
+                $table = $this->isEloquent ? 'orders' : 'orders'; // 实际表名
+                $q->table('orders')
+                  ->where('user_id', '=', \think\facade\Db::raw('user.id'))
+                  ->where('created_at', '>=', $date);
+            })->order('id', 'desc');
+        }
+
+        return $query->paginate($perPage);
+    }
+
+    /**
+     * 场景：原生 SQL 复杂报表
+     * 目标：统计每个地区的用户数量，过滤掉人数少于 10 的地区
+     */
+    public function getUserRegionReport(): array
+    {
+        $sql = "SELECT region, COUNT(*) as total 
+                FROM user 
+                WHERE status = ? 
+                GROUP BY region 
+                HAVING total > ? 
+                ORDER BY total DESC";
+        
+        // 直接调用基类封装的 query，返回纯数组
+        return $this->query($sql, [1, 10]); // status=1, count>10
     }
 	
     /**
