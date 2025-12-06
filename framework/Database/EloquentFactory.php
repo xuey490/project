@@ -131,14 +131,6 @@ class EloquentFactory implements DatabaseInterface
         return \Illuminate\Support\Str::replaceArray('?', $bindings, $sql);
     }
 
-    protected function logWarn(string $msg, array $ctx = []): void
-    {
-        if ($this->logger) {
-            $this->logger->warning($msg, $ctx);
-        } else {
-            error_log('[WARN] ' . $msg . ' ' . json_encode($ctx, JSON_UNESCAPED_UNICODE));
-        }
-    }
 
     private function convertThinkToEloquent(array $cfg): array
     {
