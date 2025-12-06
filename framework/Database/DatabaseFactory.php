@@ -15,37 +15,42 @@ declare(strict_types=1);
  */
 
 namespace Framework\Database;
-use Psr\Log\LoggerInterface;
 
+//use Psr\Log\LoggerInterface;
+use InvalidArgumentException;
 
 final class DatabaseFactory implements DatabaseInterface
 {
-    private DatabaseInterface $impl;
+    private DatabaseInterface $driver;
+	
+	
 
     /**
-     * @param array  $config  数据库配置
-     * @param string $ormType 'thinkORM' 或 'laravelORM'
+     * @param array                $config  数据库配置
+     * @param string               $ormType ORM类型 ('laravelORM', 'thinkORM')
+     * @param LoggerInterface|null $logger  自定义log类，PSR-3 日志记录器
      */
-    public function __construct(array $config, string $ormType = 'thinkORM', ?LoggerInterface $logger = null)
-    {
-        switch ($ormType) {
-            case 'laravelORM':
-                $this->impl = new EloquentFactory($config, app('log'));
-                break;
-            case 'thinkORM':
-            default:
-                $this->impl = new ThinkORMFactory($config, $logger);
-                break;
-        }
+    public function __construct(
+        array $config, 
+        string $ormType = 'thinkORM', 
+		protected ?object $logger = null
+        //?LoggerInterface $logger = null
+    ) {
+
+        $this->driver = match ($ormType) {
+            'laravelORM', 'laravel' 	=> new EloquentFactory($config, $logger),
+            'thinkORM'               	=> new ThinkORMFactory($config, $logger),
+            default               		=> throw new InvalidArgumentException("Unsupported ORM type: {$ormType}"),
+        };
     }
 
     public function __invoke(string $modelClass): mixed
     {
-        return $this->impl->__invoke($modelClass);
+        return $this->driver->make($modelClass);
     }
 
     public function make(string $modelClass): mixed
     {
-        return $this->impl->make($modelClass);
+        return $this->driver->make($modelClass);
     }
 }

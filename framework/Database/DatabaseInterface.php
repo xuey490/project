@@ -21,5 +21,13 @@ namespace Framework\Database;
  */
 interface DatabaseInterface
 {
+    /**
+     * 像函数一样调用工厂 (语法糖)
+     */
+    public function __invoke(string $modelClass): mixed;
+
+    /**
+     * 创建模型实例或查询构造器
+     */
     public function make(string $modelClass): mixed;
 }
