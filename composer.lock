@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "ea788e3bf7b306c097ddffdd9aa05813",
+    "content-hash": "69108632e7fff61ff255ac4db621c55f",
     "packages": [
         {
             "name": "brick/math",
@@ -5348,6 +5348,48 @@
                 "source": "https://github.com/xuey490/config/tree/1.0.4"
             },
             "time": "2025-12-03T16:39:25+00:00"
+        },
+        {
+            "name": "xuey490/database",
+            "version": "1.0.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/xuey490/database.git",
+                "reference": "8a5f33f821abf453bcb2a167da4d1eabe81e27c5"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/xuey490/database/zipball/8a5f33f821abf453bcb2a167da4d1eabe81e27c5",
+                "reference": "8a5f33f821abf453bcb2a167da4d1eabe81e27c5",
+                "shasum": ""
+            },
+            "require": {
+                "illuminate/database": "^12.0",
+                "illuminate/events": "^12.0",
+                "php": "^8.2",
+                "topthink/think-orm": "^4.0"
+            },
+            "require-dev": {
+                "friendsofphp/php-cs-fixer": "^3.6",
+                "phpstan/phpstan": "^2.0",
+                "phpunit/phpunit": "^11.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Framework\\Database\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "description": "FssPHP Database operation library,Integrate ThinkPHP and Illuminate Database to achieve seamless switching between the two. (namespace Framework\\Database)",
+            "support": {
+                "issues": "https://github.com/xuey490/database/issues",
+                "source": "https://github.com/xuey490/database/tree/1.0.1"
+            },
+            "time": "2025-12-06T13:05:34+00:00"
         },
         {
             "name": "xuey490/log",
