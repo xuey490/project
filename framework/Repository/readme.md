@@ -605,3 +605,324 @@ echo "维护完成\n";
 3.  **模式混合**：演示了同时操作 `Model` (User) 和 `Table Name` (Log) 的场景，`BaseRepository` 完美兼容。
 4.  **事务安全**：通过闭包方式管理事务，即使代码抛出异常，也能自动回滚，且语法统一。
 5.  **复杂能力**：通过 `getUserRegionReport` 展示了如果 ORM 搞不定，如何优雅地回退到原生 SQL。
+
+## 模型篇
+
+
+这是一个非常关键的环节。虽然 `DatabaseFactory` 和 `Repository` 帮你屏蔽了调用的差异，但 **Model 类本身的定义是无法跨 ORM 通用的**，因为它们继承的基类不同（`Illuminate\Database\Eloquent\Model` vs `think\Model`）。
+
+在实际项目中，选定 ORM 后，你的 `App\Models\User.php` 只会是其中一种代码。
+
+以下是针对两种 ORM 分别对应的 **User 模型** 代码，包含了我们在 Service 层演示的功能（如关联订单、类型转换、自动时间戳）。
+
+### 1. 方案 A：Illuminate (Laravel) ORM 模型
+
+如果你在 Factory 中配置的是 `eloquent` 或 `laravel`，请使用此代码。
+
+**文件路径**: `src/App/Model/User.php`
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+/**
+ * Laravel Eloquent User Model
+ * 
+ * @property int $id
+ * @property string $username
+ * @property string $email
+ * @property string $balance
+ * @property int $status
+ * @property int $vip_level
+ * @property \Illuminate\Support\Carbon $created_at
+ * @property \Illuminate\Support\Carbon $updated_at
+ */
+class User extends Model
+{
+    // 1. 指定表名
+    // Eloquent 默认会查找 'users' 表，如果你的表名是单数 'user'，必须显式定义
+    protected $table = 'user';
+
+    // 2. 主键 (默认是 id，如果是其他字段请修改)
+    protected $primaryKey = 'id';
+
+    // 3. 批量赋值白名单 (必须配置，否则 create() 会报错)
+    protected $fillable = [
+        'username', 
+        'email', 
+        'balance', 
+        'status', 
+        'vip_level'
+    ];
+
+    // 4. 类型转换
+    // 自动将数据库取出的值转换为特定类型
+    protected $casts = [
+        'status'    => 'integer',
+        'vip_level' => 'integer',
+        // 'decimal:2' 保证取出来是字符串 "10.00"，保持精度
+        // 如果用 'float' 可能会变成 10.0 (浮点数)
+        'balance'   => 'decimal:2', 
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+
+    // 5. 自动维护时间戳 (默认 true，这里显式写出来)
+    public $timestamps = true;
+
+    /**
+     * 定义关联关系：一个用户有多个订单
+     * 在 Repository 的 findActiveShoppers 中用到了
+     */
+    public function orders(): HasMany
+    {
+        // 假设 Order 模型在同命名空间下
+        return $this->hasMany(Order::class, 'user_id', 'id');
+    }
+}
+```
+
+---
+
+### 2. 方案 B：ThinkORM (ThinkPHP) 模型
+
+如果你在 Factory 中配置的是 `think`，请使用此代码。
+
+**文件路径**: `src/App/Models/User.php`
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Model;
+
+use think\Model;
+use think\model\relation\HasMany;
+
+/**
+ * ThinkPHP User Model
+ * 
+ * @property int $id
+ * @property string $username
+ * @property string $email
+ * @property string $balance
+ * @property int $status
+ * @property int $vip_level
+ * @property string $create_time
+ * @property string $update_time
+ */
+class User extends Model
+{
+    // 1. 指定表名
+    // ThinkPHP 默认将类名转蛇形，即 User => user。显式定义更安全。
+    protected $name = 'user'; 
+
+    // 2. 主键
+    protected $pk = 'id';
+
+    // 3. 自动时间戳
+    // 'datetime' 表示数据库存的是 Y-m-d H:i:s 格式
+    // 如果是 'int' 表示存时间戳整数
+    protected $autoWriteTimestamp = 'datetime';
+
+    // ThinkPHP 默认时间字段是 create_time 和 update_time
+    // 如果你的数据库是 created_at / updated_at (Laravel风格)，需要映射
+    protected $createTime = 'created_at';
+    protected $updateTime = 'updated_at';
+
+    // 4. 字段类型定义 (类似 Laravel 的 casts)
+    protected $type = [
+        'status'    => 'integer',
+        'vip_level' => 'integer',
+        'balance'   => 'float', // ThinkORM 没有 decimal:2 这种语法，通常用 float 或 string
+    ];
+
+    // 5. 批量赋值
+    // ThinkORM 默认允许所有字段写入，可以通过 $field 定义允许的字段
+    // 也可以不做限制，由 Repository 层控制
+    // protected $field = ['username', 'email', ...];
+
+    /**
+     * 定义关联关系
+     */
+    public function orders(): HasMany
+    {
+        // hasMany('关联模型名', '外键', '主键')
+        return $this->hasMany(Order::class, 'user_id', 'id');
+    }
+}
+```
+
+---
+
+### 3. 附赠：Order 模型 (用于关联查询)
+
+为了让 `User` 模型中的关联关系 `$this->hasMany(Order::class)` 不报错，你需要一个简单的 Order 模型。
+
+**App\Model\Order.php (通用结构示意)**
+
+```php
+<?php
+
+namespace App\Models;
+
+// 根据你选的 ORM 打开对应的基类注释
+use Illuminate\Database\Eloquent\Model; // Laravel
+// use think\Model; // ThinkPHP
+
+class Order extends Model
+{
+    // Laravel 用 $table = 'orders';
+    // ThinkPHP 用 protected $name = 'orders';
+    protected $table = 'orders'; 
+    protected $name  = 'orders';
+}
+```
+
+### 总结：如何处理“双 ORM”带来的模型文件冲突？
+
+在实际开发中，你不可能在一个文件里同时写两个类的定义。通常有三种处理方式：
+
+1.  **项目启动时二选一（推荐）**：
+    这是最常见的情况。你在项目初始化时决定用 Eloquent，那就把上面的方案 A 代码放进 `User.php`。Repository 和 Factory 负责让你即使换了 ORM，业务逻辑调用的方法名（`create`, `find`）不用变，但模型类本身是需要替换的。
+
+2.  **通过命名空间隔离（高级）**：
+    如果你在写一个通用的 CMS 系统，想同时支持两种 ORM，可以建立两个目录：
+    *   `App\Models\Eloquent\User.php`
+    *   `App\Models\Think\User.php`
+    然后在 Repository 中根据配置动态指定 `$modelClass`：
+    ```php
+    // UserRepository.php
+    public function __construct(DatabaseFactory $factory) {
+        // 简单的伪代码演示动态指定
+        if ($isEloquent) {
+            $this->modelClass = \App\Models\Eloquent\User::class;
+        } else {
+            $this->modelClass = \App\Models\Think\User::class;
+        }
+        parent::__construct($factory);
+    }
+    ```
+
+3.  **使用纯表名模式（偷懒做法）**：
+    如果不定义 User 模型类，直接在 Repository 里设置 `protected string $modelClass = 'user';`，那么你通过 Repository 做的所有增删改查都能跑通（返回数组或 stdClass），但你就失去了定义关联关系（`orders()`）和自动时间戳的能力。
+	
+## 其他技巧篇
+
+** 在 PHP 中利用 `__invoke` 实现“对象即函数”的语法糖（Syntactic Sugar）是一种很流行的做法。
+
+不过，根据 **Repository 模式** 的设计原则，我们需要区分两种情况：
+1.  **获取当前仓库的底层对象**（推荐）：`$userRepo()` 等价于 `$userRepo->newQuery()`。
+2.  **把仓库当成通用工厂用**（不推荐）：`$userRepo('OtherModel')`。因为 `UserRepository` 不应该去创建 `Order` 模型。
+
+建议的实现方式是：**默认使用当前仓库的模型，但也允许临时传入其他模型（如果非要这么做的话）。**
+
+### 1. 修改 BaseRepository.php
+
+在 `BaseRepository` 类中添加 `__invoke` 方法：
+
+```php
+    /**
+     * 语法糖：允许像函数一样调用 Repository
+     * 
+     * 用法 1 (推荐): $repo() -> 获取当前模型的 QueryBuilder (等同于 newQuery)
+     * 用法 2 (工厂): $repo('App\Model\Order') -> 临时获取其他模型的 Builder (等同于 factory->make)
+     */
+    public function __invoke(?string $modelClass = null): mixed
+    {
+        // 如果没有传参，就用当前仓库定义的 modelClass
+        // 如果传了参，就通过 factory 制造那个参数指定的模型
+        return $this->factory->make($modelClass ?? $this->modelClass);
+    }
+
+    // 同时建议把 newQuery 改为 public，或者保留 protected 供内部使用，
+    // __invoke 本质上就是把 internal 的构建能力暴露给外部了。
+```
+
+---
+
+### 2. 在 Service 或 Controller 中的使用示例
+
+假设你已经注入了 `UserRepository`。
+
+#### 场景 A：获取当前仓库的底层 ORM 对象（最常用）
+
+当你觉得 Repository 封装的方法（find, create）不够用，想直接链式调用底层 ORM 方法时，`__invoke` 非常方便。
+
+```php
+// 假设 $this->userRepo 是 UserRepository 实例
+
+// 方式 1：不传参，直接操作 User 模型
+// 这里返回的就是 Laravel Builder 或 Think Query
+$query = ($this->userRepo)(); 
+
+$users = $query->where('status', 1)
+               ->where('age', '>', 20)
+               ->limit(5)
+               ->get(); // 或 select()
+
+// 也可以直接写在一行
+$list = ($this->userRepo)()->where('email', 'like', '%@gmail.com')->count();
+```
+
+#### 场景 B：临时操作其他表（类似于你提到的 ($this)('App\Models\User')）
+
+虽然不建议在 `UserRepository` 里操作 `Order` 表（这违反了单一职责原则），但技术上是支持的：
+
+```php
+// 临时获取一个 'orders' 表的操作对象
+$orderQuery = ($this->userRepo)('orders'); 
+// 或者
+$orderModel = ($this->userRepo)(\App\Models\Order::class);
+
+$orderCount = $orderQuery->count();
+```
+
+---
+
+### 3. 在 Repository 内部使用 ($this)
+
+如果你在 `UserRepository` 内部写自定义方法，想调用工厂制造对象，也可以直接用 `$this()`。
+
+```php
+namespace App\Repository;
+
+class UserRepository extends BaseRepository
+{
+    protected string $modelClass = \App\Models\User::class;
+
+    public function findComplexData()
+    {
+        // 原写法
+        // $query = $this->factory->make($this->modelClass);
+        // 或
+        // $query = $this->newQuery();
+
+        // 现在的语法糖写法：
+        $query = ($this)(); 
+
+        return $query->where('status', 1)->select();
+    }
+    
+    public function checkLog()
+    {
+        // 内部临时调用其他表
+        // 等价于 $this->factory->make('app_logs')
+        return ($this)('app_logs')->count();
+    }
+}
+```
+
+### 总结与建议
+
+添加这个函数能极大增加代码的灵活性。
+
+*   **优点**：代码更短，写起来更流畅。`($repo)()->where(...)` 比 `$repo->newQuery()->where(...)` 看起来更像是在操作一个函数式接口。
+*   **注意**：尽量**不要**在 `UserRepository` 外部使用 `($userRepo)('OtherModel')`。如果 Service 层需要操作 `Order`，应该注入 `OrderRepository`，而不是借用 `UserRepo` 当跳板，这样才能保持代码逻辑清晰。

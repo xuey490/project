@@ -54,6 +54,19 @@ abstract class BaseRepository implements RepositoryInterface
         $this->isEloquent = ($instance instanceof \Illuminate\Database\Eloquent\Model) 
                          || ($instance instanceof \Illuminate\Database\Query\Builder);
     }
+	
+	/**
+     * 语法糖：允许像函数一样调用 Repository
+     * 
+     * 用法 1 (推荐): $repo() -> 获取当前模型的 QueryBuilder (等同于 newQuery)
+     * 用法 2 (工厂): $repo('App\Model\Order') -> 临时获取其他模型的 Builder (等同于 factory->make)
+     */
+    public function __invoke(?string $modelClass = null): mixed
+    {
+        // 如果没有传参，就用当前仓库定义的 modelClass
+        // 如果传了参，就通过 factory 制造那个参数指定的模型
+        return $this->factory->make($modelClass ?? $this->modelClass);
+    }
 
     /**
      * 获取一个新的查询构造器/模型实例

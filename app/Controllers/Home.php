@@ -240,6 +240,9 @@ $list = $this->customDao->selectModel(
     $limit,
 ) ;
 
+//dump(app('orm'));
+
+
 
 //->toArray(); TP 
 // ->get()->toArray();
@@ -247,7 +250,6 @@ $list = $this->customDao->selectModel(
 
 //dump ($this->customDao->get(['status' => 1]));
 
-dump($list);
 
 #$model = new Custom();
 #echo $model->getTableName(); // 应该输出 oa_custom
@@ -270,7 +272,7 @@ $snow = new Snowflake(2, 3);
 
 $id = $snow->nextId();
 
-echo $id . PHP_EOL;
+
 		
     // 查询构造器
     $count = $this->db->make('config')->count();
@@ -284,8 +286,8 @@ echo $id . PHP_EOL;
     $user3 = ($this->db)(\App\Models\Config::class)->find(1);		
 	
     $user4 =($this->db)('App\Models\Config')->find(1);
-    #dump($user2);
-    dump($user4);
+
+	dump($user4);
     
         // 日志测试
         // $logger = app('log');

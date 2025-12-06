@@ -15,7 +15,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\Request;
 use Twig\Environment;
 use App\Models\Admin;
-use Framework\Database\ORMFactory;
+use Framework\Database\DatabaseFactory;
 
 
 
@@ -26,9 +26,9 @@ class Blog
 
     private BlogService $blogService;
 	
-    private ORMFactory $db;
+    private DatabaseFactory $db;
 
-    public function __construct(Environment $twig, BlogService $blogService , ORMFactory $db)
+    public function __construct(Environment $twig, BlogService $blogService , DatabaseFactory $db)
     {
         $this->twig        = $twig;
         $this->blogService = $blogService;
