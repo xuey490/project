@@ -21,82 +21,77 @@ use Illuminate\Database\Capsule\Manager as Capsule;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Facade;
 use Illuminate\Database\Events\QueryExecuted; // 引入查询执行事件类
-use Psr\Log\LoggerInterface;
+//use Psr\Log\LoggerInterface;
 
 class EloquentFactory implements DatabaseInterface
 {
-    protected array $config;
+
     protected Capsule $capsule;
-    protected ?LoggerInterface $logger;
 
-    public function __construct(array $config = [], ?LoggerInterface $logger = null)
+	
+    public function __construct(
+        protected array $config,
+		protected ?object $logger = null,
+        // protected ?LoggerInterface $logger = null
+    ) {
+        $this->boot();
+    }
+	
+    protected function boot(): void
     {
-        $this->config  = $config;
-        $this->logger  = $logger;
-
         $container = new Container();
-		
-		// ⚡ 关键1：给 Facade 设置容器
+        
+        // 必须设置 Facade Application，否则 Model 内部分功能无法使用
         Facade::setFacadeApplication($container);
 
         $this->capsule = new Capsule($container);
 
-        try {
-            $connection = $this->config['connections'][$this->config['default']] ?? [];
-            
-            if (! isset($connection['driver'])) {
-                $connection = $this->convertThinkToEloquent($connection);
-            }
-            
-            $this->capsule->addConnection($connection);
-            // 必须：设置事件分发器，否则 Eloquent 的模型事件和 Query Listen 都不会生效
-            // Capsule 内部会自动处理，但确保 Container 绑定是关键
-            $this->capsule->setEventDispatcher(new \Illuminate\Events\Dispatcher($container));
+        // 1. 配置处理
+        $defaultConn = $this->config['default'] ?? 'mysql';
+        $connectionConfig = $this->config['connections'][$defaultConn] ?? [];
 
-			// 全局静态访问
-			$this->capsule->setAsGlobal();
-
-            // 启动 Eloquent ORM
-			$this->capsule->bootEloquent();
-
-            // ---------------------------------------------------------
-            // 核心修改：使用 listen 实时记录日志，而不是 enableQueryLog
-            // ---------------------------------------------------------
-            $this->capsule->getConnection()->listen(function (QueryExecuted $query) {
-                
-                // 仅当 logger 存在时记录
-                if ($this->logger) {
-                    $sql = $query->sql;
-                    $bindings = $query->bindings;
-                    $time = $query->time; // 执行时间(毫秒)
-
-                    // 格式化 SQL (可选，方便阅读)
-                    $fullSql = $this->formatSql($sql, $bindings);
-
-                    // 记录日志：级别可以根据耗时调整，比如超过 100ms 记为 warning
-                    $message = sprintf('[Illuminate Database] [%.2fms] %s', $time, $fullSql);
-                    
-                    if ($time > 100) {
-                        $this->logger->warning($message . ' [SLOW QUERY]');
-                    } else {
-                        $this->logger->debug($message);
-                    }
-                }
-            });
-
-			// ⚡ 关键3：注册 db（DatabaseManager）
-            // 绑定数据库管理器到容器
-            $db = $this->capsule;
-            $container->singleton('db', fn () => $db->getDatabaseManager());
-
-        } catch (\Throwable $e) {
-            $this->logWarn('Eloquent init failed: ' . $e->getMessage());
+        // 兼容 ThinkPHP 格式配置
+        if (!isset($connectionConfig['driver'])) {
+            $connectionConfig = $this->convertThinkToEloquent($connectionConfig);
         }
+		
+        $this->capsule->addConnection($connectionConfig);
+
+        // 2. 事件分发器 (必须绑定，否则无法监听 SQL)
+        $this->capsule->setEventDispatcher(new \Illuminate\Events\Dispatcher($container));
+
+        // 3. 全局设置
+        $this->capsule->setAsGlobal();
+        $this->capsule->bootEloquent();
+
+		$isDebug = $connectionConfig['debug'] ?? false;
+        // 4. 日志监听
+        if ($this->logger && $isDebug ) {
+            $this->listenQueryLog();
+        }
+    }	
+	
+    protected function listenQueryLog(): void
+    {
+        $this->capsule->getConnection()->listen(function (QueryExecuted $query) {
+            $time = $query->time; // 毫秒
+            
+            // 简单格式化 SQL，避免在生产环境进行过重的字符串操作
+            $sql = $this->formatSql($query->sql, $query->bindings);
+            
+            $message = sprintf('[Eloquent ORM] [%.2fms] %s', $time, $sql);
+
+            if ($time > 100) { // 慢查询阈值
+                $this->logger->warning($message . ' [SLOW]');
+            } else {
+                $this->logger->debug($message);
+            }
+        });
     }
 
     // ($factory)('App\\Model\\User') —— 会调用 __invoke；
     // $factory->make('App\\Model\\User') —— 直接调用 make()（也可用）。
-    public function __invoke(string $modelClass)
+    public function __invoke(string $modelClass): mixed
     {
         return $this->make($modelClass);
     }
@@ -158,6 +153,7 @@ class EloquentFactory implements DatabaseInterface
             'collation' => $cfg['collation'] ?? 'utf8mb4_unicode_ci',
             'prefix'    => $cfg['prefix']    ?? '',
             'strict'    => $cfg['strict']    ?? true,
+            'debug'    	=> $cfg['debug']     ?? true,
         ];
     }
 }
