@@ -23,8 +23,6 @@ final class DatabaseFactory implements DatabaseInterface
 {
     private DatabaseInterface $driver;
 	
-	
-
     /**
      * @param array                $config  数据库配置
      * @param string               $ormType ORM类型 ('laravelORM', 'thinkORM')
