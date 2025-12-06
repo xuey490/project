@@ -16,7 +16,7 @@ declare(strict_types=1);
 
 namespace Framework\Database;
 
-use think\Container;
+//use think\Container;
 use think\facade\Db;
 use think\Model;
 
