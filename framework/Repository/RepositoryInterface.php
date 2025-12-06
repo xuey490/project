@@ -67,7 +67,7 @@ interface RepositoryInterface
      * @param string $type 统计类型
      * @param string $field 字段名
      */
-    public function aggregate(string $type, array $criteria = [], string $field = '*'): int|float;
+    public function aggregate(string $type, array $criteria = [], string $field = '*'): string|int|float;
 
     /**
      * 数据库事务闭包
