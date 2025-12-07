@@ -39,7 +39,17 @@ class ModuleRepository extends BaseRepository
         if (!empty($params['no_group'])) {
         //    $criteria['whereNull'] = 'group_id';
         }
+		
 
+		$criteria['and'] = [
+            //['id' => 'admin'],
+            'id' => ['>=', 7],
+        ];
+		
+		$criteria['or'] =[
+		 'id' =>['in', [5,6,7]]
+		];
+		
 
         // 4. 排序
         $order = ['id' => 'desc'];
@@ -69,13 +79,24 @@ class ModuleRepository extends BaseRepository
     /**
      * 检查邮箱唯一性 (排除自己)
      */
-    public function emailExists(string $email, ?int $excludeId = null): bool
+    public function nameExists(string $name, ?int $excludeId = null): bool
     {
-        $criteria = ['email' => $email];
+        $criteria = ['name' => $name];
         if ($excludeId) {
             $criteria['id'] = ['<>', $excludeId];
         }
         // 使用 aggregate 统计
         return $this->aggregate('count', $criteria) > 0;
     }
+	
+    /**
+     * 查询 id > 1 且 status = 1 的用户
+     */
+    public function activeUsers()
+    {
+        return $this->newQuery()
+            ->where('id' , '>' , 1)
+            ->where(['status' =>[1]]);//where('status' , '=' , 1)
+    }
+	
 }

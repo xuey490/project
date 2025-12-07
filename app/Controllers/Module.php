@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Repository\ModuleRepository;
 use App\Repository\UserRepository;
+use App\Repository\LogRepository;
 use Framework\Database\DatabaseFactory;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -16,13 +17,16 @@ class Module
     protected ModuleRepository $moduleRepo;
 	
     protected UserRepository $userRepo;
+	
+    protected LogRepository $logRepo;
 
     // 可以在构造函数中注入 DatabaseFactory 或 ModuleRepository
     public function __construct(DatabaseFactory $dbFactory)
     {
 		//dump(app('orm'));
         $this->moduleRepo = new ModuleRepository($dbFactory);
-        $this->userRepo = new UserRepository($dbFactory);
+        $this->userRepo = 	new UserRepository($dbFactory);
+        $this->logRepo = 	new LogRepository($dbFactory);
     }
 
     /**
@@ -49,8 +53,23 @@ class Module
             'limit' => $limit,
         ];
 
-		//dump($this->userRepo->checkLog());
+		$list = $this->logRepo->SelectLogs(7);
+		$vips = $this->userRepo->findActiveVips(5);
+		$nameExists = $this->moduleRepo->nameExists($name = 'adm' , 1);
+		$activeUsers = $this->moduleRepo->activeUsers()->paginate(3)->toArray();
 		//return new Response('aa');
+		/*分页
+        return json([
+            'status' => 'success',
+            'data' => [
+                'total'   => $page->total,
+                'perPage' => $page->perPage,
+                'current' => $page->currentPage,
+                'items'   => $page->items,
+            ],
+        ]);	
+		*/
+		dump($activeUsers);
 
 
         return new JsonResponse([

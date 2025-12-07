@@ -74,7 +74,6 @@ abstract class BaseRepository implements RepositoryInterface
     }
 
     // --- 查询方法 ---
-
     public function findById(int|string $id, array $with = []): mixed
     {
         // 1. 如果是 Laravel，且是模型，直接用 Model::with()->find() 效率更高
@@ -193,15 +192,24 @@ abstract class BaseRepository implements RepositoryInterface
 
         if (is_object($item) && method_exists($item, 'save')) {
             if ($this->isEloquent) {
-                return $item->fill($data)->save();
+				// Laravel：fill + save
+                //return $item->fill($data)->save();
+                $item->fill($data);
+                return (bool) $item->save();
             } else {
-                return $item->save($data);
+				// Think\Model::save($data) 返回受影响行或 true/false
+				// return $item->save($data);
+                $res = $item->save($data);
+                return $res !== false;
             }
         }
 
         return $this->newQuery()->where('id', $id)->update($data) > 0;
     }
-
+	
+    /**
+     * 新增：按条件批量更新（返回受影响行数）
+     */
     public function updateBy(array $criteria, array $data): int
     {
         $query = $this->buildQuery($this->newQuery(), $criteria);
@@ -216,6 +224,9 @@ abstract class BaseRepository implements RepositoryInterface
         return (bool) $this->newQuery()->where('id', $id)->delete();
     }
 
+    /**
+     * 新增：按条件批量删除（返回受影响行数）
+     */
     public function deleteBy(array $criteria): int
     {
         $query = $this->buildQuery($this->newQuery(), $criteria);
@@ -223,7 +234,6 @@ abstract class BaseRepository implements RepositoryInterface
     }
 
     // --- 统计与原生 ---
-
     public function aggregate(string $type, array $criteria = [], string $field = '*'): string|int|float
     {
         $query = $this->buildQuery($this->newQuery(), $criteria);
@@ -270,7 +280,18 @@ abstract class BaseRepository implements RepositoryInterface
     }
 
     // --- 核心 DSL 解析 ---
-
+    /**
+     * QueryDSL 支持：
+     * ----------------------------------------
+     * ['status' => 1]
+     * ['age' => ['>', 18]]
+     * ['price' => ['between', [10, 30]]]
+     * ['title' => ['like', '%abc%']]
+     * ['id' => ['in', [1,2,3]]]
+     * ['or' => [...]]
+     * ['group' => function($q){...}]
+     * ['raw' => 'id > 10']
+     */
     protected function buildQuery(mixed $query, array $criteria, array $orderBy = []): mixed
     {
         // ⚡⚡⚡ 关键修复步骤 1：确保 $query 是查询构造器，而不是模型实例 ⚡⚡⚡
@@ -428,9 +449,20 @@ abstract class BaseRepository implements RepositoryInterface
                 }
                 continue;
             }
-			
-			
-			
+
+            if ($field === 'and' && is_array($value)) {
+                $callback = function ($q) use ($value) {
+                    $this->buildQuery($q, $value);
+                };
+
+                if ($this->isEloquent) {
+                    $query->Where($callback);
+                } else {
+                    $query->where($callback);
+                }
+                continue;
+            }
+
             if ($field === 'group' && is_callable($value)) {
                 $query->where(function ($q) use ($value) {
                     $value($q);
@@ -442,9 +474,10 @@ abstract class BaseRepository implements RepositoryInterface
                 $query->whereRaw($value);
                 continue;
             }
-
+		
             if (is_array($value)) {
                 [$op, $val] = $value;
+				/*
                 switch (strtolower($op)) {
                     case 'between':
                         $query->whereBetween($field, $val);
@@ -459,6 +492,43 @@ abstract class BaseRepository implements RepositoryInterface
                     default:
                         $query->where($field, $op, $val);
                 }
+				*/
+				switch (strtolower($op)) {
+					case 'in':
+						$query->whereIn($field, $val);
+						break;
+					case 'not in':
+					case 'not_in':
+						$query->whereNotIn($field, $val);
+						break;
+					case 'between':
+						$query->whereBetween($field, $val);
+						break;
+					case 'not between':
+						$query->whereNotBetween($field, $val);
+						break;
+					case 'like':
+						$query->where($field, 'like', $val);
+						break;
+					case 'not like':
+						$query->where($field, 'not like', $val);
+						break;
+					case 'null':
+						$query->whereNull($field);
+						break;
+					case 'not null':
+						$query->whereNotNull($field);
+						break;
+					case 'exists':
+						// operand is closure or subquery
+						if ($val instanceof \Closure) {
+							$query->whereExists($val);
+						}
+						break;
+					default:
+						// 默认转为 where(field, op, value)
+						$query->where($field, $op, $val);
+				}				
             } else {
                 $query->where($field, $value);
             }
@@ -475,4 +545,13 @@ abstract class BaseRepository implements RepositoryInterface
 
         return $query;
     }
+	
+	
+	
+
+	
+	
+
 }
+
+

@@ -23,7 +23,7 @@ class User extends Model
 {
     // 1. 指定表名
     // ThinkPHP 默认将类名转蛇形，即 User => user。显式定义更安全。
-    protected $name = 'user'; 
+    protected $name = 'admin_module'; 
 
     // 2. 主键
     protected $pk = 'id';
