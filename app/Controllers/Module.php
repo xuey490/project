@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Repository\ModuleRepository;
+use App\Repository\UserRepository;
 use Framework\Database\DatabaseFactory;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -13,12 +14,15 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 class Module
 {
     protected ModuleRepository $moduleRepo;
+	
+    protected UserRepository $userRepo;
 
     // 可以在构造函数中注入 DatabaseFactory 或 ModuleRepository
     public function __construct(DatabaseFactory $dbFactory)
     {
-		dump(app('orm'));
+		//dump(app('orm'));
         $this->moduleRepo = new ModuleRepository($dbFactory);
+        $this->userRepo = new UserRepository($dbFactory);
     }
 
     /**
@@ -45,7 +49,7 @@ class Module
             'limit' => $limit,
         ];
 
-		//dump($data['list']);
+		//dump($this->userRepo->checkLog());
 		//return new Response('aa');
 
 

@@ -75,7 +75,7 @@ class UserRepository extends BaseRepository
     {
         // 内部临时调用其他表
         // 等价于 $this->factory->make('app_logs')
-        return ($this)('app_logs')->count();
+        return ($this)('admin_log')->count();
     }
 	
     /**
