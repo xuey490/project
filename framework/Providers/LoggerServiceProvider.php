@@ -32,6 +32,10 @@ final class LoggerServiceProvider implements ServiceProviderInterface
 		
 		$logConfig = require BASE_PATH . '/config/log.php';
 		
+        $services->set(LoggerService::class)
+            ->args([$logConfig])
+            ->public();
+
         $services->set('log', LoggerService::class)
             ->args([$logConfig])
             ->public();

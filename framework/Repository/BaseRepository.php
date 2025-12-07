@@ -2,209 +2,228 @@
 
 declare(strict_types=1);
 
-/**
- * This file is part of FssPHP Framework.
- *
- * @link     https://github.com/xuey490/project
- * @license  https://github.com/xuey490/project/blob/main/LICENSE
- *
- * @Filename: %filename%
- * @Date: 2025-12-6
- * @Developer: xuey863toy
- * @Email: xuey863toy@gmail.com
- */
-
 namespace Framework\Repository;
 
 use Framework\Database\DatabaseFactory;
-use InvalidArgumentException;
+#use InvalidArgumentException;
 use RuntimeException;
 use think\facade\Db as ThinkDb;
 use Illuminate\Database\Capsule\Manager as IlluminateDb;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use think\db\Query as ThinkQuery;
 
 /**
  * Class BaseRepository
- * 核心数据库操作基类，用于屏蔽 ThinkPHP 和 Laravel ORM 的语法差异
+ * 核心数据库操作基类
  */
 abstract class BaseRepository implements RepositoryInterface
 {
-    /**
-     * @var string 当前仓库操作的模型类名 (由子类定义)
-     */
     protected string $modelClass;
-
-    /**
-     * @var bool 标记是否为 Laravel Eloquent 环境
-     */
     protected bool $isEloquent;
 
-    /**
-     * @param DatabaseFactory $factory 注入数据库工厂
-     */
     public function __construct(protected DatabaseFactory $factory)
     {
         if (empty($this->modelClass)) {
             throw new RuntimeException('Repository must define property $modelClass');
         }
-
-        // 检测底层驱动类型
-        // 通过简单实例化一个对象来判断它是 Think 模型还是 Laravel 模型
-        $instance = $this->factory->make($this->modelClass);
-		
-        $this->isEloquent = ($instance instanceof \Illuminate\Database\Eloquent\Model) 
-                         || ($instance instanceof \Illuminate\Database\Query\Builder);
-    }
-	
-	/**
-     * 语法糖：允许像函数一样调用 Repository
-     * 
-     * 用法 1 (推荐): $repo() -> 获取当前模型的 QueryBuilder (等同于 newQuery)
-     * 用法 2 (工厂): $repo('App\Model\Order') -> 临时获取其他模型的 Builder (等同于 factory->make)
-     */
-    public function __invoke(?string $modelClass = null): mixed
-    {
-        // 如果没有传参，就用当前仓库定义的 modelClass
-        // 如果传了参，就通过 factory 制造那个参数指定的模型
-        return $this->factory->make($modelClass ?? $this->modelClass);
+        $this->isEloquent = $this->factory->isEloquent();
     }
 
     /**
-     * 获取一个新的查询构造器/模型实例
+     * 判断是否配置了有效的模型类
      */
+    protected function isModelClass(): bool
+    {
+        return class_exists($this->modelClass);
+    }
+
     protected function newQuery(): mixed
     {
         return $this->factory->make($this->modelClass);
     }
 
     /**
-     * {@inheritDoc}
+     * 语法糖：$repo() 获取底层 Builder
      */
-    public function findById(int|string $id): mixed
+    public function __invoke(?string $modelClass = null): mixed
     {
-        // 两者都支持 find($id)
-        return $this->newQuery()->find($id);
+        return $this->factory->make($modelClass ?? $this->modelClass);
     }
 
     /**
-     * {@inheritDoc}
+     * 统一处理 Eager Loading
      */
-    public function findOneBy(array $criteria): mixed
+    protected function applyWith(mixed $query, array $with = []): mixed
+    {
+        if (empty($with)) {
+            return $query;
+        }
+
+        // 只有定义了模型类，才支持关联查询
+        // 纯表名模式下调用 with 会报错或无意义
+        if (!$this->isModelClass()) {
+            return $query;
+        }
+
+        // ThinkORM 和 Laravel 的 Builder/Model 都支持 with 方法
+        if (method_exists($query, 'with')) {
+            return $query->with($with);
+        }
+
+        return $query;
+    }
+
+    // --- 查询方法 ---
+
+    public function findById(int|string $id, array $with = []): mixed
+    {
+        // 1. 如果是 Laravel，且是模型，直接用 Model::with()->find() 效率更高
+        if ($this->isModelClass() && $this->isEloquent) {
+            /** @var \Illuminate\Database\Eloquent\Model $model */
+            $model = new $this->modelClass;
+            return $model->with($with)->find($id);
+        }
+
+        // 2. 通用流程
+        $query = $this->newQuery();
+        $query = $this->applyWith($query, $with);
+
+        if ($this->isModelClass()) {
+            // ThinkPHP Model 或 Laravel Builder
+            return $query->find($id);
+        }
+
+        // 3. 表名模式
+        return $query->where('id', $id)->first() ?? null;
+    }
+
+    public function findOneBy(array $criteria, array $with = []): mixed
     {
         $query = $this->buildQuery($this->newQuery(), $criteria);
-        
-        // 差异屏蔽：Think 用 find(), Laravel 用 first()
+        $query = $this->applyWith($query, $with);
+
         if ($this->isEloquent) {
             return $query->first();
         }
-        return $query->find();
+        return $query->find() ?: null;
     }
 
-    /**
-     * {@inheritDoc}
-     */
-    public function findAll(array $criteria = [], array $orderBy = [], ?int $limit = null): mixed
+    public function findAll(array $criteria = [], array $orderBy = [], ?int $limit = null, array $with = []): mixed
     {
         $query = $this->buildQuery($this->newQuery(), $criteria, $orderBy);
+        $query = $this->applyWith($query, $with);
 
         if ($limit) {
             $query->limit($limit);
         }
 
-        // 差异屏蔽：Think 用 select(), Laravel 用 get()
         if ($this->isEloquent) {
             return $query->get();
         }
         return $query->select();
     }
 
-    /**
-     * {@inheritDoc}
-     */
-    public function paginate(array $criteria = [], int $perPage = 15, array $orderBy = []): mixed
+    public function paginate(array $criteria = [], int $perPage = 15, array $orderBy = [], array $with = []): mixed
     {
         $query = $this->buildQuery($this->newQuery(), $criteria, $orderBy);
-        
-        // 两者都支持 paginate() 方法，虽然返回的对象结构不同，但方法名一致
+        $query = $this->applyWith($query, $with);
         return $query->paginate($perPage);
     }
 
     /**
-     * {@inheritDoc}
+     * 自增操作 (通用)
+     * @param int|string $id 主键
+     * @param string $field 字段
+     * @param int $amount 增加数量
+     * @param array $extra 同时更新的其他字段
      */
+    public function increment(int|string $id, string $field, int $amount = 1, array $extra = []): bool
+    {
+        $query = $this->newQuery()->where('id', $id);
+
+        if ($this->isEloquent) {
+            // Laravel: increment 返回 int (受影响行数)
+            return (bool) $query->increment($field, $amount, $extra);
+        } else {
+            // ThinkPHP: inc 只是标记，需要 update 执行 (或者直接 use Db::raw)
+            // ThinkORM 的 inc 方法: inc('score', 1)->update($extra)
+            return (bool) $query->inc($field, $amount)->update($extra);
+        }
+    }
+
+    /**
+     * 自减操作 (通用)
+     */
+    public function decrement(int|string $id, string $field, int $amount = 1, array $extra = []): bool
+    {
+        $query = $this->newQuery()->where('id', $id);
+
+        if ($this->isEloquent) {
+            return (bool) $query->decrement($field, $amount, $extra);
+        } else {
+            return (bool) $query->dec($field, $amount)->update($extra);
+        }
+    }
+
+
+    // --- 写入方法 ---
+
     public function create(array $data): mixed
     {
-        // 差异屏蔽：Laravel create返回模型，Think create返回模型
-        // 但如果 modelClass 是表名字符串，处理方式不同
-        if (class_exists($this->modelClass)) {
-            // 模型模式
+        if ($this->isModelClass()) {
             return forward_static_call([$this->modelClass, 'create'], $data);
         }
-        
+
         // 表名模式
         if ($this->isEloquent) {
             $id = $this->newQuery()->insertGetId($data);
             return $this->findById($id);
         } else {
-            // ThinkPHP insert 默认返回受影响行数，需要 getId=true
             $id = $this->newQuery()->insert($data, true);
-            return $this->findById($id); // 返回 array
+            return $this->findById($id);
         }
     }
 
-    /**
-     * {@inheritDoc}
-     */
     public function update(int|string $id, array $data): bool
     {
         $item = $this->findById($id);
         if (!$item) {
             return false;
         }
-		
-		// 1. 模型模式 (对象且有save方法)
+
         if (is_object($item) && method_exists($item, 'save')) {
-            // 模型模式：统一使用 fill + save
-            // Laravel 用 fill($data), Think 用 save($data) 更新
             if ($this->isEloquent) {
                 return $item->fill($data)->save();
             } else {
                 return $item->save($data);
             }
         }
-        
-        // 2. 表名模式 (Query Builder)
-        // 注意：ThinkPHP 的 update 返回受影响行数(int)，Laravel 也是 int
+
         return $this->newQuery()->where('id', $id)->update($data) > 0;
     }
 
-    /**
-     * {@inheritDoc}
-     */
+    public function updateBy(array $criteria, array $data): int
+    {
+        $query = $this->buildQuery($this->newQuery(), $criteria);
+        return (int) $query->update($data);
+    }
+
     public function delete(int|string $id): bool
     {
-        // 差异屏蔽：模型删除通常用 destroy (静态) 或 delete (实例)
-        if (class_exists($this->modelClass)) {
-             if ($this->isEloquent) {
-                 return (bool) forward_static_call([$this->modelClass, 'destroy'], $id);
-             } else {
-                 return (bool) forward_static_call([$this->modelClass, 'destroy'], $id);
-             }
+        if ($this->isModelClass()) {
+            return (bool) forward_static_call([$this->modelClass, 'destroy'], $id);
         }
-
-        // 表名模式
         return (bool) $this->newQuery()->where('id', $id)->delete();
     }
-	
-	/**
-     * 聚合统计
-     * 修改返回类型：增加 string (为了高精度)
-     */
-	// 业务代码
-	//$totalMoney = $userRepo->aggregate('sum', ['status' => 1], 'balance');
 
-	// $totalMoney 可能是 "1024.56" (string)
-	// 使用 bcmath 进行后续计算
-	//$fee = bcmul($totalMoney, '0.01', 2);	 
+    public function deleteBy(array $criteria): int
+    {
+        $query = $this->buildQuery($this->newQuery(), $criteria);
+        return (int) $query->delete();
+    }
+
+    // --- 统计与原生 ---
+
     public function aggregate(string $type, array $criteria = [], string $field = '*'): string|int|float
     {
         $query = $this->buildQuery($this->newQuery(), $criteria);
@@ -218,8 +237,6 @@ abstract class BaseRepository implements RepositoryInterface
             default => 0,
         };
 
-        // ⚡ 关键修正：确保金额计算返回字符串或数字，不要隐式转 float
-        // 如果是 sum 操作，且结果是 numeric 字符串，直接返回字符串给业务层用 bcmath 处理
         if ($type === 'sum' && is_numeric($result)) {
             return (string) $result; 
         }
@@ -227,9 +244,6 @@ abstract class BaseRepository implements RepositoryInterface
         return $result;
     }
 
-    /**
-     * {@inheritDoc}
-     */
     public function transaction(\Closure $callback): mixed
     {
         if ($this->isEloquent) {
@@ -237,68 +251,225 @@ abstract class BaseRepository implements RepositoryInterface
         }
         return ThinkDb::transaction($callback);
     }
-	
-    /**
-     * 执行原生查询
-     * 统一返回 array 格式 (Laravel 默认返回 stdClass 数组，这里建议转为 array 以保持统一)
-     */
+
     public function query(string $sql, array $bindings = []): array
     {
         if ($this->isEloquent) {
-            // Laravel 返回的是 stdClass 对象数组
             $result = IlluminateDb::select($sql, $bindings);
-            // 转换为纯数组，保证与 ThinkPHP 行为一致
             return array_map(fn($item) => (array) $item, $result);
         }
-
-        // ThinkPHP 返回的是 array
         return ThinkDb::query($sql, $bindings);
     }
 
-    /**
-     * 执行原生指令
-     */
     public function execute(string $sql, array $bindings = []): int
     {
         if ($this->isEloquent) {
-            // Laravel statement 返回 bool，affectingStatement 返回 int
             return IlluminateDb::affectingStatement($sql, $bindings);
         }
-
-        // ThinkPHP execute 返回受影响行数 (int)
-        return (int)ThinkDb::execute($sql, $bindings);
+        return (int) ThinkDb::execute($sql, $bindings);
     }
 
-    /**
-     * 内部通用方法：构建查询条件和排序
-     * 自动处理 orderBy(Laravel) 和 order(Think) 的差异
-     * 
-     * @param mixed $query 查询对象
-     * @param array $criteria 如 ['age' => ['>', 18], 'status' => 1]
-     * @param array $orderBy 如 ['id' => 'desc']
-     */
+    // --- 核心 DSL 解析 ---
+
     protected function buildQuery(mixed $query, array $criteria, array $orderBy = []): mixed
     {
-        // 1. 处理 Where 条件
-        foreach ($criteria as $field => $value) {
-            if (is_array($value) && count($value) === 2) {
-                // 格式: ['age' => ['>', 18]]
-                $query->where($field, $value[0], $value[1]);
+        // ⚡⚡⚡ 关键修复步骤 1：确保 $query 是查询构造器，而不是模型实例 ⚡⚡⚡
+        // 如果传入的是 Model 实例，调用 where/join 等方法会返回新对象，必须接住它。
+        // 最稳妥的方法是先手动转换成 Builder。
+        
+        if ($this->isModelClass()) {
+            if ($this->isEloquent) {
+                // Laravel: 如果是模型，转为 Builder
+                if ($query instanceof \Illuminate\Database\Eloquent\Model) {
+                    $query = $query->newQuery();
+                }
             } else {
-                // 格式: ['status' => 1]
+                // ThinkPHP: 如果是模型，转为 Db\Query
+                if ($query instanceof \think\Model) {
+                    $query = $query->db(); 
+                }
+            }
+        }
+		
+       // 1. SELECT 指定字段
+        if (!empty($criteria['select'])) {
+            $query->select($criteria['select']); // string or array
+            unset($criteria['select']);
+        }
+
+        // 2. DISTINCT 去重
+        if (!empty($criteria['distinct'])) {
+            $query->distinct();
+            unset($criteria['distinct']);
+        }
+
+        // 3. LOCK 悲观锁 (for update)
+        if (!empty($criteria['lock'])) {
+            if ($this->isEloquent) {
+                $query->lockForUpdate();
+            } else {
+                $query->lock(true);
+            }
+            unset($criteria['lock']);
+        }
+		
+        // 4. JOINs
+        foreach (['join', 'leftJoin', 'rightJoin'] as $joinType) {
+            if (!empty($criteria[$joinType]) && is_array($criteria[$joinType])) {
+                foreach ($criteria[$joinType] as $join) {
+                    $table = $join[0] ?? null;
+                    $field1 = $join[1] ?? null;
+                    $operator = $join[2] ?? '=';
+                    $field2 = $join[3] ?? null;
+
+                    if (!$table || !$field1) continue;
+
+                    // 自动补 "="
+                    if ($field2 === null && isset($join[2])) {
+                        $field2 = $join[2];
+                        $operator = '=';
+                    }
+
+                    if (!$this->isEloquent) {
+                        // ThinkORM: join('table', 'a=b')
+                        $query->$joinType($table, "{$field1} {$operator} {$field2}");
+                    } else {
+                        // Laravel: join('table', 'a', '=', 'b')
+                        $query->$joinType($table, $field1, $operator, $field2);
+                    }
+                }
+                unset($criteria[$joinType]);
+            }
+        }
+		
+        // 5. WHERE NULL / NOT NULL
+        if (!empty($criteria['whereNull'])) {
+            foreach ((array)$criteria['whereNull'] as $field) $query->whereNull($field);
+            unset($criteria['whereNull']);
+        }
+        if (!empty($criteria['whereNotNull'])) {
+            foreach ((array)$criteria['whereNotNull'] as $field) $query->whereNotNull($field);
+            unset($criteria['whereNotNull']);
+        }
+
+        // 6. WHERE IN / NOT IN (显式 Key 方式)
+        if (!empty($criteria['whereIn'])) {
+            foreach ($criteria['whereIn'] as $field => $values) $query->whereIn($field, $values);
+            unset($criteria['whereIn']);
+        }
+        if (!empty($criteria['whereNotIn'])) {
+            foreach ($criteria['whereNotIn'] as $field => $values) $query->whereNotIn($field, $values);
+            unset($criteria['whereNotIn']);
+        }
+		
+        // 7. GroupBy & Having
+        if (!empty($criteria['groupBy'])) {
+            $groupBy = (array) $criteria['groupBy'];
+            $query->groupBy(...$groupBy); // Laravel/Think 都支持变长参数或数组
+            unset($criteria['groupBy']);
+        }
+
+        if (!empty($criteria['having']) && is_array($criteria['having'])) {
+            foreach ($criteria['having'] as $cond) {
+                if (count($cond) === 3) {
+                    $query->having($cond[0], $cond[1], $cond[2]);
+                } elseif (count($cond) === 2) {
+                    $query->having($cond[0], '=', $cond[1]);
+                }
+            }
+            unset($criteria['having']);
+        }
+
+        if (!empty($criteria['havingRaw'])) {
+            $query->havingRaw($criteria['havingRaw']);
+            unset($criteria['havingRaw']);
+        }
+
+		// 🚩 [新增] 处理 or_group (实现 WHERE (A OR B OR C) 逻辑)
+        // 5. 🚩 处理 or_group (组内 OR)
+        if (!empty($criteria['or_group']) && is_array($criteria['or_group'])) {
+            $orGroup = $criteria['or_group'];
+            $query->where(function ($subQuery) use ($orGroup) {
+                // 这里用你验证过有效的逻辑即可
+                // 如果是递归版本也没问题，只要外层 $query 是 Builder 就行
+                $isFirst = true;
+                foreach ($orGroup as $field => $value) {
+                    $op = '='; $val = $value;
+                    if (is_array($value)) { $op = $value[0] ?? '='; $val = $value[1] ?? $value[0]; }
+
+                    if ($this->isEloquent) {
+                        $isFirst ? $subQuery->where($field, $op, $val) : $subQuery->orWhere($field, $op, $val);
+                    } else {
+                        $isFirst ? $subQuery->where($field, $op, $val) : $subQuery->whereOr($field, $op, $val);
+                    }
+                    $isFirst = false;
+                }
+            });
+            unset($criteria['or_group']);
+        }
+
+
+        // 3. Where
+        foreach ($criteria as $field => $value) {
+			
+            // 忽略特殊 Key
+            if (in_array($field, ['page', 'limit', 'per_page'])) continue; 
+			
+            // 修正：Laravel 没有 whereOr，只有 orWhere
+            if ($field === 'or' && is_array($value)) {
+                $callback = function ($q) use ($value) {
+                    $this->buildQuery($q, $value);
+                };
+
+                if ($this->isEloquent) {
+                    $query->orWhere($callback);
+                } else {
+                    $query->whereOr($callback);
+                }
+                continue;
+            }
+			
+			
+			
+            if ($field === 'group' && is_callable($value)) {
+                $query->where(function ($q) use ($value) {
+                    $value($q);
+                });
+                continue;
+            }
+
+            if ($field === 'raw') {
+                $query->whereRaw($value);
+                continue;
+            }
+
+            if (is_array($value)) {
+                [$op, $val] = $value;
+                switch (strtolower($op)) {
+                    case 'between':
+                        $query->whereBetween($field, $val);
+                        break;
+                    case 'in':
+                        $query->whereIn($field, $val);
+                        break;
+                    case 'like':
+                        // Think 和 Laravel 都支持 where('field', 'like', 'val')
+                        $query->where($field, 'LIKE', $val);
+                        break;
+                    default:
+                        $query->where($field, $op, $val);
+                }
+            } else {
                 $query->where($field, $value);
             }
         }
 
-        // 2. 处理排序
-        // 差异屏蔽：Think 使用 order(), Laravel 使用 orderBy()
-        if (!empty($orderBy)) {
-            foreach ($orderBy as $field => $direction) {
-                if ($this->isEloquent) {
-                    $query->orderBy($field, $direction);
-                } else {
-                    $query->order($field, $direction);
-                }
+        // 4. OrderBy
+        foreach ($orderBy as $field => $direction) {
+            if ($this->isEloquent) {
+                $query->orderBy($field, $direction);
+            } else {
+                $query->order($field, $direction);
             }
         }
 

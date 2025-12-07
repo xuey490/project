@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Repository;
 
 use Framework\Repository\BaseRepository;
+use Framework\Database\DatabaseFactory;
 
 /**
  * 用户仓库
@@ -13,8 +14,39 @@ use Framework\Repository\BaseRepository;
 class UserRepository extends BaseRepository
 {
     // 指定该仓库操作的模型 (完整类名)
-    protected string $modelClass = \App\Models\User::class;
+    // 指定模型类或表名（支持 Model::class 或 'users'）
+    protected string $modelClass = \App\Models\User::class; // 或 'users'
 
+    public function __construct(DatabaseFactory $factory)
+    {
+        parent::__construct($factory);
+    }
+		
+    /**
+     * 示例自定义方法：查找活跃用户并返回带 posts 关系（避免 N+1）
+     */
+    public function findActiveWithPosts(int $limit = 50)
+    {
+        $criteria = ['status' => 1];
+        $orderBy = ['last_login' => 'desc'];
+        $with = ['posts']; // eager load posts to avoid N+1
+        return $this->findAll($criteria, $orderBy, $limit, $with);
+    }
+
+    /**
+     * 示例：按 DSL 更新
+     */
+    public function deactivateOldUsers(string $beforeDate): int
+    {
+        $criteria = [
+            'AND' => [
+                ['status' => 1],
+                ['created_at' => ['<', $beforeDate]]
+            ]
+        ];
+        return $this->updateBy($criteria, ['status' => 0]);
+    }
+	
     // 如果需要扩展特定的复杂业务逻辑，可以在这里写
     // 比如：查找活跃的 VIP 用户
     public function findActiveVips(int $level = 1)
@@ -43,7 +75,7 @@ class UserRepository extends BaseRepository
     {
         // 内部临时调用其他表
         // 等价于 $this->factory->make('app_logs')
-        return ($this)('app_logs')->count();
+        return ($this)('admin_log')->count();
     }
 	
     /**
