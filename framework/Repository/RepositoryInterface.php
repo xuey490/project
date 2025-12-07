@@ -23,14 +23,15 @@ namespace Framework\Repository;
 interface RepositoryInterface
 {
     /**
-     * 根据主键查找单条记录
+     * 根据主键查找
+     * @param array $relations 预加载关联模型，如 ['profile', 'orders']
      */
-    public function findById(int|string $id): mixed;
+    public function findById(int|string $id, array $relations = []): mixed;
 
     /**
-     * 根据条件查找单条记录
+     * 根据条件查找单条
      */
-    public function findOneBy(array $criteria): mixed;
+    public function findOneBy(array $criteria, array $relations = []): mixed;
 
     /**
      * 根据条件查找多条记录
@@ -38,12 +39,13 @@ interface RepositoryInterface
      * @param array $orderBy  排序 ['id' => 'desc']
      * @param int|null $limit 限制条数
      */
-    public function findAll(array $criteria = [], array $orderBy = [], ?int $limit = null): mixed;
+    public function findAll(array $criteria = [], array $orderBy = [], ?int $limit = null, array $relations = []): mixed;
 
     /**
      * 分页查询
      */
-    public function paginate(array $criteria = [], int $perPage = 15, array $orderBy = []): mixed;
+    public function paginate(array $criteria = [], int $perPage = 15, array $orderBy = [], array $relations = []): mixed;
+
 
     /**
      * 创建数据

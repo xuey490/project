@@ -26,10 +26,11 @@ final class RepositoryProvider implements ServiceProviderInterface
     {
         $services = $configurator->services();
 
-        $services->load('App\\Repository\\', BASE_PATH . '/app/Repository/')
+        $services->load('App\\Repository\\', \dirname(__DIR__) . '/Repository/**/*.php')
             ->autowire()
             ->autoconfigure()
-            ->public();
+            ->public();		
+			
     }
 	
 	public function boot(ContainerInterface $container): void

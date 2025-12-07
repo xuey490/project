@@ -19,6 +19,7 @@ namespace Framework\Providers;
 use Framework\Container\ServiceProviderInterface;
 use Framework\Database\DatabaseFactory;
 //use Psr\Log\LoggerInterface;
+use Framework\Log\LoggerService;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 
@@ -32,7 +33,7 @@ final class DatabaseServiceProvider implements ServiceProviderInterface
 
         $dbConfig = require BASE_PATH . '/config/database.php';
         $ormType  = $dbConfig['engine'] ?? 'thinkORM';
-
+		
         // 注册 DatabaseFactory ，引入log服务
         $services->set(DatabaseFactory::class)
             ->args([

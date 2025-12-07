@@ -176,9 +176,9 @@ class Home
 		->get()->toArray();
 		*/
 		
-		//$count = ($this->db)('config')->count();  //5
-		//$users = ($this->db)('config')->paginate(2);
-        //dump($users);
+		$count = ($this->db)('config')->count();  //5
+		$users = ($this->db)('config')->paginate(2);
+        dump($users);
 
 		
 		

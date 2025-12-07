@@ -26,5 +26,12 @@ class Custom extends \Framework\Utils\BaseModel
 	
 	protected $name = 'custom'; 
 
-
+    // 封装状态为1的用户分页
+    public static function activeUsersPaginate($perPage = 10)
+    {
+        return self::where('status', 1)
+                   ->orderBy('created_at', 'desc')
+                   ->orderBy('id', 'desc')
+                   ->cursorPaginate($perPage);
+    }
 }
