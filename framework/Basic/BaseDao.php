@@ -65,8 +65,8 @@ abstract class BaseDao
 
         // 3. 创建适配器
         $this->instance = ORMAdapterFactory::createAdapter($mode, $modelClass);
-        // dump($this->instance);
-        // dump("created model: " . get_class($this->instance));
+        //dump($this->instance);
+        //dump("created model: " . get_class($this->instance));
     }
 
     public function __call($name, $arguments)

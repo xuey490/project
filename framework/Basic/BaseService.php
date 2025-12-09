@@ -19,6 +19,7 @@ namespace Framework\Basic;
 use Framework\ORM\Trait\ServicesTrait;
 use Illuminate\Support\Facades\DB as LaravelDb;
 use think\facade\DB as ThinkDb;
+use Framework\Basic\BaseDao;
 
 /**
  * @method getModel()
@@ -44,42 +45,42 @@ abstract class BaseService
      */
     public function transaction(callable $closure, bool $isTran = true, ?string $framework = null): mixed
     {
-        $framework = $framework ?? config('database.engine' , 'thinkORM'); // 默认使用 'thinkORM'
+        if (!$isTran) {
+            return $closure();
+        }
+
+        $framework = $framework ?? config('database.engine', 'thinkORM');
+
         return match ($framework) {
-            'thinkORM' => $isTran ? $this->runThinkPhpTransaction($closure) : $closure(),
-            'laravelORM' => $isTran ? $this->runLaravelTransaction($closure) : $closure(),
-            default => throw new \InvalidArgumentException("Unsupported framework: $framework"),
+            'thinkORM'   => $this->thinkOrmTransaction($closure),
+            'laravelORM' => $this->laravelOrmTransaction($closure),
+            default      => throw new \InvalidArgumentException("Unsupported framework: {$framework}"),
         };
     }
 
+
     /**
-     * 数据库事务操作
-     *
-     * @param callable $closure
-     * @param bool     $isTran
-     *
-     * @return mixed
+     * ThinkORM 事务
      */
-    public function runThinkPhpTransaction(callable $closure, bool $isTran = true): mixed
+    protected function thinkOrmTransaction(callable $closure): mixed
     {
-        return $isTran ? ThinkDB::transaction($closure) : $closure();
+        return ThinkDb::transaction(function () use ($closure) {
+            return $closure();
+        });
     }
 
     /**
-     * 执行 Laravel 事务
-     *
-     * @param callable $closure
-     * @param bool     $isTran
-     *
-     * @return mixed
+     * Laravel ORM 事务
      */
-    private function runLaravelTransaction(callable $closure, bool $isTran = true): mixed
+    protected function laravelOrmTransaction(callable $closure): mixed
     {
-        return $isTran ? LaravelDb::transaction($closure) : $closure();
+        return LaravelDb::transaction(function () use ($closure) {
+            return $closure();
+        });
     }
 
 
-    /**
+    /** 代理 DAO 调用
      * @param $name
      * @param $arguments
      *
@@ -87,6 +88,49 @@ abstract class BaseService
      */
     public function __call($name, $arguments)
     {
-        return call_user_func_array([$this->dao, $name], $arguments);
+        if (!$this->dao) {
+            throw new \RuntimeException("DAO not initialized in service.");
+        }
+
+        if (!method_exists($this->dao, $name)) {
+            throw new \BadMethodCallException("Method {$name} not found in DAO: " . get_class($this->dao));
+        }
+		
+		//return call_user_func_array([$this->dao, $name], $arguments);
+        return $this->dao->$name(...$arguments);
     }
+	
+    /**
+     * 规范化分页参数（从数组/请求中获取）
+     *
+     * 返回 [page, limit, offset]
+     *
+     * @param array|null $params 可为 null 或 [ 'page'=>..., 'limit'=>... ] 或 [page,limit]
+     * @param int $defaultLimit 默认 limit
+     */
+    protected function PageParams(?array $params = null, int $defaultLimit = 10): array
+    {
+        $page = 1;
+        $limit = $defaultLimit;
+
+        if ($params === null) {
+            return [$page, $limit, 0];
+        }
+
+        // 支持关联数组或索引数组
+        if (array_is_list($params)) {
+            $page = (int)($params[0] ?? 1);
+            $limit = (int)($params[1] ?? $defaultLimit);
+        } else {
+            $page = (int)($params['page'] ?? $params['p'] ?? 1);
+            $limit = (int)($params['limit'] ?? $params['per_page'] ?? $defaultLimit);
+        }
+
+        $page = max(1, $page);
+        $limit = max(1, $limit);
+
+        $offset = ($page - 1) * $limit;
+        return [$page, $limit, $offset];
+    }
+	
 }
