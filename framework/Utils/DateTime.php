@@ -16,6 +16,10 @@ declare(strict_types=1);
 
 namespace Framework\Utils;
 
+use DateTime as PhpDateTime;
+use DateTimeZone;
+use Exception;
+
 /**
  * 时间帮助类
  */
@@ -68,5 +72,67 @@ class DateTime
             // 返回解析成功的时间戳
             return $dateTime->getTimestamp();
         }
+    }
+	
+    /**
+     * 获取当前时间（默认 y-m-d H:i:s）
+     */
+    public static function now(string $format = 'Y-m-d H:i:s', ?string $timezone = null): string
+    {
+        $tz = $timezone ? new DateTimeZone($timezone) : null;
+        return (new PhpDateTime('now', $tz))->format($format);
+    }
+
+    /**
+     * 字符串转换为时间戳
+     */
+    public static function toTimestamp(string $time): int
+    {
+        return strtotime($time);
+    }
+
+    /**
+     * 毫秒时间戳
+     */
+    public static function ms(): int
+    {
+        return (int) round(microtime(true) * 1000);
+    }
+
+    /**
+     * 时间戳格式化
+     */
+    public static function format(int $timestamp, string $format = 'Y-m-d H:i:s'): string
+    {
+        return date($format, $timestamp);
+    }
+
+    /**
+     * 计算两个时间差（秒）
+     */
+    public static function diff(string $start, string $end): int
+    {
+        return strtotime($end) - strtotime($start);
+    }
+
+    /**
+     * 尝试转换任意字符串为 DateTime
+     */
+    public static function parse(string $time): PhpDateTime
+    {
+        try {
+            return new PhpDateTime($time);
+        } catch (Exception) {
+            throw new \InvalidArgumentException("Invalid datetime string: {$time}");
+        }
+    }
+
+    /**
+     * 转换为任意格式（智能处理）
+     */
+    public static function convert(string $time, string $format = 'Y-m-d H:i:s'): string
+    {
+        $dt = self::parse($time);
+        return $dt->format($format);
     }
 }

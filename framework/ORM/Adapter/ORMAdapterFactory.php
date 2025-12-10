@@ -32,7 +32,7 @@ class ORMAdapterFactory
     {
         // 对应 ThinkphpORMFactory 构造函数的参数名
         $params = ['model' => $model];
-		#dump($mode);
+
         return match ($mode) {
             'thinkORM'   => App::make(ThinkphpORMFactory::class, $params),
             'laravelORM' => App::make(LaravelORMFactory::class, $params),

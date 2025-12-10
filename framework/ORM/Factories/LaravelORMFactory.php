@@ -32,6 +32,41 @@ class LaravelORMFactory
 
     private ?Model $modelInstance = null;
 
+    /**
+     * 构造函数.
+     * @param Model|string|null $model 模型类名或实例
+     */
+    public function __construct(Model|string|null $model = null)
+    {
+        if (is_object($model)) {
+            $this->modelInstance = $model;
+            $this->modelClass = get_class($model);
+        } else {
+            $this->modelClass = $model;
+        }
+    }
+
+    /**
+     * 获取模型实例 (懒加载).
+     */
+    public function getModel(): Model
+    {
+        if ($this->modelInstance) {
+            return $this->modelInstance;
+        }
+
+        try {
+            $class = $this->modelClass;
+            if (!class_exists($class)) {
+                throw new Exception($class . ' 不是一个有效的模型类');
+            }
+            $this->modelInstance = App::make($class);
+            return $this->modelInstance;
+        } catch (Throwable $e) {
+            throw new Exception('模型加载失败: ' . $e->getMessage());
+        }
+    }
+
     private function splitWhere(array $where): array
     {
         $special = [];
@@ -88,41 +123,6 @@ class LaravelORMFactory
         }
         if (!empty($field)) {
             $query->selectRaw($field);
-        }
-    }
-
-    /**
-     * 构造函数.
-     * @param Model|string|null $model 模型类名或实例
-     */
-    public function __construct(Model|string|null $model = null)
-    {
-        if (is_object($model)) {
-            $this->modelInstance = $model;
-            $this->modelClass = get_class($model);
-        } else {
-            $this->modelClass = $model;
-        }
-    }
-
-    /**
-     * 获取模型实例 (懒加载).
-     */
-    public function getModel(): Model
-    {
-        if ($this->modelInstance) {
-            return $this->modelInstance;
-        }
-
-        try {
-            $class = $this->modelClass;
-            if (!class_exists($class)) {
-                throw new Exception($class . ' 不是一个有效的模型类');
-            }
-            $this->modelInstance = App::make($class);
-            return $this->modelInstance;
-        } catch (Throwable $e) {
-            throw new Exception('模型加载失败: ' . $e->getMessage());
         }
     }
 

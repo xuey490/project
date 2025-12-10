@@ -51,7 +51,11 @@ use Framework\ORM\Adapter\ORMAdapterFactory;
  */
 abstract class BaseDao
 {
-    protected mixed $instance;
+	/** @var mixed ORM Adapter，如 LaravelORMFactory 或 ThinkphpORMFactory */
+    protected mixed $instance = null;
+
+    /** @var mixed Eloquent/ThinkORM 模型类名 */
+    protected string $modelClass = '';
 
     public function __construct(?string $mode = null, object|string|null $modelClass = null)
     {
@@ -68,14 +72,77 @@ abstract class BaseDao
         //dump($this->instance);
         //dump("created model: " . get_class($this->instance));
     }
-
-    public function __call($name, $arguments)
+	
+    /**
+     * 获取底层 ORM 适配器实例
+     *
+     * @return mixed
+     */
+    public function getAdapter(): mixed
     {
-        if (method_exists($this->instance, $name)) {
-            return $this->instance->{$name}(...$arguments);
-        }
-        throw new \BadMethodCallException("Method {$name} does not exist in " . get_class($this->instance));
+        return $this->instance;
     }
+	
+    /**
+     * 动态代理调用 —— 将所有方法转发给 ORM Adapter
+     *
+     * @param string $name
+     * @param array  $arguments
+     * @return mixed
+     *
+     * @throws Exception
+     */
+    public function __call(string $name, array $arguments): mixed
+    {
+        if (!$this->instance) {
+            throw new Exception(
+                sprintf(
+                    '[DAO ERROR] %s 未初始化 ORM 适配器',
+                    static::class
+                )
+            );
+        }
+
+        // 检查适配器是否支持该方法
+        if (!method_exists($this->instance, $name)) {
+            throw new Exception(
+                sprintf(
+                    "[DAO ERROR] 方法不存在: %s::%s()\nAdapter: %s\nModel: %s",
+                    static::class,
+                    $name,
+                    get_class($this->instance),
+                    $this->modelClass
+                )
+            );
+        }
+
+        try {
+            return $this->instance->{$name}(...$arguments);
+
+        } catch (Throwable $e) {
+
+            throw new Exception(
+                sprintf(
+                    "[DAO ERROR] 调用 %s::%s() 时发生异常\nAdapter: %s\nModel: %s\nMessage: %s",
+                    static::class,
+                    $name,
+                    get_class($this->adapter),
+                    $this->modelClass,
+                    $e->getMessage()
+                ),
+                previous: $e
+            );
+        }
+    }
+
+	public function getModel(): mixed
+	{
+		if (method_exists($this->instance, 'getModel')) {
+			return $this->instance->getModel();
+		}
+
+		throw new \RuntimeException("当前 ORM 适配器不支持 getModel()");
+	}
 
     /**
      * 获取当前模型类名.

@@ -3,40 +3,70 @@
 declare(strict_types=1);
 
 /**
- * This file is part of FssPHP Framework.
+ * This file is part of FssPhp Framework.
  *
- * @link     https://github.com/xuey490/project
- * @license  https://github.com/xuey490/project/blob/main/LICENSE
+ * @link     https://github.com/xuey490/novaphp
+ * @license  https://github.com/xuey490/novaphp/blob/main/LICENSE
  *
- * @Filename: %filename%
- * @Date: 2025-11-24
+ * @Filename: ControllersProvider.php
+ * @Date: 2025-12-10
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
  */
 
+
 namespace Framework\Basic;
 
 use Symfony\Component\HttpFoundation\Request;
-use Framework\Basic\BaseJsonResponse;
+use Framework\Utils\Json;
+use Framework\Basic\BaseService;
+use Framework\Basic\Traits\CrudQueryTrait;
+use Framework\Basic\Traits\CrudFilterTrait;
+use Framework\Basic\Traits\CrudFormatterTrait;
+use Framework\Basic\Traits\CrudActionTrait;
 
 abstract class BaseController
 {
+    use CrudQueryTrait;
+    use CrudFilterTrait;
+    use CrudFormatterTrait;
+    use CrudActionTrait;
+
     protected Request $request;
+	
+    protected BaseService $service;
+	
+    protected ?object $validator = null;
+	
+	protected string $serviceClass = '';
 
-    public function __construct(Request $request)
-    {
-        $this->request = $request;
+    public function __construct(
+        Request $request,
+        //BaseService $service,
+        ?object $validator = null
+    ) {
 
-        // 留给子类扩展生命周期行为
+        $this->request   	= $request;
+        //$this->service   	= $service;
+        $this->validator 	= $validator;
+
+        if (empty($this->serviceClass)) {
+            throw new \RuntimeException(static::class . ' 未指定 $serviceClass');
+        }
+
+        $this->service = app()->make($this->serviceClass);
+
+        // 统一初始化入口
         $this->initialize();
     }
 
     /**
-     * 子类可覆盖
+     * 子类可根据需要覆盖 lifecycle
      */
     protected function initialize(): void
     {
     }
+
 
     /**
      * 返回成功 JSON
@@ -61,4 +91,38 @@ abstract class BaseController
     {
         return BaseJsonResponse::error($msg, 500);
     }
+
+
+    /**
+     * 获取请求参数，并支持可选的 XSS 过滤
+     * 
+     * @param string $key 参数名
+     * @param mixed $default 默认值
+     * @param bool $filter 是否开启 XSS 过滤（默认开启）
+     * @return mixed
+     */
+    protected function input(string $key, mixed $default = null, bool $filter = true): mixed
+    {
+        // 1. 优先从 Query (GET) 获取，其次从 Request (POST) 获取
+        // 你也可以根据需要调整优先级
+        $value = $this->request->query->get($key);
+        if ($value === null) {
+            $value = $this->request->request->get($key, $default);
+        }
+
+        // 2. 如果开启过滤，且值是字符串，则进行转义
+        if ($filter && is_string($value)) {
+            // strip_tags 用于去除 HTML 标签（彻底删掉 <script>）
+            // 或者使用 htmlspecialchars 转义（保留符号但使其失效）
+            
+            // 方式 A：彻底移除标签（适合昵称、标题等纯文本）
+            // $value = strip_tags($value); 
+            
+            // 方式 B：转义实体（适合不想丢失数据，但想安全显示的场景）
+            $value = htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+        }
+
+        return $value;
+    }
+	
 }

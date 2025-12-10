@@ -89,16 +89,31 @@ abstract class BaseService
     public function __call($name, $arguments)
     {
         if (!$this->dao) {
-            throw new \RuntimeException("DAO not initialized in service.");
+            throw new \RuntimeException("BaseService: DAO not initialized in service.");
         }
 
-        if (!method_exists($this->dao, $name)) {
-            throw new \BadMethodCallException("Method {$name} not found in DAO: " . get_class($this->dao));
-        }
+		// 直接尝试调用 DAO，让 BaseDao::__call() 处理代理到 ORM Adapter
+		try {
+			// 支持返回引用调用语法，也支持 PHP 8 call
+			return $this->dao->{$name}(...$arguments);
+		} catch (\BadMethodCallException $e) {
+			// DAO 及其适配器都不支持该方法
+			throw new \BadMethodCallException(
+				"BaseService: Method {$name} not found in DAO adapter (" . get_class($this->dao) . " / adapter: " . get_class($this->dao->instance) . "): " . $e->getMessage()
+			);
+		} catch (\Throwable $e) {
+			// 其它异常（例如 ORM 内部抛出的），直接向上抛或包装
+			throw $e;
+		}
 		
-		//return call_user_func_array([$this->dao, $name], $arguments);
-        return $this->dao->$name(...$arguments);
+		//最后兜底
+		return call_user_func_array([$this->dao, $name], $arguments);
+        //return $this->dao->$name(...$arguments);
+		
     }
+	
+	
+	
 	
     /**
      * 规范化分页参数（从数组/请求中获取）
