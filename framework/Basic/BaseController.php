@@ -64,7 +64,7 @@ abstract class BaseController
             $this->service = app()->make($this->serviceClass);
         } else {
             // 如果你的控制器只是简单的展示页面，不需要 Service，也可以不抛异常，视具体需求而定
-            throw new \RuntimeException(static::class . ' 未指定 $serviceClass');
+            #throw new \RuntimeException(static::class . ' 未指定 $serviceClass');
         }
 
 
