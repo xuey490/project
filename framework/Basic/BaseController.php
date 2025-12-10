@@ -24,6 +24,8 @@ use Framework\Basic\Traits\CrudQueryTrait;
 use Framework\Basic\Traits\CrudFilterTrait;
 use Framework\Basic\Traits\CrudFormatterTrait;
 use Framework\Basic\Traits\CrudActionTrait;
+use Framework\Database\DatabaseFactory; 
+
 
 abstract class BaseController
 {
@@ -33,30 +35,39 @@ abstract class BaseController
     use CrudActionTrait;
 
     protected Request $request;
-	
-    protected BaseService $service;
-	
+    
+    // 这里的类型最好稍微宽泛一点或者确定的接口，
+    // 如果你有 BaseService 接口最好，没有的话用 object 也可以，但建议用 BaseService
+    protected object $service; 
+    
+    // 新增：数据库工厂，设为 protected 供子类使用
+    protected DatabaseFactory $db;
+
     protected ?object $validator = null;
-	
-	protected string $serviceClass = '';
+    
+    protected string $serviceClass = '';
 
     public function __construct(
         Request $request,
-        //BaseService $service,
-        ?object $validator = null
+        DatabaseFactory $db,           // 1. 必传参数：DB工厂
+        ?BaseService $service = null,  // 2. 可选参数：Service (放到最后)
+        ?object $validator = null      // 3. 可选参数：验证器
     ) {
+        $this->request = $request;
+        $this->db      = $db;          // 保存 DB 实例
+        $this->validator = $validator;
 
-        $this->request   	= $request;
-        //$this->service   	= $service;
-        $this->validator 	= $validator;
-
-        if (empty($this->serviceClass)) {
-            throw new \RuntimeException(static::class . ' 未指定 $serviceClass');
+        // Service 的初始化逻辑
+        if ($service !== null) {
+            $this->service = $service;
+        } elseif (!empty($this->serviceClass)) {
+            $this->service = app()->make($this->serviceClass);
+        } else {
+            // 如果你的控制器只是简单的展示页面，不需要 Service，也可以不抛异常，视具体需求而定
+            #throw new \RuntimeException(static::class . ' 未指定 $serviceClass');
         }
 
-        $this->service = app()->make($this->serviceClass);
 
-        // 统一初始化入口
         $this->initialize();
     }
 
