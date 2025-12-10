@@ -1,3 +1,176 @@
+## 如何写控制器的代码
+
+在很多情况下**连构造函数都不需要写**。
+
+
+### 1. 原理查看 `BaseController`
+我们需要做两件事：
+1.  定义 `protected DatabaseFactory $db` 属性（注意必须是 `protected`，如果是 `private` 子类就用不了了）。
+2.  在 `__construct` 中注入它。
+
+**注意参数顺序**：PHP 建议把**必须参数**放在**可选参数**（带默认值的）之前。
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace Framework\Basic;
+
+use Symfony\Component\HttpFoundation\Request;
+use Framework\Database\DatabaseFactory; // 引入类
+
+abstract class BaseController
+{
+    // ... traits ...
+
+    protected Request $request;
+    
+    // 这里的类型最好稍微宽泛一点或者确定的接口，
+    // 如果你有 BaseService 接口最好，没有的话用 object 也可以，但建议用 BaseService
+    protected object $service; 
+    
+    // 新增：数据库工厂，设为 protected 供子类使用
+    protected DatabaseFactory $db;
+
+    protected ?object $validator = null;
+    
+    protected string $serviceClass = '';
+
+    public function __construct(
+        Request $request,
+        DatabaseFactory $db,           // 1. 必传参数：DB工厂
+        ?BaseService $service = null,  // 2. 可选参数：Service (放到最后)
+        ?object $validator = null      // 3. 可选参数：验证器
+    ) {
+        $this->request = $request;
+        $this->db      = $db;          // 保存 DB 实例
+        $this->validator = $validator;
+
+        // Service 的初始化逻辑
+        if ($service !== null) {
+            $this->service = $service;
+        } elseif (!empty($this->serviceClass)) {
+            $this->service = app()->make($this->serviceClass);
+        } else {
+            // 如果你的控制器只是简单的展示页面，不需要 Service，也可以不抛异常，视具体需求而定
+            // throw new \RuntimeException(...); 
+        }
+
+        $this->initialize();
+    }
+    
+    // ... 
+}
+```
+
+---
+
+### 2. 极致精简后的 `User` 控制器
+
+现在，你的 `User` 控制器可以享受到**依赖注入容器**（DI Container）带来的巨大便利。
+
+只要你的框架容器（看起来像是类似 Laravel/Symfony 的容器）支持自动解析父类构造函数，你的 `User` 类可以写成这样：
+
+#### 方案 A：由容器自动完成一切（推荐，最干净）
+
+**连构造函数都不用写了！** 容器会自动识别 `BaseController` 的构造函数签名，并自动注入 `Request`, `DatabaseFactory`。至于 `$service`，因为它是可选的（null），容器会传 null，然后基类代码会读取 `$serviceClass` 自动创建服务。
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Controllers;
+
+use App\Services\UserService;
+use Framework\Basic\BaseController;
+
+/**
+ * 用户管理控制器
+ * @property UserService $service 
+ */
+class User extends BaseController
+{
+    // 指定服务类名，基类会自动创建
+    protected string $serviceClass = UserService::class;
+
+    // 无需编写 __construct！
+    // 父类的 __construct 会自动被调用，
+    // $this->request, $this->db, $this->service 都会自动准备好。
+
+    public function list()
+    {
+        // 这里的 $this->db 可以直接使用
+        // $this->db->query(...) 
+        
+        $data = $this->service->listUsers([], []);
+        return $this->success($data);
+    }
+}
+```
+
+#### 方案 B：如果子类必须有构造函数
+
+如果 `User` 控制器还有自己特殊的依赖（比如 `UserLog` 记录类），你才需要写构造函数，并且需要**透传**父类的依赖：
+
+```php
+class User extends BaseController
+{
+    protected string $serviceClass = UserService::class;
+
+    public function __construct(
+        Request $request, 
+        DatabaseFactory $db,
+        UserService $service, // 这里为了获得 IDE 提示，可以直接注入具体类
+        private UserLog $log  // 子类独有的依赖
+    ) {
+        // 调用父类构造，传入父类需要的参数
+        parent::__construct($request, $db, $service); 
+        
+        // 处理子类自己的逻辑
+    }
+}
+```
+
+---
+
+### 3. 一个架构层面的思考（重要）
+
+虽然把 `DatabaseFactory` 放在 `BaseController` 很方便，但在标准的 **MVC + Service** 架构中，有一个原则：
+
+> **Controller 层应该尽量不要直接操作数据库。**
+
+*   **Controller 的职责**：接收请求、参数校验、调用 Service、返回响应。
+*   **Service 的职责**：业务逻辑、事务处理、调用 Model/DB。
+
+**现状分析**：
+你现在把 `$db` 注入给了 Controller。如果你的 Controller 代码里充斥着 `$this->db->query(...)`，那么你的 Service 层就被架空了。
+
+**建议**：
+1.  虽然在基类注入了 `$db`，但**尽量少在 Controller 里直接用它**。
+2.  应该把数据库操作封装在 `UserService` 里面。
+3.  Controller 里的 `$this->service->listUsers()` 才是正道。
+
+**那为什么还要注入 `$db` 到 Controller？**
+唯一合理的理由是：你需要处理**跨 Service 的事务**。
+例如：
+```php
+public function register() {
+    $this->db->beginTransaction(); // 开启事务
+    try {
+        $this->userService->create();
+        $this->walletService->create(); // 另一个 Service
+        $this->db->commit();
+    } catch (Exception $e) {
+        $this->db->rollback();
+    }
+}
+```
+
+
+
+## 特殊业务编排
 
 在某些业务情况下，需要多个service层，设计到 **业务编排（Orchestration）**的时候
 
