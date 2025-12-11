@@ -4,11 +4,11 @@
 
 
 ### 1. 原理查看 `BaseController`
-我们需要做两件事：
-1.  定义 `protected DatabaseFactory $db` 属性（注意必须是 `protected`，如果是 `private` 子类就用不了了）。
-2.  在 `__construct` 中注入它。
 
-**注意参数顺序**：PHP 建议把**必须参数**放在**可选参数**（带默认值的）之前。
+定义 `protected DatabaseFactory $db` 属性（注意必须是 `protected`，如果是 `private` 子类就用不了了）。
+
+
+无参数构造函数
 
 ```php
 <?php
@@ -37,28 +37,26 @@ abstract class BaseController
     
     protected string $serviceClass = '';
 
-    public function __construct(
-        Request $request,
-        DatabaseFactory $db,           // 1. 必传参数：DB工厂
-        ?BaseService $service = null,  // 2. 可选参数：Service (放到最后)
-        ?object $validator = null      // 3. 可选参数：验证器
-    ) {
-        $this->request = $request;
-        $this->db      = $db;          // 保存 DB 实例
-        $this->validator = $validator;
-
-        // Service 的初始化逻辑
-        if ($service !== null) {
-            $this->service = $service;
-        } elseif (!empty($this->serviceClass)) {
+    // 构造函数不接受参数，完全由内部解决
+    public function __construct()
+    {
+        // 1. 获取全局 Request
+        $this->request = app('request'); 
+        
+        // 2. 获取全局 DB
+        $this->db = app('db'); 
+        
+        // 3. 【自动初始化 Service】
+        // 如果子类定义了 serviceClass，父类自动帮你实例化！
+        // 只有定义了 serviceClass 才初始化，没定义就算了，说明这个控制器不需要通用CRUD
+        if (!empty($this->serviceClass)) {
             $this->service = app()->make($this->serviceClass);
-        } else {
-            // 如果你的控制器只是简单的展示页面，不需要 Service，也可以不抛异常，视具体需求而定
-            // throw new \RuntimeException(...); 
         }
-
+		
+        // 4. 钩子
         $this->initialize();
     }
+
     
     // ... 
 }
@@ -126,7 +124,7 @@ class User extends BaseController
         private UserLog $log  // 子类独有的依赖
     ) {
         // 调用父类构造，传入父类需要的参数
-        parent::__construct($request, $db, $service); 
+        parent::__construct(); 
         
         // 处理子类自己的逻辑
     }
@@ -217,7 +215,7 @@ class User extends BaseController
         WalletService $walletService  // 注入副服务
     ) {
         // 1. 调用父类构造，初始化 $request, $db, 和主 $service
-        parent::__construct($request, $db, $userService);
+        parent::__construct();
 
         // 2. 初始化副服务
         $this->walletService = $walletService;
@@ -356,3 +354,128 @@ class WalletService extends BaseService
 3.  **选择方案**：
     *   如果 `WalletService` 在这个控制器里好几个方法都要用 -> **用方案一（构造函数注入）**。
     *   如果只有 `register` 这一次用 -> **用方案二（app()->make）**，代码更少。
+	
+既然你已经选择了 **无参数构造函数（Service Locator 模式）** 的基类设计，那么在子类中引入多个服务时，为了保持风格一致且逻辑顺畅，推荐使用以下两种方式。
+
+这里假设你的场景是：`User` 控制器，主服务是 `UserService`（父类自动处理），额外需要 `WalletService`。
+
+---
+
+
+## 前端控制器的两种写法
+
+### 方式一：手动获取（最稳健，风格统一）
+
+这是最符合你当前 `BaseController` 设计风格的写法。子类覆盖构造函数，手动去容器里“拿”需要的额外服务。
+
+**优点**：完全受控，不依赖容器对构造函数参数的自动注入能力。
+**注意**：一定要先调用 `parent::__construct()`。
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Controllers;
+
+use Framework\Basic\BaseController;
+use App\Services\UserService;
+use App\Services\WalletService;
+
+/**
+ * @property UserService $service  // 主服务（IDE提示用）
+ */
+class User extends BaseController
+{
+    // 1. 设置主服务，父类会自动初始化它到 $this->service
+    protected string $serviceClass = UserService::class;
+
+    // 2. 定义额外服务属性
+    private WalletService $walletService;
+
+    public function __construct()
+    {
+        // 【第一步】必须先调用父类构造！
+        // 父类会帮你初始化 Request, DB 以及主服务 UserService
+        parent::__construct(); 
+
+        // 【第二步】手动获取额外服务
+        $this->walletService = app()->make(WalletService::class);
+    }
+
+    public function register()
+    {
+        // 使用主服务
+        $userId = $this->service->createUser(...);
+
+        // 使用额外服务
+        $this->walletService->createWallet($userId);
+        
+        return $this->success();
+    }
+}
+```
+
+---
+
+### 方式二：混合注入（如果容器支持）
+
+假如你的框架在实例化控制器时（比如在路由分发阶段），是使用容器（`$container->make(Controller::class)`）来创建实例的，那么你可以使用这种“混合写法”。
+
+**原理**：PHP 允许子类的构造函数参数与父类不同。父类无参，子类有参，完全合法。
+
+**优点**：代码看起来更显式，更有“依赖注入”的味道。
+
+```php
+<?php
+
+declare(strict_types=1);
+
+namespace App\Controllers;
+
+use Framework\Basic\BaseController;
+use App\Services\UserService;
+use App\Services\WalletService;
+
+class User extends BaseController
+{
+    protected string $serviceClass = UserService::class;
+    
+    private WalletService $walletService;
+
+    // 子类请求注入 WalletService
+    public function __construct(WalletService $walletService)
+    {
+        // 1. 先调用父类无参构造（处理 Request, DB, UserService）
+        parent::__construct(); 
+
+        // 2. 赋值注入进来的额外服务
+        $this->walletService = $walletService;
+    }
+}
+```
+
+> **警示**：方式二只有当你的框架底层是用 `Container` 来实例化控制器时才有效。如果是 `new $controllerName()` 这种原生写法，方式二会报错（提示缺少参数）。鉴于你之前的修改，**方式一（手动获取）是最保险的**。
+
+---
+
+### 总结建议
+
+既然你已经把 `BaseController` 改造成了自动拉取依赖的模式，我强烈建议你**坚持使用方式一**。
+
+这样你的代码逻辑非常清晰：
+1.  **通用依赖**（Request, DB, MainService）：父类帮你搞定，你什么都不用管。
+2.  **特殊依赖**（ExtraService）：自己在构造函数里 `app()->make()`，随用随拿。
+
+最终代码如下：
+
+```php
+    public function __construct()
+    {
+        parent::__construct(); // 也就是这行代码，让父类帮你干脏活累活
+        
+        // 自己处理特殊的
+        $this->walletService = app()->make(WalletService::class);
+        $this->logService    = app()->make(LogService::class);
+    }
+```
