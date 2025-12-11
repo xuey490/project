@@ -35,7 +35,7 @@ trait CrudActionTrait
     public function show(Request $request)
     {
         try {
-            $id = intval($request->get('id'));
+            $id = $request->get('id');
             $data = $this->service->get($id);
 			
             if (!$data) {
