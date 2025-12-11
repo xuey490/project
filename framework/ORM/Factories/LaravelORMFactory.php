@@ -71,6 +71,7 @@ class LaravelORMFactory
     {
         $special = [];
         foreach ($where as $key => $condition) {
+			#dump($key);
             if (is_array($condition) && count($condition) === 3) {
                 $op = strtolower($condition[1]);
                 if ($op === 'in' || $op === 'not in') {
@@ -84,6 +85,7 @@ class LaravelORMFactory
 
     private function applyConditions(Builder $query, array $where): void
     {
+		
         [$normal, $special] = $this->splitWhere($where);
         if (!empty($normal)) {
             $query->where($normal);
@@ -104,6 +106,7 @@ class LaravelORMFactory
 
     private function buildQuery(array $where = []): Builder
     {
+		
         $query = $this->getModel()->query();
         if (!empty($where)) {
             $this->applyConditions($query, $where);

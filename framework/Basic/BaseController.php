@@ -35,39 +35,33 @@ abstract class BaseController
     use CrudActionTrait;
 
     protected Request $request;
-    
-    // 这里的类型最好稍微宽泛一点或者确定的接口，
-    // 如果你有 BaseService 接口最好，没有的话用 object 也可以，但建议用 BaseService
-    protected object $service; 
-    
-    // 新增：数据库工厂，设为 protected 供子类使用
+	
     protected DatabaseFactory $db;
-
-    protected ?object $validator = null;
+	
+    protected object $service;
     
+    // 子类只需要定义这个属性
     protected string $serviceClass = '';
+	
+	protected ?object $validator = null;
 
-    public function __construct(
-        Request $request,
-        DatabaseFactory $db,           // 1. 必传参数：DB工厂
-        ?BaseService $service = null,  // 2. 可选参数：Service (放到最后)
-        ?object $validator = null      // 3. 可选参数：验证器
-    ) {
-        $this->request = $request;
-        $this->db      = $db;          // 保存 DB 实例
-        $this->validator = $validator;
-
-        // Service 的初始化逻辑
-        if ($service !== null) {
-            $this->service = $service;
-        } elseif (!empty($this->serviceClass)) {
+    // 构造函数不接受参数，完全由内部解决
+    public function __construct()
+    {
+        // 1. 获取全局 Request
+        $this->request = app('request'); 
+        
+        // 2. 获取全局 DB
+        $this->db = app('db'); 
+        
+        // 3. 【自动初始化 Service】
+        // 如果子类定义了 serviceClass，父类自动帮你实例化！
+        // 只有定义了 serviceClass 才初始化，没定义就算了，说明这个控制器不需要通用CRUD
+        if (!empty($this->serviceClass)) {
             $this->service = app()->make($this->serviceClass);
-        } else {
-            // 如果你的控制器只是简单的展示页面，不需要 Service，也可以不抛异常，视具体需求而定
-            #throw new \RuntimeException(static::class . ' 未指定 $serviceClass');
         }
-
-
+		
+        // 4. 钩子
         $this->initialize();
     }
 

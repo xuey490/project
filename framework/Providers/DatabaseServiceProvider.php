@@ -43,8 +43,8 @@ final class DatabaseServiceProvider implements ServiceProviderInterface
             ])
             ->public();
 
-        // 别名 "orm" ，引入log服务
-        $services->set('orm', DatabaseFactory::class)
+        // 别名 "db" ，引入log服务
+        $services->set('db', DatabaseFactory::class)
             ->args([
                 $dbConfig,
                 $ormType,
