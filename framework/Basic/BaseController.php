@@ -55,8 +55,7 @@ abstract class BaseController
         $this->db = app('db'); 
         
         // 3. 【自动初始化 Service】
-        // 如果子类定义了 serviceClass，父类自动帮你实例化！
-        // 只有定义了 serviceClass 才初始化，没定义就算了，说明这个控制器不需要通用CRUD
+        // 只有子类定义了 serviceClass 父类自动帮你实例化，没定义就算了，说明这个控制器不需要通用CRUD
         if (!empty($this->serviceClass)) {
             $this->service = app()->make($this->serviceClass);
         }

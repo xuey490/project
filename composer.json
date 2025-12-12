@@ -33,6 +33,7 @@
         "league/commonmark": "^2.6",
         "monolog/monolog": "^3.9.0",
         "phpoption/phpoption": "^1.9",
+        "phpseclib/phpseclib": "^3.0",
         "psr/container": "^2.0",
         "psr/event-dispatcher": "^1.0",
         "psr/log": "^3.0",
