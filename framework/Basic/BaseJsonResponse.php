@@ -20,7 +20,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 
 class BaseJsonResponse extends JsonResponse
 {
-    public static function success(mixed $data = [], string $msg = 'success', int $code = 0): static
+    public static function success(mixed $data = [], string $msg = 'success', int $code = 200): static
     {
         return new static([
             'code' => $code,
