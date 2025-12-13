@@ -32,13 +32,26 @@ class CsrfTokenManager
 
     public function getToken(string $tokenId = 'default'): string
     {
-        $token = $this->session->get($this->getSessionKey($tokenId));
-        if (! $token) {
-            $token = bin2hex(random_bytes(32));
-            $this->session->set($this->getSessionKey($tokenId), $token);
+        $key = $this->getSessionKey($tokenId);
+
+        $token = $this->session->get($key);
+        if ($token) {
+            return $token;
         }
+
+        $token = bin2hex(random_bytes(32));
+        $this->session->set($key, $token);
+
         return $token;
     }
+
+    public function refreshToken(string $tokenId = 'default'): string
+    {
+        $token = bin2hex(random_bytes(32));
+        $this->session->set($this->getSessionKey($tokenId), $token);
+        return $token;
+    }
+
 
     public function isTokenValid(string $tokenId, string $token): bool
     {

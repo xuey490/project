@@ -165,7 +165,7 @@ class JwtFactory
     }
 
     /*
-     * 刷新jwt token
+     * 刷新jwt token 可以弃用
      */
     public function refresh(string $token, ?int $ttl = null): string
     {
@@ -235,6 +235,62 @@ class JwtFactory
             }
         }
     }
+	
+	/*
+	* 生成 Refresh Token
+	*/
+	public function issueRefreshToken(int $userId, int $ttl = 604800): string
+	{
+		$refreshToken = bin2hex(random_bytes(64));
+		$hash         = hash('sha256', $refreshToken);
+
+		$redis = app('redis.client');
+
+		// refresh_token -> user_id
+		$redis->setex("refresh:token:{$hash}", $ttl, (string) $userId);
+
+		// user -> refresh tokens
+		$redis->sadd("user:refresh_tokens:{$userId}", $hash);
+		$redis->expire("user:refresh_tokens:{$userId}", $ttl);
+
+		return $refreshToken;
+	}
+
+	/*
+	* 校验 Refresh Token
+	*/
+	public function validateRefreshToken(string $refreshToken): int
+	{
+		$hash  = hash('sha256', $refreshToken);
+		$redis = app('redis.client');
+
+		$userId = $redis->get("refresh:token:{$hash}");
+		if (! $userId) {
+			throw new \RuntimeException('Invalid or expired refresh token');
+		}
+
+		return (int) $userId;
+	}
+
+	
+	public function rotateRefreshToken(string $oldRefreshToken): string
+	{
+		$hash  = hash('sha256', $oldRefreshToken);
+		$redis = app('redis.client');
+
+		$userId = $redis->get("refresh:token:{$hash}");
+		if (! $userId) {
+			throw new \RuntimeException('Refresh token already used or expired');
+		}
+
+		// 1. 删除旧 token（用完即焚）
+		$redis->del("refresh:token:{$hash}");
+		$redis->srem("user:refresh_tokens:{$userId}", $hash);
+
+		// 2. 生成新 token
+		return $this->issueRefreshToken((int) $userId);
+	}
+
 
     public function revoke(string $token): void
     {
