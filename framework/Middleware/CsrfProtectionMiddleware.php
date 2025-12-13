@@ -20,7 +20,7 @@ use Framework\Security\CsrfTokenManager;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-// use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 class CsrfProtectionMiddleware
 {
@@ -39,7 +39,7 @@ class CsrfProtectionMiddleware
         }
 
         if ($request->getMethod() === 'GET') {
-            $request->attributes->set('csrf_token', $this->tokenManager->getToken('default'));
+            //$request->attributes->set('csrf_token', $this->tokenManager->getToken('default'));
             return $next($request);
         }
 
@@ -49,15 +49,21 @@ class CsrfProtectionMiddleware
             }
         }
 
-        $token = $request->request->get($this->tokenName)
+        /*$token = $request->request->get($this->tokenName)
             ?? $request->headers->get('X-CSRF-TOKEN')
             ?? '';
+		*/
+		
+		$token = $request->request->get($this->tokenName)
+			?? $request->headers->get('X-CSRF-TOKEN')
+			?? $request->headers->get('X-XSRF-TOKEN')
+			?? $request->cookies->get('XSRF-TOKEN');		
 
         if (! is_string($token) || ! $this->tokenManager->isTokenValid('default', $token)) {
             if ($this->removeAfterValidation) {
                 $this->tokenManager->removeToken('default');
             }
-            // throw new AccessDeniedHttpException($this->errorMessage);
+            //throw new AccessDeniedHttpException($this->errorMessage);
 
             $responseContent = view('errors/csrf_error.html.twig', [
                 'status_code' => Response::HTTP_FORBIDDEN, // 403
