@@ -8,7 +8,7 @@ use Framework\Attributes\Menu;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Framework\Attributes\Route;
-
+use Framework\Basic\BaseJsonResponse;
 /**
  * 示例后台控制器：展示 Attribute 与 DocBlock 两种方式 # [Auth(roles: ['admin'])] ,require 模式是true，如果设置false，则匿名访问
  *
@@ -23,8 +23,9 @@ use Framework\Attributes\Route;
 
 
 #[Route(prefix: '/vvv1/admins', group: 'apssi', middleware: [\App\Middlewares\AuthMiddleware::class, \App\Middlewares\LogMiddleware::class])]
-##[Auth(required: true, roles: ['admins'])] // 如开启，则整个页面需要认证，哪怕方法类没有进行设置
-##[Menu(title: '系统管理', icon: 'cog', order: 100)]
+
+#[Auth(required: true, roles: ['admins'])] // 如开启，则整个页面需要认证，哪怕方法类没有进行设置
+#[Menu(title: '系统管理', icon: 'cog', order: 100)]
 class Admins
 {
     /**
@@ -82,12 +83,12 @@ class Admins
         // 从 AuthMiddleware 注入的用户信息
         $user = $request->attributes->get('user', null);
 
-        return new Response(json_encode([
+        return BaseJsonResponse::success([
             'ok' => true,
             'action' => 'index',
             'user' => $user,
             'message' => 'testadmin',
-        ]), 200, ['Content-Type' => 'application/json']);
+        ],'testadmin');
     }
 
 
@@ -102,12 +103,10 @@ class Admins
     {
         $user = $request->attributes->get('user', null);
 
-        return new Response(json_encode([
-            'ok' => true,
-            'action' => 'contentManager',
-            'user' => $user,
-            'message' => '内容管理页面',
-        ]), 200, ['Content-Type' => 'application/json']);
+		return BaseJsonResponse::success([
+			'action' => 'contentManager',
+			'user'   => $user
+		], '内容管理页面');
     }
 
 
@@ -116,18 +115,18 @@ class Admins
      * 后台管理入口
      * @auth true
      */
-    #[Auth(required: true, roles: ['admin'])]
-    public function legacyAdmin(Request $request): Response
-    {
-        // 当 Dispatcher 的 detect 方法识别到 @auth true，会自动把中间件（App\Middlewares\AuthMiddleware）加入链
-        $user = $request->attributes->get('user', null);
-        return new Response(json_encode([
-            'ok' => true,
-            'action' => 'legacyAdmin',
-            'user' => $user,
-        ]), 200, ['Content-Type' => 'application/json']);
-    }
+	#[Auth(required: true, roles: ['admin'])]
+	public function legacyAdmin(Request $request): Response
+	{
+		$user = $request->attributes->get('user', null);
 
+		return BaseJsonResponse::success([
+			'action' => 'legacyAdmin',
+			'user'   => $user
+		], '后台管理页面');
+	}
+	
+	
     /**
      * 方法级 Attribute（推荐）
      * - 需要登录

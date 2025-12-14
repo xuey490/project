@@ -42,7 +42,7 @@ trait CrudActionTrait
                 return $this->fail('数据不存在');
             }
 
-            return Json::success('ok', $data->toArray());
+            return Json::success($data->toArray() , 'ok');
 
         } catch (\Throwable $e) {
             return $this->fail($e->getMessage());
@@ -59,7 +59,7 @@ trait CrudActionTrait
             }
 
             $model = $this->service->save($data);
-            return Json::success('ok', $model->toArray());
+            return Json::success($model->toArray(),'ok');
 
         } catch (\Throwable $e) {
             return $this->fail($e->getMessage());

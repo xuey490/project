@@ -72,7 +72,7 @@ class CsrfTokenGenerateMiddleware
          *
          * 这些接口通常用于“尚未建立 Session”的阶段
          */
-        if ($path === '/login/getCsrfToken') {
+        if ($path === '/login/getCsrfToken' || $path === '/login/captcha' || $path === '/login/getCaptchaOpenFlag'  ) {
             return $next($request);
         }
 

@@ -11,18 +11,18 @@ trait CrudFormatterTrait
 {
     protected function formatSelect($list, int $total)
     {
-        return Json::success('ok', [
+        return Json::success([
             'total' => $total,
             'items' => $list,
-        ]);
+        ],'ok');
     }
 
     protected function formatNormal($list, int $total)
     {
-        return Json::success('ok', [
+        return Json::success( [
             'total' => $total,
             'list'  => $list,
-        ]);
+        ],'ok');
     }
 
     protected function formatTree($items)
@@ -37,6 +37,6 @@ trait CrudFormatterTrait
             ];
         }
         $tree = new Tree($nodes);
-        return Json::success('ok', $tree->getTree());
+        return Json::success($tree->getTree(),'ok');
     }
 }

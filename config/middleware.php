@@ -19,7 +19,7 @@ return [
             '/payment/notify'
         ],
         'error_message' => '请求无效，请刷新页面后重试。',
-        'remove_after_validation' => true, // 用完即焚
+        'remove_after_validation' => false, // 用完即焚
     ],
 
 	// Referer配置
