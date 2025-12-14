@@ -22,31 +22,35 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
-前后端 CSRF 工作流变成如下：
-请求前
-
-后端写入 cookie：XSRF-TOKEN
-
-axios 自动后端生成csrf的Url或者 读取 cookie 并设置 header X-XSRF-TOKEN
-
-请求中
-
-后端比对：
-
-header: X-XSRF-TOKEN
-
-cookie: XSRF-TOKEN
-
-session: csrf_token
-
-token 过期
-
-后端返回 419（你自己约定也可以 403/400）
-axios → 自动请求 /csrf-token 获取新 token
-axios → 自动重试原请求一次
-*/
-
-
+ * CSRF Token 生成 / 同步中间件（SPA 友好版）
+ *
+ * 设计说明（非常重要）：
+ *
+ * 1. CSRF Token 是「会话级别」的安全标识，而不是一次性验证码
+ * 2. 在 SPA 场景下，Token 必须在 Session 生命周期内保持稳定
+ * 3. 本中间件【只负责】：
+ *    - 在 Session 中生成 Token（若不存在）
+ *    - 将 Token 同步到 Cookie（XSRF-TOKEN）
+ *
+ * 4. 本中间件【不负责】：
+ *    - 校验 CSRF（应由独立的 Verify 中间件完成）
+ *    - 每次请求刷新 Token（禁止！会导致并发请求失败）
+ *
+ * 前后端 CSRF 工作流：
+ *
+ * 请求前：
+ *   - 后端生成 CSRF Token（仅首次）
+ *   - 写入 Cookie：XSRF-TOKEN（非 HttpOnly）
+ *   - Axios 从 Cookie 读取，并写入 Header：X-CSRF-TOKEN
+ *
+ * 请求中：
+ *   - 后端校验 Header 中的 X-CSRF-TOKEN
+ *   - 与 Session 中的 csrf_token 比对
+ *
+ * 失效时：
+ *   - 返回 419（或 403）
+ *   - 前端可选择重新拉取 Token 或引导重新登录
+ */
 class CsrfTokenGenerateMiddleware
 {
     public function __construct(
@@ -55,40 +59,62 @@ class CsrfTokenGenerateMiddleware
         private string $tokenId = 'default'
     ) {}
 
-	public function handle(Request $request, callable $next): Response
-	{
-		
-		$path = $request->getPathInfo();
-		if ($path === '/login/getCsrfToken') {
-			return $next($request); // ❗ 不生成csrf TOKEN
-		}
-		
-		// 1. 只获取已有 token（不存在才生成）
-		$token = $this->tokenManager->getToken($this->tokenId);
+    public function handle(Request $request, callable $next): Response
+    {
+        $path   = $request->getPathInfo();
+        $method = strtoupper($request->getMethod());
 
-		/** @var Response $response */
-		$response = $next($request);
+        /**
+         * ❗ 特殊接口跳过 CSRF 生成
+         * 例如：
+         * - /login/getCsrfToken
+         * - /auth/login
+         *
+         * 这些接口通常用于“尚未建立 Session”的阶段
+         */
+        if ($path === '/login/getCsrfToken') {
+            return $next($request);
+        }
 
-		// 2. 仅在 Cookie 不存在 或 不一致时才写
-		$cookieToken = $request->cookies->get($this->cookieName);
+        /**
+         * 1️⃣ 从 Session 中获取 CSRF Token
+         * - 若已存在：直接返回（不会刷新）
+         * - 若不存在：生成并写入 Session
+         */
+        $token = $this->tokenManager->getToken($this->tokenId);
 
-		if ($cookieToken !== $token) {
-			$response->headers->setCookie(
-				new Cookie(
-					$this->cookieName,
-					$token,
-					0,
-					'/',
-					null,
-					false,
-					false,
-					false,
-					Cookie::SAMESITE_LAX
-				)
-			);
-		}
+        /** @var Response $response */
+        $response = $next($request);
 
-		return $response;
-	}
+        /**
+         * 2️⃣ 同步 Token 到 Cookie
+         *
+         * 设计原则：
+         * - Cookie 只是「前端读取通道」
+         * - Session 才是 Token 的唯一可信来源
+         *
+         * 仅在以下情况写 Cookie：
+         * - Cookie 不存在
+         * - Cookie 与 Session Token 不一致
+         */
+        $cookieToken = $request->cookies->get($this->cookieName);
 
+        if ($cookieToken !== $token) {
+            $response->headers->setCookie(
+                new Cookie(
+                    $this->cookieName,
+                    $token,
+                    0,                  // Session Cookie
+                    '/',
+                    null,
+                    false,              // https 可按需开启
+                    false,              // ❗ 必须允许 JS 读取
+                    false,
+                    Cookie::SAMESITE_LAX
+                )
+            );
+        }
+
+        return $response;
+    }
 }
