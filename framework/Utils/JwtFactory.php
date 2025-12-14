@@ -101,10 +101,107 @@ class JwtFactory
         ];
     }
 
+	// 最底层：parseRaw（只负责“这是不是我签的 JWT”）
+	protected function parseRaw(string $token): Plain
+	{
+		$token = trim($token);
+
+		if (
+			substr_count($token, '.') !== 2 ||
+			! preg_match('/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/', $token)
+		) {
+			throw new \InvalidArgumentException('Invalid JWT format.');
+		}
+
+		$parsed = $this->config->parser()->parse($token);
+
+		// 只校验签名是否合法
+		$ok = $this->config->validator()->validate(
+			$parsed,
+			new SignedWith($this->config->signer(), $this->config->verificationKey())
+		);
+
+		if (! $ok) {
+			throw new \RuntimeException('JWT signature verification failed.');
+		}
+
+		return $parsed;
+	}
+
+	// API 请求用：parseForAccess（最严格）
+	public function parseForAccess(string $token): Plain
+	{
+		$parsed = $this->parseRaw($token);
+
+		// 1️⃣ 黑名单优先（防止并发 / 重放）
+		if ($this->isBlacklisted($parsed)) {
+			throw new \RuntimeException('Token has been revoked.');
+		}
+
+		// 2️⃣ exp 校验
+		$exp = $parsed->claims()->get('exp');
+		if (! $exp instanceof \DateTimeImmutable || $exp < new \DateTimeImmutable()) {
+			throw new \RuntimeException('Token expired.');
+		}
+
+		// 3️⃣ Redis 活跃校验（是否被提前注销）
+		$jti = $parsed->claims()->get('jti');
+		if (! $jti || ! app('redis.client')->exists("login:token:{$jti}")) {
+			throw new \RuntimeException('Token not active.');
+		}
+
+		// 4️⃣ issuer / nbf / iat 校验
+		$clock = new SystemClock($this->timezone);
+
+		$this->config->validator()->assert(
+			$parsed,
+			new IssuedBy($this->jwtConfig['issuer'] ?? null),
+			new LooseValidAt(
+				$clock,
+				new \DateInterval(
+					'PT' . intval($this->jwtConfig['blacklist_grace_period'] ?? 0) . 'S'
+				)
+			)
+		);
+
+		return $parsed;
+	}
+
+	// 刷新 / 注销用：parseForRefresh（允许过期）
+	public function parseForRefresh(string $token): Plain
+	{
+		$parsed = $this->parseRaw($token);
+
+		// refresh 场景：允许 exp 过期
+		// 但不允许被明确 revoke
+		if ($this->isBlacklisted($parsed)) {
+			throw new \RuntimeException('Token has been revoked.');
+		}
+
+		// issuer / nbf 校验（防伪造）
+		$clock = new SystemClock($this->timezone);
+
+		$this->config->validator()->assert(
+			$parsed,
+			new IssuedBy($this->jwtConfig['issuer'] ?? null),
+			new LooseValidAt(
+				$clock,
+				new \DateInterval('PT0S')
+			)
+		);
+
+		return $parsed;
+	}
+
+	public function parse(string $token): Plain
+	{
+		return $this->parseForAccess($token);
+	}
+
     /*
      * 解析jwt token
      */
-    public function parse(string $token): Plain
+    public function parse_bak(string $token): Plain
     {
         $token = trim($token);
 

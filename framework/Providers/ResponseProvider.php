@@ -41,12 +41,12 @@ final class ResponseProvider implements ServiceProviderInterface
         // 定义工厂类
         $services->set(ResponseFactory::class)
             ->public();
-        /*
+        
         $services
             ->set('response1' , Response::class)
             ->args(['', Response::HTTP_OK, []])
             ->public();
-
+		/*
         $services
             ->set('response2' , Response::class)
             ->class(Response::class)
