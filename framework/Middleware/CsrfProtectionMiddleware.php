@@ -18,6 +18,7 @@ declare(strict_types=1);
 namespace Framework\Middleware;
 
 use Framework\Security\CsrfTokenManager;
+use Framework\Basic\BaseJsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -100,25 +101,22 @@ class CsrfProtectionMiddleware
              */
 
             if ($this->isAjaxRequest($request)) {
-                return new Response(
-                    json_encode([
-                        'status'  => 'error',
-                        'code'    => 419,
-                        'message' => $this->errorMessage ?: 'CSRF token mismatch.',
-                    ], JSON_UNESCAPED_UNICODE),
-                    419,
-                    ['Content-Type' => 'application/json']
-                );
+				if ($this->isAjaxRequest($request)) {
+					return BaseJsonResponse::fail(
+						$this->errorMessage ?: 'CSRF token mismatch.',
+						419
+					);
+				}
             }
 
-            return new Response(
-                view('errors/csrf_error.html.twig', [
-                    'status_code' => 403,
-                    'status_text' => 'Forbidden',
-                    'message'     => $this->errorMessage ?: 'CSRF token mismatch.',
-                ]),
-                403
-            );
+			return new Response(
+				view('errors/csrf_error.html.twig', [
+					'status_code' => 403,
+					'status_text' => 'Forbidden',
+					'message'     => $this->errorMessage ?: 'CSRF token mismatch.',
+				]),
+				403
+			);
         }
 
         /**
