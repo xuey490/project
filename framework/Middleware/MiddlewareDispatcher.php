@@ -82,7 +82,6 @@ class MiddlewareDispatcher
             }
         }
 
-        // dump($rawRouteMiddleware);
 
         // 2. 【核心步骤】规范化路由中间件数组
         // 将可能嵌套的多维数组合并成一维数组
