@@ -8,7 +8,7 @@ declare(strict_types=1);
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
- * @Filename: Framework.php
+ * @Filename: %filename%
  * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
@@ -35,21 +35,28 @@ final class Framework
 {
     // 核心路径常量（可通过配置覆盖）
     private const CONTROLLER_DIR = BASE_PATH . '/app/Controllers';
+
     private const CONTROLLER_NAMESPACE = 'App\Controllers';
+
     private const ROUTE_CACHE_FILE = BASE_PATH . '/storage/cache/routes.php';
-    private const DIR_PERMISSION = 0755;
+
+    private const DIR_PERMISSION = 0755; // 目录默认权限
 
     private static ?Framework $instance = null;
 
     private ?Request $request = null;
+
     private ContainerInterface $container;
+
     private Router $router;
+
     private MiddlewareDispatcher $middlewareDispatcher;
+
     private Kernel $kernel;
-    
-    // 明确定义为 LoggerInterface 或 null
+
     private ?LoggerInterface $logger = null;
-	
+    // private mixed $logger;
+
     /**
      * 单例模式：禁止外部实例化.
      */
@@ -73,6 +80,7 @@ final class Framework
      */
     public function __wakeup(): void
     {
+        // 反序列化时抛出异常，彻底禁止重建实例
         throw new \RuntimeException('Cannot unserialize singleton');
     }
 
@@ -84,6 +92,7 @@ final class Framework
         if (self::$instance === null) {
             self::$instance = new self();
         }
+
         return self::$instance;
     }
 
@@ -122,6 +131,8 @@ final class Framework
         $start         = microtime(true);
         $this->request = $request;
 
+        $response = new Response('', Response::HTTP_INTERNAL_SERVER_ERROR);
+
         try {
             $route = $this->router->match($this->request);
 
@@ -150,10 +161,11 @@ final class Framework
 
             $this->logRequestAndResponse($this->request, $response, $start);
             return $response;
-
         } catch (\Throwable $e) {
+
             return $this->handleException($e);
         } finally {
+            // Workerman 下必须释放
             $this->request = null;
         }
     }
@@ -164,15 +176,17 @@ final class Framework
     private function logError(string $message): void
     {
         $logDir = BASE_PATH . '/storage/logs';
+
         if (! is_dir($logDir)) {
+            // 使用常量权限
             @mkdir($logDir, self::DIR_PERMISSION, true);
         }
-        
+
         $file = $logDir . '/error.log';
         $time = date('Y-m-d H:i:s');
+
         @file_put_contents($file, "[{$time}] {$message}\n", FILE_APPEND);
     }
-
 
     /**
      * 初始化 BASE_PATH.
@@ -180,6 +194,7 @@ final class Framework
     private function initializeBasePath(): void
     {
         if (! defined('BASE_PATH')) {
+            // 简化路径计算：基于当前文件位置定位项目根目录
             $base = realpath(dirname(__DIR__, 3));
             define('BASE_PATH', $base === false ? getcwd() : $base);
         }
@@ -196,10 +211,16 @@ final class Framework
             BASE_PATH . '/storage/view',
         ];
 
-        $permission = self::DIR_PERMISSION;
+        // 从配置获取目录权限（默认 0777）
+        $permission = null;
+
+        // config() 工具函数如果可用则使用，否则使用常量
         if (function_exists('config')) {
+            /** @noinspection PhpUndefinedFunctionInspection */
             $permission = config('app.dir_permission', self::DIR_PERMISSION);
         }
+
+        $permission = $permission ?? self::DIR_PERMISSION;
 
         foreach ($dirs as $dir) {
             if (! is_dir($dir) && ! mkdir($dir, (int) $permission, true) && ! is_dir($dir)) {
@@ -209,7 +230,7 @@ final class Framework
     }
 
     /**
-     * 优化点：简化了 Logger 的初始化逻辑
+     * 初始化配置和容器（核心流程）.
      */
     private function initializeConfigAndContainer(): void
     {
@@ -237,8 +258,11 @@ final class Framework
      */
     private function initializeDependencies(): void
     {
+        // 1. 加载路由（支持缓存）
         $allRoutes = $this->loadAllRoutes();
 
+        // 2. 初始化中间件调度器
+        // 优先尝试容器获取，否则新建
         try {
             if ($this->container->has(MiddlewareDispatcher::class)) {
                 $this->middlewareDispatcher = $this->container->get(MiddlewareDispatcher::class);
@@ -246,10 +270,12 @@ final class Framework
                 $this->middlewareDispatcher = new MiddlewareDispatcher($this->container);
             }
         } catch (\Throwable $e) {
+            // 回退
             $this->middlewareDispatcher = new MiddlewareDispatcher($this->container);
-            $this->logError('MiddlewareDispatcher init failed: ' . $e->getMessage());
+            $this->logError('Failed to initialize MiddlewareDispatcher: ' . $e->getMessage());
         }
 
+        // 3. 初始化路由
         $this->router = new Router(
             $allRoutes,
             $this->container,
@@ -262,8 +288,13 @@ final class Framework
      */
     private function loadAllRoutes(): RouteCollection
     {
-        $isProduction = function_exists('config') && (string) config('app.env') === 'prod';
+        $isProduction = false;
+        if (function_exists('config')) {
+            /** @noinspection PhpUndefinedFunctionInspection */
+            $isProduction = (string) config('app.env') === 'prod';
+        }
 
+        // 生产环境且缓存存在时，直接加载缓存
         if ($isProduction && file_exists(self::ROUTE_CACHE_FILE)) {
             $serializedRoutes = @file_get_contents(self::ROUTE_CACHE_FILE);
             if ($serializedRoutes !== false) {
@@ -272,34 +303,51 @@ final class Framework
                     $this->logger?->info('Loaded routes from cache');
                     return $routes;
                 }
+
+                $this->logger?->warning('Route cache is invalid, regenerating');
                 @unlink(self::ROUTE_CACHE_FILE);
             }
         }
 
-        $allRoutes = new RouteCollection();
+        // 1. 加载手动路由
+        $manualRoutes = null;
+        $manualCount  = 0;
+        $allRoutes    = new RouteCollection();
 
-        // 1. 手动路由
         $routesFile = BASE_PATH . '/config/routes.php';
         if (file_exists($routesFile)) {
             $manualRoutes = require $routesFile;
             if ($manualRoutes instanceof RouteCollection) {
                 $allRoutes->addCollection($manualRoutes);
+                $manualCount = $manualRoutes->count();
             }
         }
 
-        // 2. 注解路由
-        $attrLoader = new AttributeRouteLoader(self::CONTROLLER_DIR, self::CONTROLLER_NAMESPACE);
+        // 2. 加载 Attribute 注解路由
+        $attrLoader = new AttributeRouteLoader(
+            self::CONTROLLER_DIR,
+            self::CONTROLLER_NAMESPACE
+        );
+
         $annotatedRoutes = $attrLoader->loadRoutes();
+        $annotatedCount  = 0;
+
         if ($annotatedRoutes instanceof RouteCollection) {
             $allRoutes->addCollection($annotatedRoutes);
+            $annotatedCount = $annotatedRoutes->count();
         }
 
+        // 生产环境缓存路由
         if ($isProduction) {
             $this->cacheRoutes($allRoutes);
         }
 
-        // 简化了日志记录内容
-        $this->logger?->info('[Route Loaded] Total: ' . $allRoutes->count());
+        $this->logger?->info(sprintf(
+            '[Route Loaded]Loaded %d routes (manual: %d, annotated: %d)',
+            $allRoutes->count(),
+            $manualCount,
+            $annotatedCount
+        ));
 
         return $allRoutes;
     }
@@ -310,10 +358,12 @@ final class Framework
     private function cacheRoutes(RouteCollection $routes): void
     {
         $serialized = @serialize($routes);
-        if ($serialized !== false) {
-            @file_put_contents(self::ROUTE_CACHE_FILE, $serialized);
-            @chmod(self::ROUTE_CACHE_FILE, 0644);
+        if ($serialized === false) {
+            throw new \RuntimeException('Failed to serialize route collection');
         }
+
+        @file_put_contents(self::ROUTE_CACHE_FILE, $serialized);
+        @chmod(self::ROUTE_CACHE_FILE, 0644); // 缓存文件权限只读
     }
 
     /**
@@ -325,19 +375,26 @@ final class Framework
     {
         $controllerClass = $route['controller'] ?? '';
         $method          = $route['method']     ?? '';
-        
+        $routeParams     = $route['params']     ?? [];
+
         if ($controllerClass === '' || $method === '') {
             return $this->handleNotFound();
         }
 
+        // 从容器获取控制器实例（支持依赖注入）
         $controller = $this->container->get($controllerClass);
-        $this->processRequestParameters($controllerClass, $method, $route['params'] ?? []);
 
+        // 处理路径参数和查询参数的类型转换
+        $this->processRequestParameters($controllerClass, $method, $routeParams);
+
+        // 解析控制器方法参数（Symfony ArgumentResolver）
         $argumentResolver = new ArgumentResolver();
         $arguments        = $argumentResolver->getArguments($this->request, [$controller, $method]);
 
+        // 调用控制器方法
         $response = $controller->{$method}(...$arguments);
 
+        // 统一处理返回值
         return $this->normalizeResponse($response);
     }
 
@@ -351,18 +408,31 @@ final class Framework
     {
         try {
             $reflection = new \ReflectionMethod($controllerClass, $method);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            // 如果反射失败则跳过类型转换
+            $this->logger?->warning('ReflectionMethod failed', ['exception' => $e]);
             return;
         }
 
         foreach ($reflection->getParameters() as $param) {
-            $name = $param->getName();
-            $type = $param->getType();
+            $paramName = $param->getName();
+            $type      = $param->getType();
 
-            $value = $routeParams[$name] ?? ($this->request->query->has($name) ? $this->request->query->get($name) : null);
+            // 优先获取路径参数，其次查询参数
+            if (array_key_exists($paramName, $routeParams)) {
+                $value = $routeParams[$paramName];
+            } elseif ($this->request->query->has($paramName)) {
+                $value = $this->request->query->get($paramName);
+            } else {
+                // 无参数值，跳过
+                continue;
+            }
 
+            // 内置类型转换
             if ($value !== null && $type !== null && $type->isBuiltin()) {
-                 $this->request->attributes->set($name, $this->castValueToType($value, $type->getName()));
+                $typedName = $type->getName();
+                $value     = $this->castValueToType($value, $typedName);
+                $this->request->attributes->set($paramName, $value);
             }
         }
     }
@@ -396,8 +466,14 @@ final class Framework
         }
 
         if (is_array($response) || is_object($response)) {
-            $payload = @json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
-            return new Response($payload, Response::HTTP_OK, ['Content-Type' => 'application/json']);
+            $payload = @json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $payload = $payload === false ? '' : $payload;
+
+            return new Response(
+                $payload,
+                Response::HTTP_OK,
+                ['Content-Type' => 'application/json']
+            );
         }
 
         return new Response((string) $response, Response::HTTP_OK);
@@ -420,52 +496,86 @@ final class Framework
         return new Response($content, Response::HTTP_NOT_FOUND);
     }
 
+    /* 遗弃
+    500 错误的友好页面
+    */
+    private function handleException1(\Throwable $e): Response
+    {
+        // 设置HTTP响应头为500
+        http_response_code(500);
+
+        // 渲染Twig模板，并将异常对象传递过去
+        // 注意：我们传递的是整个$e对象，而不是print_r的结果
+        $html = view('errors/500.html.twig', [
+            'exception' => $e,
+        ]);
+
+        // 返回一个包含渲染后HTML的Response对象
+        return new Response($html, 500);
+        // return new Response('500 Server Error', 500);
+    }
+
     /**
      * 处理异常.
      */
     private function handleException(\Throwable $e): Response
     {
         $statusCode = Response::HTTP_INTERNAL_SERVER_ERROR;
+
         if ($e instanceof HttpExceptionInterface) {
             $statusCode = (int) $e->getStatusCode();
-        } elseif ($e->getCode() >= 400 && $e->getCode() <= 599) {
-            $statusCode = (int) $e->getCode();
+        } else {
+            $code = (int) $e->getCode();
+            if ($code >= 400 && $code <= 599) {
+                $statusCode = $code;
+            }
         }
 
-        $isDebug = function_exists('config') && config('app.debug');
-        
+
+        // 准备模板所需的所有变量（直接传递具体值，不依赖模板函数）
+        $templateVars = [
+            // 异常信息
+            'exception_class'   => get_class($e),
+            'exception_code'    => $statusCode,
+            'exception_message' => $e->getMessage(),
+            'exception_file'    => $e->getFile(),
+            'exception_line'    => $e->getLine(),
+            'trace'             => $e->getTraceAsString(),
+            'stack_frames'      => count($e->getTrace()), // 堆栈帧数
+
+            // 请求信息（从当前 request 对象获取）
+            'request_method' => $this->request->getMethod(),
+            'request_uri'    => $this->request->getUri(),
+            'client_ip'      => $this->request->getClientIp() ?: 'unknown',
+            'request_time'   => date('Y-m-d H:i:s'),
+            'user_agent'     => $this->request->headers->get('User-Agent') ?: 'unknown',
+
+            // 环境信息（从容器或配置获取）
+            'php_version' => PHP_VERSION,
+            'app_env'     => function_exists('config') ? config('app.env') : 'prod',
+            'app_debug'   => function_exists('config') ? config('app.debug') : false,
+        ];
+
+        // 开发环境渲染调试模板
+        $content = '';
         try {
-            if ($isDebug) {
-                // 仅在 Debug 模式下收集详细信息
-                $content = view('errors/debug.html.twig', [
-                    'exception_class'   => get_class($e),
-                    'exception_message' => $e->getMessage(),
-                    'trace'             => $e->getTraceAsString(),
-					'stack_frames'      => count($e->getTrace()), // 堆栈帧数
-
-					// 请求信息（从当前 request 对象获取）
-					'request_method' => $this->request->getMethod(),
-					'request_uri'    => $this->request->getUri(),
-					'client_ip'      => $this->request->getClientIp() ?: 'unknown',
-					'request_time'   => date('Y-m-d H:i:s'),
-					'user_agent'     => $this->request->headers->get('User-Agent') ?: 'unknown',
-
-					// 环境信息（从容器或配置获取）
-					'php_version' => PHP_VERSION,
-					'app_env'     => function_exists('config') ? config('app.env') : 'prod',
-					'app_debug'   => function_exists('config') ? config('app.debug') : false,
-                ]);
+            if (function_exists('config') && config('app.debug')) {
+                $content = view('errors/debug.html.twig', $templateVars);
             } else {
-                $content = view('errors/500.html.twig', ['status_code' => $statusCode]);
+                $content = view('errors/500.html.twig', [
+                    'status_code' => $statusCode,
+                    'status_text' => Response::$statusTexts[$statusCode] ?? 'Server Error',
+                    'message'     => 'An unexpected error occurred. Please try again later. 程序发生错误，请稍后再试！',
+                ]);
             }
-        } catch (\Throwable $renderEx) {
-            $this->logError('Render exception failed: ' . $renderEx->getMessage());
-            $content = 'Server Error';
+        } catch (\Throwable $e2) {
+            $this->logError('Failed to render exception view: ' . $e2->getMessage());
+            $content = 'Server Error~';
         }
 
         return new Response($content, $statusCode);
     }
-	
+
     /**
      * 彩蛋路由判断.
      *
@@ -473,10 +583,13 @@ final class Framework
      */
     private function isEasterEggRoute(array $route): bool
     {
-        return isset($route['controller'], $route['method']) && (
-            ($route['controller'] === '__FrameworkVersionController__' && $route['method'] === '__showVersion__') ||
-            ($route['controller'] === '__FrameworkTeamController__' && $route['method'] === '__showTeam__')
-        );
+        if (! isset($route['controller'], $route['method'])) {
+            return false;
+        }
+
+        return
+            ($route['controller'] === '__FrameworkVersionController__' && $route['method'] === '__showVersion__')
+            || ($route['controller'] === '__FrameworkTeamController__' && $route['method'] === '__showTeam__');
     }
 
     /**
@@ -486,9 +599,10 @@ final class Framework
      */
     private function handleEasterEgg(array $route): Response
     {
-        if ($route['controller'] === '__FrameworkVersionController__') {
+        if (isset($route['controller']) && $route['controller'] === '__FrameworkVersionController__') {
             return EasterEgg::getResponse();
         }
+
         return EasterEgg::getTeamResponse();
     }
 
@@ -497,22 +611,19 @@ final class Framework
      */
     private function logRequestAndResponse(Request $request, Response $response, float $startTime): void
     {
-        if ($this->logger === null) {
-            return;
-        }
-        
-        $duration = (microtime(true) - $startTime) * 1000;
-        
+        $duration = microtime(true) - $startTime;
+
         try {
-            $this->logger->info('[Request]', [
+            $this->logger?->info('[Request processed]', [
                 'method'   => $request->getMethod(),
-                'uri'      => $request->getPathInfo(),
+                'path'     => $request->getPathInfo(),
                 'status'   => $response->getStatusCode(),
-                'duration' => round($duration, 2) . 'ms',
+                'duration' => round($duration * 1000, 2) . 'ms', // 转换为毫秒
                 'ip'       => $request->getClientIp(),
             ]);
-        } catch (\Throwable) {
-            // 日志记录失败忽略，避免死循环
+        } catch (\Throwable $e) {
+            // 回退到文件日志
+            $this->logError('Failed to write structured request log: ' . $e->getMessage());
         }
     }
 }
