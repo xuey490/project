@@ -17,48 +17,36 @@ declare(strict_types=1);
 namespace Framework\Core;
 
 use Framework\Middleware\MiddlewareDispatcher;
-use Framework\Middleware\MiddlewareMethodOverride;
-use Symfony\Component\DependencyInjection\ContainerInterface;
+use Psr\Container\ContainerInterface; // 推荐使用 PSR 接口
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Exception\MethodNotAllowedException;
 use Symfony\Component\Routing\Exception\ResourceNotFoundException;
 use Symfony\Component\Routing\Matcher\UrlMatcher;
-// 引入你的静态容器
 use Symfony\Component\Routing\RequestContext;
 use Symfony\Component\Routing\RouteCollection;
-
-// 推荐使用 PSR-11 标准接口
 
 class Router
 {
     /**
      * 所有路由集合（手动路由 + 注解路由）.
-     * @var RouteCollection
      */
-    private $allRoutes;
+    private RouteCollection $allRoutes;
 
     /**
      * 控制器基础命名空间.
-     * @var string
      */
-    private $controllerNamespace = 'App\Controllers'; // 默认控制器命名空间
+    private string $controllerNamespace;
 
-    // 新增：用于存储 DI 容器
-    private $container;
+    private ContainerInterface $container;
 
-    /**
-     * 构造函数：仅接收合并后的路由集合（职责单一化）.
-     * @param RouteCollection $allRoutes           合并后的所有路由（手动 + 注解）
-     * @param string          $controllerNamespace 控制器基础命名空间（可选，默认 App\Controllers）
-     */
     public function __construct(
         RouteCollection $allRoutes,
-        ContainerInterface $container, // <--- 新增参数 // ← 期望 PSR-11 容器
+        ContainerInterface $container,
         string $controllerNamespace = 'App\Controllers'
     ) {
         $this->allRoutes           = $allRoutes;
-        $this->container           = $container; // <--- 存储容器
+        $this->container           = $container;
         $this->controllerNamespace = $controllerNamespace;
     }
 
@@ -69,127 +57,152 @@ class Router
      */
     public function match(Request $request): ?array
     {
-        // 1. 预处理：处理PUT/DELETE请求、去除URL的.html后缀
+        // 1. 预处理：去除URL的.html后缀
         $this->preprocessRequest($request);
 
+        // 2. 准备上下文
         $path    = $request->getPathInfo();
         $context = new RequestContext();
         $context->fromRequest($request);
 
-        // 🔥 检查 版本彩蛋
+        // 🔥 彩蛋逻辑保持不变
         if (EasterEgg::isTriggeredVersion($request)) {
             return EasterEgg::getRouteMarker();
         }
-
-        // 🔥 检查 团队彩蛋（团队名单）
         if (EasterEgg::isTriggeredTeam($request)) {
             return EasterEgg::getTeamRouteMarker();
         }
 
-        // 2. 策略1：匹配手动路由 + 注解路由（共用Symfony UrlMatcher）
-        $manualOrAnnotationRoute = $this->matchManualAndAnnotationRoutes($path, $context);
-        if ($manualOrAnnotationRoute) {
-            // $context->setMethod('GET');	//✅ 强制设置方法
-            return $manualOrAnnotationRoute;
+        // 3. 策略1：匹配手动路由 + 注解路由
+        // 注意：这里传递 $request 是为了在内部将参数注入到 request attributes 中
+        $routeInfo = $this->matchManualAndAnnotationRoutes($path, $context, $request);
+        if ($routeInfo) {
+            return $routeInfo;
         }
 
-        // 再尝试自动路由（GET 默认）
-
-        // 3. 策略2：匹配自动解析路由（最低优先级）
+        // 4. 策略2：匹配自动解析路由（最低优先级）
         $autoRoute = $this->matchAutoRoute($path, $request);
         if ($autoRoute) {
             return $autoRoute;
         }
 
-        // 4. 未匹配到任何路由
         return null;
     }
 
     /**
-     * 匹配路由.
+     * 匹配路由并注入 Request 属性.
      */
-    private function matchManualAndAnnotationRoutes(string $path, RequestContext $context): ?array
+    private function matchManualAndAnnotationRoutes(string $path, RequestContext $context, Request $request): ?array
     {
         try {
-            $matcher    = new UrlMatcher($this->allRoutes, $context);
+            $matcher = new UrlMatcher($this->allRoutes, $context);
+            
+            // 匹配结果包含：_route, _controller, 以及 defaults 中的 _middleware, _auth, _roles 等
             $parameters = $matcher->match($path);
 
-            $routeName      = $parameters['_route'];
-            $routeObject    = $this->allRoutes->get($routeName);
-            $middlewareList = $routeObject ? $routeObject->getDefault('_middleware', []) : [];
+            // 🔥 【核心修复】将匹配到的所有参数（路由参数+Defaults）注入到 Request 中
+            // 这样 MiddlewareDispatcher 才能通过 $request->attributes->get('_middleware') 拿到数据
+            $request->attributes->add($parameters);
 
-            if (! isset($parameters['_controller'])) {
+            if (!isset($parameters['_controller'])) {
                 return null;
             }
 
-            [$controllerClass, $actionMethod] = explode('::', $parameters['_controller'], 2);
+            // 解析控制器和方法
+            // 格式可能是 "Class::Method" 或 "Class" (__invoke)
+            if (str_contains($parameters['_controller'], '::')) {
+                [$controllerClass, $actionMethod] = explode('::', $parameters['_controller'], 2);
+            } else {
+                $controllerClass = $parameters['_controller'];
+                $actionMethod = '__invoke';
+            }
 
-            unset($parameters['_controller'], $parameters['_route']);
+            // 清理掉不需要返回给 Kernel 的内部参数，但 Request attributes 中保留
+            // $paramsToReturn = $parameters;
+            // unset($paramsToReturn['_controller'], $paramsToReturn['_route'], $paramsToReturn['_middleware']);
 
             return [
                 'controller' => $controllerClass,
                 'method'     => $actionMethod,
-                'params'     => $parameters,
-                'middleware' => $middlewareList,
+                'params'     => $parameters, // 包含 id, slug 等路由参数
+                'middleware' => $parameters['_middleware'] ?? [],
             ];
-        } catch (MethodNotAllowedException|ResourceNotFoundException $e) {
-            // ✅ 捕获两种异常，让 POST / PUT / DELETE 自动回退到自动路由逻辑
+
+        } catch (MethodNotAllowedException | ResourceNotFoundException $e) {
             return null;
         }
     }
 
     /**
-     * 匹配自动解析路由（支持多级命名空间、自动参数映射）.
+     * 匹配自动解析路由.
      */
     private function matchAutoRoute(string $path, Request $request): ?array
     {
+        // ... (原有逻辑保持不变)
         $path = rtrim($path, '/');
-        // 拆分路径为段（过滤空值，确保数组键从0开始）
         $pathSegments  = array_values(array_filter(explode('/', $path)));
         $requestMethod = $request->getMethod();
 
-        // 根路径特殊处理：映射到 HomeController@index
+        // 根路径
         if (empty($pathSegments)) {
             $homeController = "{$this->controllerNamespace}\\Home";
             if (class_exists($homeController) && method_exists($homeController, 'index')) {
-                return [
-                    'controller' => $homeController,
-                    'method'     => 'index',
-                    'params'     => [],
-                    'middleware' => [],
-                ];
+                return $this->finalizeAutoRoute($request, $homeController, 'index', []);
             }
             return null;
         }
 
-        // 核心逻辑：从长到短尝试匹配控制器（支持多级命名空间）
-        // 例：/api/v2/user/show/1 → 先试 [api,v2,user] → 再试 [api,v2] → 最后试 [api]
+        // 多级控制器匹配
         for ($controllerSegmentLength = count($pathSegments); $controllerSegmentLength >= 1; --$controllerSegmentLength) {
-            // 1. 提取控制器路径段，构建控制器类名
             $controllerSegments = array_slice($pathSegments, 0, $controllerSegmentLength);
             $controllerClass    = $this->buildControllerClassName($controllerSegments);
 
-            // 控制器不存在，跳过当前长度，尝试更短的路径段
-            if (! class_exists($controllerClass)) {
+            if (!class_exists($controllerClass)) {
                 continue;
             }
 
-            // 2. 提取动作+参数段，尝试匹配控制器方法
             $actionAndParamSegments = array_slice($pathSegments, $controllerSegmentLength);
             $routeInfo              = $this->matchActionAndParams($controllerClass, $actionAndParamSegments, $requestMethod);
 
             if ($routeInfo) {
-                return array_merge([
-                    'controller' => $controllerClass,
-                    'middleware' => [], // 自动路由默认无中间件，可按需扩展
-                ], $routeInfo);
+                return $this->finalizeAutoRoute(
+                    $request, 
+                    $controllerClass, 
+                    $routeInfo['method'], 
+                    $routeInfo['params']
+                );
             }
         }
 
-        // 未匹配到自动路由
         return null;
     }
 
+    /**
+     * 统一处理自动路由的返回，并注入 Request.
+     */
+    private function finalizeAutoRoute(Request $request, string $controller, string $method, array $params): array
+    {
+        // 构造标准的 attributes
+        $attributes = array_merge($params, [
+            '_controller' => $controller . '::' . $method,
+            '_route'      => 'auto_route_' . md5($controller . $method), // 虚拟路由名
+            // 自动路由默认没有中间件和权限设置，给予默认空值，防止中间件报错
+            '_middleware' => [],
+            '_auth'       => false,
+            '_roles'      => [],
+        ]);
+
+        // 🔥 【核心修复】注入到 Request
+        $request->attributes->add($attributes);
+
+        return [
+            'controller' => $controller,
+            'method'     => $method,
+            'params'     => $params,
+            'middleware' => [],
+        ];
+    }
+	
     /**
      * 构建控制器完整类名（支持多级命名空间）
      * 例：[api, v2, user] → App\Controllers\Api\V2\UserController.
