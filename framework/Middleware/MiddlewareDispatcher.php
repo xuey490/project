@@ -64,18 +64,36 @@ class MiddlewareDispatcher
         // 1. 获取路由中间件
         // 此时 $request->attributes 已经由 UrlMatcher 填充完毕
         $rawRouteMiddleware = $request->attributes->get('_middleware', []);
-		$currentRouteName = $request->attributes->get('_route' , []); 
-		#dump($rawRouteMiddleware);
-        // 2. 拍平并去重
+		//$currentRouteName = $request->attributes->get('_route' , null); 
+		$routeInfo = $request->attributes->get('_route');
+        $currentRouteName = is_string($routeInfo) ? $routeInfo : (is_array($routeInfo) ? json_encode($routeInfo) : 'unknown_route');
+
+        // 2. 拍平数组 (处理可能的嵌套)
         $flattenedRouteMiddleware = $this->flattenArray($rawRouteMiddleware);
         
+        // 🔥 【核心】循环检查中间件是否存在
+        // 这一步在实例化之前做，发现不存在直接抛错
+        foreach ($flattenedRouteMiddleware as $middlewareClass) {
+            if (empty($middlewareClass)) {
+                continue;
+            }
+
+            if (!class_exists($middlewareClass)) {
+                // 抛出详细错误，包含是哪个路由出的问题
+                throw new \RuntimeException(sprintf(
+                    "Middleware class '%s' not found. Defined in route: '%s'. Please check your Route Attributes or Annotations.",
+                    $middlewareClass,
+                    $currentRouteName
+                ));
+            }
+        }
+		
         // 移除全局已存在的，避免重复执行
         $uniqueRouteMiddleware = array_values(array_diff(
             $flattenedRouteMiddleware,
             $this->globalMiddleware
         ));
-		
-		
+
 
         // 3. 处理 Auth 逻辑
         // 直接读取 UrlMatcher 注入的 _auth 和 _roles
@@ -102,10 +120,26 @@ class MiddlewareDispatcher
             if (empty($middlewareClass)) {
                 continue;
             }
-
+			
+            // 这里也可以加一个简单的容错，防止 globalMiddleware 里写错了
+            if (!class_exists($middlewareClass)) {
+                throw new \RuntimeException(sprintf(
+                    "Global Middleware class '%s' not found. Please check MiddlewareDispatcher configuration.",
+                    $middlewareClass
+                ));
+            }
+			
             // 从容器解析
             $middleware = $this->container->get($middlewareClass);
 
+            // 检查是否实现了 handle 方法（可选，更严谨的检查）
+            if (!method_exists($middleware, 'handle')) {
+                throw new \RuntimeException(sprintf(
+                    "Middleware class '%s' does not have a 'handle' method.",
+                    $middlewareClass
+                ));
+            }
+			
             // 包装
             $middlewareChain = function ($req) use ($middleware, $middlewareChain) {
                 return $middleware->handle($req, $middlewareChain);
@@ -115,6 +149,7 @@ class MiddlewareDispatcher
         // 6. 启动链条
         return $middlewareChain($request);
     }
+
 	
     /**
      * 将多维数组递归“拍平”成一维数组.
