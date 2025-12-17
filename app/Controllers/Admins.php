@@ -5,6 +5,8 @@ namespace App\Controllers;
 
 use Framework\Attributes\Auth;
 use Framework\Attributes\Menu;
+use Framework\Attributes\Log;
+use Framework\Attributes\Role;
 use Framework\Basic\BaseJsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -65,7 +67,7 @@ class Admins
 	 
 	 
     /**
-     * 创建新产品 vvv1/admins/testadmin
+     * 创建新产品 vvv1/admins/add?page=11 && /Admins/test
      * 
      * @method get
      * @path /add
@@ -74,7 +76,9 @@ class Admins
      * @role admin,manager
      * @middleware App\Middlewares\AuthMiddleware, App\Middlewares\LogMiddleware
      * @menu 创建产品
-     */	 
+     */
+	#[Role(['admin'])] // 只有超级管理员能访问
+	#[Log(description: '创建新产品', level: 'warning')]
     public function test(Request $request): Response
     {
         // 从 AuthMiddleware 注入的用户信息
