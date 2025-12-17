@@ -98,6 +98,8 @@ class CsrfTokenGenerateMiddleware
          * - Cookie 与 Session Token 不一致
          */
         $cookieToken = $request->cookies->get($this->cookieName);
+		
+		$request->headers->set('X-CSRF-TOKEN' , $token);
 
         if ($cookieToken !== $token) {
             $response->headers->setCookie(
