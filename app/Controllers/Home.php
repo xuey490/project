@@ -138,11 +138,11 @@ class Home
 		
 	}
 	
-	##[Auth(required: true, roles: ['admin', 'editor'])]
-	
-
+	#[Auth(required: true, roles: ['admin', 'editor'], guard: 'index')]
     public function index(Request $request)
     {
+		
+		//dump($request->headers->get('x-csrf-token'));
         // ✅ 此时 app() 已可用！
 
         // dump(app()->getServiceIds()); // 查看所有服务 ID
@@ -176,9 +176,9 @@ class Home
 		->get()->toArray();
 		*/
 		
-		$count = ($this->db)('config')->count();  //5
-		$users = ($this->db)('config')->paginate(2);
-        dump($users);
+		#$count = ($this->db)('config')->count();  //5
+		#$users = ($this->db)('config')->paginate(2);
+        #dump($users);
 
 		
 		
@@ -240,9 +240,6 @@ $list = $this->customDao->selectModel(
     $limit,
 ) ;
 
-//dump(app('orm'));
-
-
 
 //->toArray(); TP 
 // ->get()->toArray();
@@ -287,7 +284,7 @@ $id = $snow->nextId();
 	
     $user4 =($this->db)('App\Models\Config')->find(1);
 
-	dump($user4);
+	#dump($user4);
     
         // 日志测试
         // $logger = app('log');
@@ -318,13 +315,17 @@ $id = $snow->nextId();
 		#$logger1 = app('log_cache');
 
 		#$logger1->log('默认日志文件');
-				
+		
+		
+		// 容器注册快速测试
 		// 使用自定义参数 app(\Framework\Log\LoggerCache::class) 或app('\Framework\Log\LoggerCache') 带引号做为字符串参数
-		$logger2 = app(\Framework\Utils\LoggerCache::class, [
+		/*
+		$logger2 = App::getContainer()->make(\Framework\Utils\LoggerCache::class, [
 			'channel' => 'payment',
 			'logFile' => BASE_PATH .'/storage/logs/payment.log',
 		]);
 		$logger2->log('支付日志');
+		*/
 	
 
         // Symfony缓存
