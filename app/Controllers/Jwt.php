@@ -17,7 +17,7 @@ use App\Middlewares\AuthMiddleware;
 use Framework\Attributes\Auth;
 use Symfony\Component\HttpFoundation\JsonResponse;
 
-#[Route(prefix: '/jwts/apijwt', group: 'apijwt' , middleware: [AuthMiddleware::class] )]
+#[Route(prefix: '/jwts/apijwt',auth: true, group: 'apijwt' , middleware: [AuthMiddleware::class] )]
 class Jwt
 {
 	private string $tokenString;
@@ -80,7 +80,17 @@ class Jwt
 	
 	
 	
-	
+    /**
+     * 创建新产品 vvv1/admins/testadmin
+     * 
+     * @method get
+     * @path /setlogin
+     * @name products.store
+     * @auth true
+     * @role admin,manager
+     * @middleware App\Middlewares\AuthMiddleware, App\Middlewares\LogMiddleware
+     * @menu 创建产品
+     */	
 	public function login() 
     {
         // ... 验证用户凭证 ...
@@ -110,15 +120,7 @@ class Jwt
             'message' => 'Login successful',
             'expires_in' => $ttl
         ]);
-		
-		/*
-		
-		return new Response(
-			json_encode($data),
-			Response::HTTP_OK,
-			['Content-Type' => 'application/json']
-		);
-		*/
+
     }	
 	
 	

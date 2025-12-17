@@ -5,10 +5,15 @@ namespace App\Controllers;
 
 use Framework\Attributes\Auth;
 use Framework\Attributes\Menu;
+use Framework\Attributes\Log;
+use Framework\Attributes\Role;
+use Framework\Attributes\Cache;
+use Framework\Basic\BaseJsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Framework\Attributes\Route;
-use Framework\Basic\BaseJsonResponse;
+
 /**
  * 示例后台控制器：展示 Attribute 与 DocBlock 两种方式 # [Auth(roles: ['admin'])] ,require 模式是true，如果设置false，则匿名访问
  *
@@ -23,9 +28,8 @@ use Framework\Basic\BaseJsonResponse;
 
 
 #[Route(prefix: '/vvv1/admins', group: 'apssi', middleware: [\App\Middlewares\AuthMiddleware::class, \App\Middlewares\LogMiddleware::class])]
-
-#[Auth(required: true, roles: ['admins'])] // 如开启，则整个页面需要认证，哪怕方法类没有进行设置
-#[Menu(title: '系统管理', icon: 'cog', order: 100)]
+##[Auth(required: true, roles: ['admins'])] // 如开启，则整个页面需要认证，哪怕方法类没有进行设置
+##[Menu(title: '系统管理', icon: 'cog', order: 100)]
 class Admins
 {
     /**
@@ -34,7 +38,7 @@ class Admins
      * DocBlock 说明示例（可选）：
      * @menu 列表页
      */
-	#[Route(path: '/',  auth: true, roles: ['admin'], methods: ['GET'], name: 'demoaa1.index')] //注解路由的auth roles
+	##[Route(path: '/',   roles: ['admin'], methods: ['GET'], name: 'demoaa1.index')] //注解路由的auth roles
     /**
      * 旧 DocBlock 
      * 旧式的写法，role admin,super 用,隔开，不能用其他符号
@@ -42,6 +46,7 @@ class Admins
      * @role Super
      * @menu 内容管理
      */
+	
     public function index(Request $request): Response
     {
         // 可以通过 $request->attributes->get('user') 读取经过中间件注入的用户信息（若有）
@@ -50,6 +55,23 @@ class Admins
             'action' => 'index',
             'note' => 'public index (no auth)'
         ]), 200, ['Content-Type' => 'application/json']);
+    }
+
+    // 场景1：普通数据接口，缓存 1 分钟
+    #[Cache(ttl: 60)]
+    public function getHotList(): JsonResponse
+    {
+        // 模拟耗时查询
+        $data = ['item1', 'item2', 'item3', date('Y-m-d H:i:s')]; 
+        return new JsonResponse($data);
+    }
+
+    // 场景2：指定 Key，适用于需要手动清除缓存的场景
+    // 例如：后台更新了配置，你可以手动调用 app('cache')->delete('sys_config')
+    #[Cache(ttl: 600, key: 'sys_config')]
+    public function getConfig(): JsonResponse
+    {
+        return new JsonResponse(['site_name' => 'My FssPHP']);
     }
 
 
@@ -61,7 +83,21 @@ class Admins
      * @role admin
      * @menu test首页
      */
-    
+	 
+	 
+    /**
+     * 创建新产品 vvv1/admins/add?page=11 && /Admins/test
+     * 
+     * @method get
+     * @path /add
+     * @name products.storeaa
+     * @auth true
+     * @role admin,manager
+     * @middleware App\Middlewares\AuthMiddleware, App\Middlewares\LogMiddleware
+     * @menu 创建产品
+     */
+	#[Role(['admin'])] // 只有超级管理员能访问
+	#[Log(description: '创建新产品', level: 'warning')]
     public function test(Request $request): Response
     {
         // 从 AuthMiddleware 注入的用户信息
@@ -83,12 +119,12 @@ class Admins
         // 从 AuthMiddleware 注入的用户信息
         $user = $request->attributes->get('user', null);
 
-        return BaseJsonResponse::success([
+        return new Response(json_encode([
             'ok' => true,
             'action' => 'index',
             'user' => $user,
             'message' => 'testadmin',
-        ],'testadmin');
+        ]), 200, ['Content-Type' => 'application/json']);
     }
 
 
@@ -125,8 +161,7 @@ class Admins
 			'user'   => $user
 		], '后台管理页面');
 	}
-	
-	
+
     /**
      * 方法级 Attribute（推荐）
      * - 需要登录

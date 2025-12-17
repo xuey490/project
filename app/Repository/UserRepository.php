@@ -49,19 +49,21 @@ class UserRepository extends BaseRepository
 	
     // 如果需要扩展特定的复杂业务逻辑，可以在这里写
     // 比如：查找活跃的 VIP 用户
-    public function findActiveVips(int $level = 1)
+    public function findActiveVips(int $id = 2)
     {
         // 获取原生查询构造器，自己处理复杂逻辑
         $query = $this->newQuery();
         
         $query->where('status', 1)
-              ->where('vip_level', '>=', $level);
+              ->where('id', '>=', $id);
+			  
+			  
 
         // 手动处理特定语法差异
         if ($this->isEloquent) {
-            return $query->orderBy('vip_level', 'desc')->get();
+            return $query->orderBy('id', 'desc')->get();
         } else {
-            return $query->order('vip_level', 'desc')->select();
+            return $query->order('id', 'desc')->paginate(2)->toArray();
         }
 		
         // 现在的语法糖写法：

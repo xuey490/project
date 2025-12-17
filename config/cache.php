@@ -8,7 +8,7 @@ return [
         'file' => [
             'driver' => 'file',
 			'type' => 'File',  //兼容thinkcache
-            'path' => '../storage/cache',
+            'path' => BASE_PATH . '/storage/cache',
             'prefix' => 'cache_',           // ← 新增：key 前缀
             'enable_tags' => true,          // ← 新增：是否启用标签
         ],
@@ -20,14 +20,7 @@ return [
 			'port'	 	=> 6379,
             'password'  => null,
 			'expire'	=>3600,
-			/*
-            'connection' => [
-                'scheme' => 'tcp',
-                'host' => env('REDIS_HOST', '127.0.0.1'),
-                'port' => env('REDIS_PORT', 6379),
-                'password' => env('REDIS_PASSWORD', null),
-            ],
-			*/
+
             'database' => 0,
             'prefix' => 'redis_cache_',           // Redis 缓存前缀
             'enable_tags' => true,

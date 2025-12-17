@@ -23,7 +23,6 @@ class Module
     // 可以在构造函数中注入 DatabaseFactory 或 ModuleRepository
     public function __construct(DatabaseFactory $dbFactory)
     {
-		//dump(app('orm'));
         $this->moduleRepo = new ModuleRepository($dbFactory);
         $this->userRepo = 	new UserRepository($dbFactory);
         $this->logRepo = 	new LogRepository($dbFactory);

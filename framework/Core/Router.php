@@ -16,6 +16,7 @@ declare(strict_types=1);
 
 namespace Framework\Core;
 
+use Framework\Attributes\MiddlewareProviderInterface; 
 use Framework\Middleware\MiddlewareDispatcher;
 use Psr\Container\ContainerInterface; // 推荐使用 PSR 接口
 use Symfony\Component\HttpFoundation\Request;
@@ -28,16 +29,8 @@ use Symfony\Component\Routing\RouteCollection;
 
 class Router
 {
-    /**
-     * 所有路由集合（手动路由 + 注解路由）.
-     */
     private RouteCollection $allRoutes;
-
-    /**
-     * 控制器基础命名空间.
-     */
     private string $controllerNamespace;
-
     private ContainerInterface $container;
 
     public function __construct(
@@ -50,37 +43,22 @@ class Router
         $this->controllerNamespace = $controllerNamespace;
     }
 
-    /**
-     * 核心路由匹配方法
-     * 优先级：手动路由 > 注解路由 > 自动解析路由.
-     * @return null|array 路由元数据：[controller, method, params, middleware]
-     */
     public function match(Request $request): ?array
     {
-        // 1. 预处理：去除URL的.html后缀
         $this->preprocessRequest($request);
-
-        // 2. 准备上下文
         $path    = $request->getPathInfo();
         $context = new RequestContext();
         $context->fromRequest($request);
 
-        // 🔥 彩蛋逻辑保持不变
-        if (EasterEgg::isTriggeredVersion($request)) {
-            return EasterEgg::getRouteMarker();
-        }
-        if (EasterEgg::isTriggeredTeam($request)) {
-            return EasterEgg::getTeamRouteMarker();
-        }
+        // 彩蛋逻辑略...
 
-        // 3. 策略1：匹配手动路由 + 注解路由
-        // 注意：这里传递 $request 是为了在内部将参数注入到 request attributes 中
+        // 1. 尝试匹配手动/注解路由
         $routeInfo = $this->matchManualAndAnnotationRoutes($path, $context, $request);
         if ($routeInfo) {
             return $routeInfo;
         }
 
-        // 4. 策略2：匹配自动解析路由（最低优先级）
+        // 2. 尝试自动解析路由 (Fallback)
         $autoRoute = $this->matchAutoRoute($path, $request);
         if ($autoRoute) {
             return $autoRoute;
@@ -89,27 +67,18 @@ class Router
         return null;
     }
 
-    /**
-     * 匹配路由并注入 Request 属性.
-     */
     private function matchManualAndAnnotationRoutes(string $path, RequestContext $context, Request $request): ?array
     {
         try {
             $matcher = new UrlMatcher($this->allRoutes, $context);
-            
-            // 匹配结果包含：_route, _controller, 以及 defaults 中的 _middleware, _auth, _roles 等
             $parameters = $matcher->match($path);
 
-            // 🔥 【核心修复】将匹配到的所有参数（路由参数+Defaults）注入到 Request 中
-            // 这样 MiddlewareDispatcher 才能通过 $request->attributes->get('_middleware') 拿到数据
             $request->attributes->add($parameters);
 
             if (!isset($parameters['_controller'])) {
                 return null;
             }
 
-            // 解析控制器和方法
-            // 格式可能是 "Class::Method" 或 "Class" (__invoke)
             if (str_contains($parameters['_controller'], '::')) {
                 [$controllerClass, $actionMethod] = explode('::', $parameters['_controller'], 2);
             } else {
@@ -117,37 +86,34 @@ class Router
                 $actionMethod = '__invoke';
             }
 
-            // 清理掉不需要返回给 Kernel 的内部参数，但 Request attributes 中保留
-            // $paramsToReturn = $parameters;
-            // unset($paramsToReturn['_controller'], $paramsToReturn['_route'], $paramsToReturn['_middleware']);
-
             return [
                 'controller' => $controllerClass,
                 'method'     => $actionMethod,
-                'params'     => $parameters, // 包含 id, slug 等路由参数
+                'params'     => $parameters,
                 'middleware' => $parameters['_middleware'] ?? [],
             ];
-
         } catch (MethodNotAllowedException | ResourceNotFoundException $e) {
             return null;
         }
     }
 
-    /**
-     * 匹配自动解析路由.
-     */
     private function matchAutoRoute(string $path, Request $request): ?array
     {
-        // ... (原有逻辑保持不变)
         $path = rtrim($path, '/');
         $pathSegments  = array_values(array_filter(explode('/', $path)));
         $requestMethod = $request->getMethod();
 
-        // 根路径
+        // 根路径 -> Home::index
         if (empty($pathSegments)) {
             $homeController = "{$this->controllerNamespace}\\Home";
             if (class_exists($homeController) && method_exists($homeController, 'index')) {
+                // 🔥 这里也要调用反射扫描
                 return $this->finalizeAutoRoute($request, $homeController, 'index', []);
+            }
+            // 兼容旧命名 HomeController
+            $homeControllerOld = "{$this->controllerNamespace}\\HomeController";
+            if (class_exists($homeControllerOld) && method_exists($homeControllerOld, 'index')) {
+                 return $this->finalizeAutoRoute($request, $homeControllerOld, 'index', []);
             }
             return null;
         }
@@ -178,28 +144,100 @@ class Router
     }
 
     /**
-     * 统一处理自动路由的返回，并注入 Request.
+     * 🔥 核心修复：在自动路由确认后，现场扫描注解
      */
     private function finalizeAutoRoute(Request $request, string $controller, string $method, array $params): array
     {
-        // 构造标准的 attributes
+        // 1. 进行反射扫描
+        $scannedData = $this->scanForMiddlewareAndAttributes($controller, $method);
+
+        // 2. 构造标准的 attributes
         $attributes = array_merge($params, [
             '_controller' => $controller . '::' . $method,
-            '_route'      => 'auto_route_' . md5($controller . $method), // 虚拟路由名
-            // 自动路由默认没有中间件和权限设置，给予默认空值，防止中间件报错
-            '_middleware' => [],
-            '_auth'       => false,
-            '_roles'      => [],
+            '_route'      => 'auto_route_' . md5($controller . $method),
+            
+            // 🔥 这里不再是空数组，而是填入扫描到的结果
+            '_middleware' => $scannedData['middleware'],
+            '_auth'       => $scannedData['auth'],
+            '_roles'      => $scannedData['roles'],
+            '_attributes' => $scannedData['attributesMap'], // 透传 Auth 对象
         ]);
 
-        // 🔥 【核心修复】注入到 Request
         $request->attributes->add($attributes);
 
         return [
             'controller' => $controller,
             'method'     => $method,
             'params'     => $params,
-            'middleware' => [],
+            'middleware' => $scannedData['middleware'],
+        ];
+    }
+
+    /**
+     * 🔥 新增方法：反射扫描控制器和方法上的注解
+     * 用于在“自动路由”模式下动态提取 #[Auth] 等信息
+     */
+    private function scanForMiddlewareAndAttributes(string $controller, string $method): array
+    {
+        $middleware = [];
+        $attributesMap = [];
+        $auth = null;
+        $roles = [];
+
+        try {
+            $refClass = new \ReflectionClass($controller);
+            $refMethod = $refClass->getMethod($method);
+
+            // 合并类级和方法级的 Attributes
+            $allAttributes = array_merge($refClass->getAttributes(), $refMethod->getAttributes());
+
+            foreach ($allAttributes as $attr) {
+                // 排除路由注解 (自动路由模式下不需要处理它们)
+                if (in_array($attr->getName(), [
+                    'Framework\Attributes\Route', 
+                    'Framework\Attributes\Routes\Prefix', 
+                    'Framework\Attributes\Routes\BaseMapping'
+                ])) {
+                    continue;
+                }
+
+                try {
+                    $inst = $attr->newInstance();
+                    $attributesMap[$attr->getName()] = $inst;
+
+                    // 1. 提取中间件 (检查接口)
+                    if ($inst instanceof MiddlewareProviderInterface) {
+                        $provided = $inst->getMiddleware();
+                        $candidates = is_array($provided) ? $provided : [$provided];
+                        foreach ($candidates as $mid) {
+                            if (is_string($mid) && !empty($mid)) {
+                                $middleware[] = $mid;
+                            }
+                        }
+                    }
+
+                    // 2. 兼容 Auth/Roles 数据提取 (如果需要兼容旧逻辑)
+                    // 如果你的 Auth 注解有 public $required 属性
+                    if ($inst instanceof \Framework\Attributes\Auth) {
+                        $auth = $inst->required ?? true;
+                    }
+                    if ($inst instanceof \Framework\Attributes\Role) {
+                        $roles = array_merge($roles, $inst->roles ?? []);
+                    }
+
+                } catch (\Throwable $e) {
+                    continue;
+                }
+            }
+        } catch (\ReflectionException $e) {
+            // 方法不存在等情况，忽略
+        }
+
+        return [
+            'middleware'    => array_values(array_unique($middleware)),
+            'attributesMap' => $attributesMap,
+            'auth'          => $auth,
+            'roles'         => array_values(array_unique($roles)),
         ];
     }
 	

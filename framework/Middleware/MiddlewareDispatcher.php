@@ -65,8 +65,11 @@ class MiddlewareDispatcher
         // 此时 $request->attributes 已经由 UrlMatcher 填充完毕
         $rawRouteMiddleware = $request->attributes->get('_middleware', []);
 		//$currentRouteName = $request->attributes->get('_route' , null); 
+		
 		$routeInfo = $request->attributes->get('_route');
         $currentRouteName = is_string($routeInfo) ? $routeInfo : (is_array($routeInfo) ? json_encode($routeInfo) : 'unknown_route');
+
+		#dump($rawRouteMiddleware);
 
         // 2. 拍平数组 (处理可能的嵌套)
         $flattenedRouteMiddleware = $this->flattenArray($rawRouteMiddleware);
@@ -94,6 +97,7 @@ class MiddlewareDispatcher
             $this->globalMiddleware
         ));
 
+		
 
         // 3. 处理 Auth 逻辑
         // 直接读取 UrlMatcher 注入的 _auth 和 _roles
