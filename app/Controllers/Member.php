@@ -8,15 +8,14 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use App\Services\UserService;
 use Framework\Basic\BaseService;
-use Framework\Basic\Crud;
 use Framework\Utils\Json;
 
-class Member extends Crud
+class Member 
 {
     public function __construct(
         UserService $service
     ) {
-        parent::__construct($service);
+        //parent::__construct($service);
     }
 
     public function get(Request $request): Response
