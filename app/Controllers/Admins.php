@@ -7,9 +7,11 @@ use Framework\Attributes\Auth;
 use Framework\Attributes\Menu;
 use Framework\Attributes\Log;
 use Framework\Attributes\Role;
+use Framework\Attributes\Cache;
 use Framework\Basic\BaseJsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Framework\Attributes\Route;
 
 /**
@@ -53,6 +55,23 @@ class Admins
             'action' => 'index',
             'note' => 'public index (no auth)'
         ]), 200, ['Content-Type' => 'application/json']);
+    }
+
+    // 场景1：普通数据接口，缓存 1 分钟
+    #[Cache(ttl: 60)]
+    public function getHotList(): JsonResponse
+    {
+        // 模拟耗时查询
+        $data = ['item1', 'item2', 'item3', date('Y-m-d H:i:s')]; 
+        return new JsonResponse($data);
+    }
+
+    // 场景2：指定 Key，适用于需要手动清除缓存的场景
+    // 例如：后台更新了配置，你可以手动调用 app('cache')->delete('sys_config')
+    #[Cache(ttl: 600, key: 'sys_config')]
+    public function getConfig(): JsonResponse
+    {
+        return new JsonResponse(['site_name' => 'My FssPHP']);
     }
 
 
