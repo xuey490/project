@@ -4,6 +4,14 @@ declare(strict_types=1);
 
 /**
  * This file is part of FssPHP Framework.
+ *
+ * @link     https://github.com/xuey490/project
+ * @license  https://github.com/xuey490/project/blob/main/LICENSE
+ *
+ * @Filename: %filename%
+ * @Date: 2025-12-17
+ * @Developer: xuey863toy
+ * @Email: xuey863toy@gmail.com
  */
 
 namespace Framework\Core;
@@ -36,7 +44,6 @@ class AttributeRouteLoader
         $this->controllerDir       = rtrim($controllerDir, '/');
         $this->controllerNamespace = rtrim($controllerNamespace, '\\');
     }
-
 
 	/**
      * 加载所有路由
@@ -259,252 +266,6 @@ class AttributeRouteLoader
         return [$map, array_values(array_unique($middlewareList))];
     }
 	
-    public function loadRoutes1(): RouteCollection
-    {
-        $routeCollection = new RouteCollection();
-        $controllerFiles = $this->scanDirectory($this->controllerDir);
-
-        foreach ($controllerFiles as $file) {
-            $className = $this->convertFileToClass($file);
-            if (!class_exists($className)) {
-                continue;
-            }
-
-            $refClass = new \ReflectionClass($className);
-            if ($refClass->isAbstract()) {
-                continue;
-            }
-
-            // =========================================================
-            // 1. 处理类级别 (Class Level)
-            // =========================================================
-
-            // A. 收集业务注解 (Auth, Log) 并提取它们关联的中间件
-            [$classAttributesMap, $classExtraMiddleware] = $this->collectAttributesAndMiddleware($refClass->getAttributes());
-
-            // B. 初始化类级配置
-            $classPrefix     = '';
-            $classGroup      = null;
-            $classMiddleware = []; // 这里存放 Prefix/Route/DocBlock 定义的中间件
-            $classAuth       = null;
-            $classRoles      = [];
-
-            // C. 解析 Prefix (Spring 风格)
-            $prefixAttrs = $refClass->getAttributes(Prefix::class);
-            if (!empty($prefixAttrs)) {
-                $inst = $prefixAttrs[0]->newInstance();
-                $classPrefix     = $inst->prefix     ?? '';
-                $classMiddleware = $inst->middleware ?? [];
-                $classAuth       = $inst->auth       ?? null;
-                $classRoles      = $inst->roles      ?? [];
-            }
-
-            // D. 解析 Route (Symfony 风格，会覆盖 Prefix)
-            $routeAttrs = $refClass->getAttributes(Route::class);
-            if (!empty($routeAttrs)) {
-                $inst = $routeAttrs[0]->newInstance();
-                $classPrefix     = $inst->prefix     ?? $classPrefix;
-                $classGroup      = $inst->group      ?? $classGroup;
-                $classMiddleware = $inst->middleware ?? $classMiddleware;
-                $classAuth       = $inst->auth       ?? $classAuth;
-                $classRoles      = $inst->roles      ?? $classRoles;
-            }
-
-            // E. 解析类级 DocBlock
-            $classDocData = $this->parseDocBlockAnnotations($refClass->getDocComment() ?: null);
-            $classPrefix     = $classDocData['prefix']     ?? $classPrefix;
-            $classGroup      = $classDocData['group']      ?? $classGroup;
-            $classMiddleware = array_merge($classMiddleware, $classDocData['middleware'] ?? []);
-            $classAuth       = $classDocData['auth']       ?? $classAuth;
-            $classRoles      = array_merge($classRoles, $classDocData['roles'] ?? []);
-
-            // F. 🔥 合并类级自动提取的中间件 (来自 #[Auth] 等)
-            $classMiddleware = array_merge($classMiddleware, $classExtraMiddleware);
-
-
-            // =========================================================
-            // 2. 处理方法级别 (Method Level)
-            // =========================================================
-            foreach ($refClass->getMethods(\ReflectionMethod::IS_PUBLIC) as $method) {
-                // 跳过魔术方法
-                if (str_starts_with($method->getName(), '__')) {
-                    continue;
-                }
-
-                // A. 收集方法级业务注解 & 提取中间件
-                [$methodAttributesMap, $methodExtraMiddleware] = $this->collectAttributesAndMiddleware($method->getAttributes());
-                
-                // 合并注解对象 (透传给中间件使用，Method 覆盖 Class)
-                $mergedAttributesMap = array_merge($classAttributesMap, $methodAttributesMap);
-
-                // B. 解析方法级 DocBlock
-                $docBlockData = $this->parseDocBlockAnnotations($method->getDocComment() ?: null);
-
-                // C. 寻找主要路由定义 (Route 或 BaseMapping)
-                $routeDef = null;
-                foreach ($method->getAttributes() as $attr) {
-                    $inst = $attr->newInstance();
-                    
-                    if ($inst instanceof Route) {
-                        $routeDef = $inst;
-                        break;
-                    }
-                    
-                    // 兼容 GetMapping, PostMapping 等
-                    if ($inst instanceof BaseMapping) {
-                        // 构造一个临时的 Route 对象方便统一处理
-                        $routeDef = new Route(
-                            path: $inst->path,
-                            methods: $inst->methods ?? (property_exists($inst, 'methods') ? $inst->methods : []),
-                            middleware: $inst->middleware ?? [],
-                            auth: $inst->auth ?? null,
-                            roles: $inst->roles ?? []
-                        );
-                        break;
-                    }
-                }
-
-                // D. 如果没有注解路由，尝试使用 DocBlock 或 自动路由生成
-                if (!$routeDef) {
-                    if (!empty($docBlockData)) {
-                        // DocBlock 路由
-                        $routeDef = new Route(
-                            path: $docBlockData['path'] ?? $method->getName(),
-                            methods: $docBlockData['methods'] ?? ['GET'],
-                            middleware: $docBlockData['middleware'] ?? [],
-                            group: $docBlockData['group'] ?? null,
-                            auth: $docBlockData['auth'] ?? null,
-                            roles: $docBlockData['roles'] ?? []
-                        );
-                    } else {
-                        // 自动路由逻辑 (auto route)
-                        // 如果连 DocBlock 都没有，生成默认的 path
-                        $autoPath = '/' . strtolower(str_replace('Controller', '', $refClass->getShortName())) . '/' . $method->getName();
-                        $routeDef = new Route(
-                            path: $autoPath,
-                            methods: ['GET'],
-                            middleware: [],
-                            group: $classGroup, // 继承类级 Group
-                            auth: $classAuth,
-                            roles: $classRoles
-                        );
-                    }
-                }
-
-                // =========================================================
-                // 3. 数据合并与清理
-                // =========================================================
-
-                // 路径合并
-                $finalPath = '/' . trim(trim($classPrefix, '/') . '/' . trim($routeDef->path, '/'), '/');
-                
-                // Group 合并
-                $finalGroup = $docBlockData['group'] ?? $routeDef->group ?? $classGroup;
-
-                // Auth & Roles 合并 (优先级: DocBlock > Method > Class)
-                $finalAuth = $docBlockData['auth'] ?? $routeDef->auth ?? $classAuth ?? null;
-                $finalRoles = array_values(array_unique(array_merge(
-                    $classRoles, 
-                    $routeDef->roles ?? [], 
-                    $docBlockData['roles'] ?? []
-                )));
-
-                // 🔥 中间件合并 (关键步骤)
-                // 来源：Class Prefix/Route + Class Auth/Log + Method Route + Method Auth/Log + DocBlock
-                $rawMergedMiddleware = array_merge(
-                    $classMiddleware,           
-                    $routeDef->middleware ?? [],
-                    $methodExtraMiddleware,    
-                    $docBlockData['middleware'] ?? []
-                );
-
-                // 🔥 清洗中间件数组：去重 + 去除空值 (防止空数组导致的 null 问题)
-                $finalMiddleware = array_values(array_unique(array_filter($rawMergedMiddleware, function($v) {
-                    return !empty($v) && is_string($v);
-                })));
-				
-								 //dump($finalMiddleware);
-
-                // =========================================================
-                // 4. 生成 Symfony Route
-                // =========================================================
-                $defaults = array_merge($routeDef->defaults ?? [], [
-                    '_controller' => "{$className}::{$method->getName()}",
-                    '_group'      => $finalGroup,
-                    '_middleware' => $finalMiddleware, // 这里包含了所有自动提取的中间件
-                    '_auth'       => $finalAuth,
-                    '_roles'      => $finalRoles,
-                    '_attributes' => $mergedAttributesMap, // 透传注解对象供中间件使用
-                ]);
-
-                $sfRoute = new SymfonyRoute(
-                    path: $finalPath,
-                    defaults: $defaults,
-                    requirements: $routeDef->requirements ?? [],
-                    options: [],
-                    host: $routeDef->host ?? '',
-                    schemes: $routeDef->schemes ?? [],
-                    methods: $routeDef->methods ?: ['GET']
-                );
-
-                // 生成路由名称
-                $routeName = $routeDef->name ?? 
-                             ($docBlockData['name'] ?? strtolower(str_replace('\\', '_', $className)) . '_' . $method->getName());
-                
-                $routeCollection->add($routeName, $sfRoute);
-            }
-        }
-
-        return $routeCollection;
-    }
-
-    /**
-     * 收集注解对象 & 从接口自动提取中间件
-     * 
-     * @param \ReflectionAttribute[] $attributes
-     * @return array{0: array<string, object>, 1: array<string>} [AttributesMap, MiddlewareList]
-     */
-    private function collectAttributesAndMiddleware11(array $attributes): array
-    {
-        $map = [];
-        $middlewareList = [];
-
-        foreach ($attributes as $attr) {
-            $name = $attr->getName();
-            
-            // 1. 排除基础路由注解，避免重复处理
-            if ($name === Route::class || $name === Prefix::class || 
-                $name === BaseMapping::class || is_subclass_of($name, BaseMapping::class)) {
-                continue;
-            }
-
-            try {
-                $inst = $attr->newInstance();
-                // 保存注解对象，用于透传到 Request
-                $map[$name] = $inst;
-
-                // 2. 🔥 核心：检查是否实现了接口，如果实现了，提取中间件类名
-                if ($inst instanceof MiddlewareProviderInterface) {
-                    $provided = $inst->getMiddleware();
-                    
-                    // 统一转为数组并清洗
-                    $candidates = is_array($provided) ? $provided : [$provided];
-                    foreach ($candidates as $mid) {
-                        if (is_string($mid) && !empty($mid)) {
-                            $middlewareList[] = $mid;
-                        }
-                    }
-                }
-            } catch (\Throwable $e) {
-                // 忽略无法实例化的注解，防止框架崩溃
-                continue;
-            }
-        }
-
-        // 返回 [注解对象字典, 中间件列表(去重)]
-        return [$map, array_values(array_unique($middlewareList))];
-    }
-
     /**
      * 从 DocBlock 解析注解数据 (保持原有正则逻辑)
      */
