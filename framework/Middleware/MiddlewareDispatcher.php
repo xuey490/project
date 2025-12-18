@@ -35,6 +35,7 @@ class MiddlewareDispatcher
 
     // 全局中间件（所有请求都会执行）
     private array $globalMiddleware = [
+        ContextInitMiddleware::class,
         MethodOverrideMiddleware::class,
         CorsMiddleware::class,
         CsrfTokenGenerateMiddleware::class,

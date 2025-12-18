@@ -25,7 +25,7 @@ use Framework\Basic\Traits\CrudFilterTrait;
 use Framework\Basic\Traits\CrudFormatterTrait;
 use Framework\Basic\Traits\CrudActionTrait;
 use Framework\Database\DatabaseFactory; 
-
+use Framework\DI\Injectable;
 
 abstract class BaseController
 {
@@ -33,7 +33,8 @@ abstract class BaseController
     use CrudFilterTrait;
     use CrudFormatterTrait;
     use CrudActionTrait;
-
+    // 引入注入能力
+    use Injectable;
     protected Request $request;
 	
     protected DatabaseFactory $db;
@@ -48,6 +49,7 @@ abstract class BaseController
     // 构造函数不接受参数，完全由内部解决
     public function __construct()
     {
+		$this->inject();
         // 1. 获取全局 Request
         $this->request = app('request'); 
         

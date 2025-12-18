@@ -138,10 +138,11 @@ class Home
 		
 	}
 	
-	#[Auth(required: true, roles: ['admin', 'editor'], guard: 'index')]
+	##[Auth(required: true, roles: ['admin', 'editor'], guard: 'index')]
     public function index(Request $request)
     {
-		
+		#$rawRouteMiddleware = $request->attributes->get('_middleware', []);
+		#dump($rawRouteMiddleware);		
 		//dump($request->headers->get('x-csrf-token'));
         // ✅ 此时 app() 已可用！
 
@@ -469,10 +470,12 @@ $query1 = Schema::table('custom', fn(Blueprint $t) =>
         return new Response("Hello, {$name}");
     }
 
-    public function showForm(Request $request): Response
+    public function show1(Request $request): Response
     {
 		$session = app('session');
 		$userid = $session->get('user_id');
+		
+		dump($userid);
 		
 		$CaptchaImage =\Framework\Utils\Captcha::base64();
 		
