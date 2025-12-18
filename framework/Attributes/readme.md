@@ -1,4 +1,4 @@
-## 关于注解控制器的写法
+## 关于注解注解型的控制器写法
 
 我们这里演示如何使用注解声明
 
@@ -6,7 +6,7 @@
 
 基于我们之前的分析，**路由器（Router）** 会先解析路由注解，**调度器（Dispatcher）** 随后会扫描所有注解并合并中间件，最终形成洋葱调用链。
 
-### 示例代码：`UserController.php`
+### 示例代码：`User.php`
 
 ```php
 <?php
@@ -37,10 +37,10 @@ use Framework\Attributes\Log;
 use Framework\Attributes\Middlewares;
 use Framework\Attributes\Transaction; // 顺便加上事务演示
 // 假设你有一些 Spring 风格的路由注解
-use Framework\Attributes\Routing\RestController;
-use Framework\Attributes\Routing\GetMapping;
-use Framework\Attributes\Routing\PostMapping;
-use Framework\Attributes\Routing\DeleteMapping;
+use Framework\Attributes\Route;
+use Framework\Attributes\Routes\GetMapping;
+use Framework\Attributes\Routes\PostMapping;
+use Framework\Attributes\Routes\DeleteMapping;
 
 // 引入中间件类
 use App\Middlewares\CorsMiddleware;
@@ -50,15 +50,15 @@ use App\Middlewares\JsonFormatterMiddleware;
 /**
  * 用户管理控制器
  * 
- * 1. #[RestController]: 声明这是一个 API 控制器，路由前缀为 /api/v1/users
+ * 1. #[Route]: 声明这是一个 API 控制器，路由前缀为 /api/v1/users
  * 2. #[Middlewares]: 类级别的中间件，该类下所有方法都会经过 Cors 和 JsonFormatter
  */
-#[RestController(prefix: '/api/v1/users')]
+#[Route(prefix: '/api/v1/users')]
 #[Middlewares([
     CorsMiddleware::class,          // 全局处理跨域
     JsonFormatterMiddleware::class  // 全局统一 JSON 返回格式
 ])]
-class UserController
+class User
 {
     /**
      * 用户登录
@@ -141,7 +141,7 @@ class UserController
     *   **Method (Transaction)**: `[TransactionMiddleware]`
     *   **Method (Log)**: `[LogMiddleware]`
 
-    *(注意：`#[RestController]` 和 `#[DeleteMapping]` 属于路由注解，主要用于 UrlMatcher 匹配路由，它们解析出的中间件（如果有）也会被放入集合)*
+    *(注意：`#[Route]` 和 `#[DeleteMapping]` 属于路由注解，主要用于 UrlMatcher 匹配路由，它们解析出的中间件（如果有）也会被放入集合)*
 
 2.  **拍平 (Flatten)**：
     调度器调用 `flattenArray`，将上述嵌套结构变成一维数组。
