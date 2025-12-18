@@ -10,6 +10,19 @@ use Framework\Attributes\Role;
 use Framework\Attributes\Cache;
 use Framework\Attributes\UserAction;
 use Framework\Attributes\Middlewares;
+
+
+use Framework\DI\Attribute\Autowire;
+use Framework\DI\Attribute\Inject;
+use Framework\DI\Attribute\Context;
+use App\Services\UserService;
+use App\Services\LoggerInterface;
+use App\Services\FileLogger;
+#use Psr\Log\LoggerInterface;
+
+use Framework\Database\DatabaseFactory;
+
+use Framework\Basic\BaseController;
 use Framework\Basic\BaseJsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -32,8 +45,26 @@ use Framework\Attributes\Route;
 #[Route(prefix: '/vvv1/admins', group: 'apssi', middleware: [\App\Middlewares\AuthMiddleware::class, \App\Middlewares\LogMiddleware::class])]
 ##[Auth(required: true, roles: ['admins'])] // 如开启，则整个页面需要认证，哪怕方法类没有进行设置
 ##[Menu(title: '系统管理', icon: 'cog', order: 100)]
-class Admins
+class Admins  extends BaseController
 {
+	
+    // 用法 1: 自动装配 (根据类型 UserService 注入)
+    #[Autowire]
+    protected UserService $userService;
+	
+	
+    // 用法 2: 指定接口注入 (当属性类型是接口时，指定注入具体的实现类ID)
+    // 假设容器里 'log' 绑定了 FileLogger
+    #[Inject(id: 'App\Services\FileLogger')] 
+    protected LoggerInterface $logger;
+	
+    #[Inject(id: 'db')] 
+    protected DatabaseFactory $db;
+	
+    // 用法 3: 上下文注入 (注入当前请求对象)
+    #[Context('request')]
+    protected Request $req;	
+	
     /**
      * 公共列表页 —— 无需登录（默认不带 #[Auth]）
      *
@@ -104,8 +135,12 @@ class Admins
     public function test(Request $request): Response
     {
 		
-		#dump(app('db'));
-		
+		#dump($this->userService->getUsers(1));
+		#dump($this->logger->info('Inject log'));
+		#echo ($this->req->query->get('name'));
+
+
+
         // 从 AuthMiddleware 注入的用户信息
         $user = $request->attributes->get('user', null);
 

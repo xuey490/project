@@ -17,6 +17,7 @@ declare(strict_types=1);
 namespace Framework\Providers;
 
 use Framework\Container\ServiceProviderInterface;
+use Framework\Middleware\ContextInitMiddleware;
 use Framework\Middleware\CircuitBreakerMiddleware;
 use Framework\Middleware\CookieConsentMiddleware;
 use Framework\Middleware\CsrfTokenGenerateMiddleware;
@@ -52,6 +53,11 @@ final class MiddlewaresProvider implements ServiceProviderInterface
         $services->set(CorsMiddleware::class)
             ->autowire()
             ->autoconfigure()->public();
+
+		// ContextInitMiddleware
+        $services->set(ContextInitMiddleware::class)
+            ->autowire()
+            ->autoconfigure()->public();	
 			
 		// CSRF
         $services->set(CsrfTokenGenerateMiddleware::class)
