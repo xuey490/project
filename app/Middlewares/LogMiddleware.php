@@ -32,12 +32,13 @@ class LogMiddleware
      */
     public function handle(Request $request, callable $next): Response
     {
-		
-	
+		//dump($request);
+			
         // 1. 获取所有业务注解
         $attributes = $request->attributes->get('_attributes', []);
+		
 		$authAttr = $attributes[Log::class] ?? null;
-		#dump($authAttr);
+		
 		
 		$level = $authAttr->level ?? 'info';
 		
