@@ -99,12 +99,12 @@ class Admins
      * @middleware App\Middlewares\AuthMiddleware, App\Middlewares\LogMiddleware
      * @menu 创建产品
      */
-	#[Role(['guest'])] // 只有超级管理员能访问
+	#[Role(['admin'])] // 只有超级管理员能访问
 	#[Log(description: '创建新产品', level: 'warning')]
     public function test(Request $request): Response
     {
 		
-		dump(app('db'));
+		#dump(app('db'));
 		
         // 从 AuthMiddleware 注入的用户信息
         $user = $request->attributes->get('user', null);
@@ -120,7 +120,6 @@ class Admins
 
     #[UserAction(type: 'register')] // ✅ 注册成功后，自动写入 user_logs 表
 	#[Middlewares([\App\Middlewares\LogMiddleware::class])]
-	#[Log(description: '注册用户', level: 'info')]
     public function register(Request $request): JsonResponse
     {
         // 1. 创建用户
@@ -131,7 +130,7 @@ class Admins
         ]);
 		*/
 		$rawRouteMiddleware = $request->attributes->get('_middleware', []);
-		dump($rawRouteMiddleware);
+		#dump($rawRouteMiddleware);
 		
 		
         // 2. 返回结果

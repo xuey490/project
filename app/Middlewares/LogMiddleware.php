@@ -77,7 +77,7 @@ class LogMiddleware
         // 假设 Log 注解可以通过某种方式传递 level，这里默认用 info
         // 如果想动态调用，可以使用 app('log')->{$level}($message, $logContext)
         //app('log')->info($message, $logContext);
-		app('log')->{$level}($message.':'.$authAttr->description, $logContext);
+		app('log')->{$level}($message, $logContext);
 
         return $response;
     }
