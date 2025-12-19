@@ -7,6 +7,11 @@ namespace App\Repository;
 use Framework\Repository\BaseRepository;
 use Framework\Database\DatabaseFactory;
 
+use App\Services\UserService;
+use Framework\DI\Attribute\Autowire;
+use Framework\DI\Attribute\Inject;
+use Framework\DI\Attribute\Context;
+
 /**
  * 用户仓库
  * 继承 BaseRepository 获得所有标准 CRUD 能力
@@ -16,17 +21,32 @@ class UserRepository extends BaseRepository
     // 指定该仓库操作的模型 (完整类名)
     // 指定模型类或表名（支持 Model::class 或 'users'）
     protected string $modelClass = \App\Models\User::class; // 或 'users'
+	
+    #[Autowire]
+    protected UserService $userService;
 
+	/*
     public function __construct(DatabaseFactory $factory)
     {
+		$n = new UserService();
+		dump($this->userService->getUsers(1));
         parent::__construct($factory);
-    }
+    }*/
 		
+    /**
+     * 子类可根据需要覆盖 lifecycle
+     */
+    protected function initialize(): void
+    {
+		dump($this->userService);
+    }	
+	
     /**
      * 示例自定义方法：查找活跃用户并返回带 posts 关系（避免 N+1）
      */
     public function findActiveWithPosts(int $limit = 50)
     {
+		
         $criteria = ['status' => 1];
         $orderBy = ['last_login' => 'desc'];
         $with = ['posts']; // eager load posts to avoid N+1
@@ -51,6 +71,7 @@ class UserRepository extends BaseRepository
     // 比如：查找活跃的 VIP 用户
     public function findActiveVips(int $id = 2)
     {
+		
         // 获取原生查询构造器，自己处理复杂逻辑
         $query = $this->newQuery();
         

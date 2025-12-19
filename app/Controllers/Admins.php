@@ -15,6 +15,8 @@ use Framework\Attributes\Middlewares;
 use Framework\DI\Attribute\Autowire;
 use Framework\DI\Attribute\Inject;
 use Framework\DI\Attribute\Context;
+
+
 use App\Services\UserService;
 use App\Services\LoggerInterface;
 use App\Services\FileLogger;
@@ -82,6 +84,7 @@ class Admins  extends BaseController
 	
     public function index(Request $request): Response
     {
+		dump($this->db);
         // 可以通过 $request->attributes->get('user') 读取经过中间件注入的用户信息（若有）
         return new Response(json_encode([
             'ok' => true,
@@ -130,12 +133,12 @@ class Admins  extends BaseController
      * @middleware App\Middlewares\AuthMiddleware, App\Middlewares\LogMiddleware
      * @menu 创建产品
      */
-	#[Role(['admin'])] // 只有超级管理员能访问
+	#[Role(['guest'])] // 只有超级管理员能访问
 	#[Log(description: '创建新产品', level: 'warning')]
     public function test(Request $request): Response
     {
 		
-		#dump($this->userService->getUsers(1));
+		dump($this->userService->getUsers(1));
 		#dump($this->logger->info('Inject log'));
 		#echo ($this->req->query->get('name'));
 

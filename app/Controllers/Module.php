@@ -11,15 +11,28 @@ use Framework\Database\DatabaseFactory;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Framework\Basic\BaseController;
 
-class Module
+use Framework\DI\Attribute\Autowire;
+use Framework\DI\Attribute\Inject;
+use Framework\DI\Attribute\Context;
+
+class Module extends BaseController
 {
-    protected ModuleRepository $moduleRepo;
-	
+
+    #[Inject(id: 'db')] 
+    protected DatabaseFactory $db;
+
+    #[Autowire]
+    protected ModuleRepository $moduleRepo;	
+
+	#[Autowire]
     protected UserRepository $userRepo;
 	
+	#[Autowire]
     protected LogRepository $logRepo;
 
+	/*
     // 可以在构造函数中注入 DatabaseFactory 或 ModuleRepository
     public function __construct(DatabaseFactory $dbFactory)
     {
@@ -27,13 +40,17 @@ class Module
         $this->userRepo = 	new UserRepository($dbFactory);
         $this->logRepo = 	new LogRepository($dbFactory);
     }
-
+	*/
+	
+	
     /**
      * 1. 获取列表 (GET)
      * 路由示例: GET /users?keyword=abc&status=1&page=1
      */
     public function index(Request $request): Response
     {
+		#dump($this->moduleRepo);
+		
         // 从 URL 查询字符串获取参数 ($_GET)
         // all() 获取所有参数数组，get() 获取单个
         $params = $request->query->all(); 
@@ -68,7 +85,7 @@ class Module
             ],
         ]);	
 		*/
-		dump($activeUsers);
+		dump($vips);
 
 
         return new JsonResponse([
@@ -129,7 +146,7 @@ class Module
      * 3. 更新用户 (PUT/PATCH)
      * 路由示例: PUT /users/{id}
      */
-    public function update(int $id, Request $request): Response
+    public function update1(int $id, Request $request): Response
     {
         try {
             $input = $request->toArray();
@@ -205,7 +222,7 @@ class Module
     /**
      * 成功响应
      */
-    protected function success(mixed $data = null, string $msg = 'success', int $status = 200): JsonResponse
+    protected function success1(mixed $data = null, string $msg = 'success', int $status = 200): JsonResponse
     {
         return new JsonResponse([
             'code' => $status,
@@ -217,7 +234,7 @@ class Module
     /**
      * 错误响应
      */
-    protected function error(string $msg, int $status = 400): JsonResponse
+    protected function error1(string $msg, int $status = 400): JsonResponse
     {
         return new JsonResponse([
             'code' => $status,

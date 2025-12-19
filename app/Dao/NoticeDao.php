@@ -11,4 +11,9 @@ class NoticeDao extends BaseDao
     {
         return Notice::class;
     }
+	
+	public function getData(): array
+	{
+		return ['id' => 1, 'name' => 'mike'];
+	}
 }

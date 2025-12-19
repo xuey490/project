@@ -104,7 +104,7 @@ class Home
 	{
 		//thinkORM 和 DB 的测试
         $list = Db::name('config')->select();//error：Undefined db config:mysql
-		dump($list);
+		//dump($list);
         #dump(($this->db)('config')->where('id' , 1)->select()->toArray());
 		
 		//ThinkORM Model的写法
@@ -141,12 +141,13 @@ class Home
 	##[Auth(required: true, roles: ['admin', 'editor'], guard: 'index')]
     public function index(Request $request)
     {
+		dump($this->customDao->getActiveUsers());
 		#$rawRouteMiddleware = $request->attributes->get('_middleware', []);
 		#dump($rawRouteMiddleware);		
 		//dump($request->headers->get('x-csrf-token'));
         // ✅ 此时 app() 已可用！
 
-        // dump(app()->getServiceIds()); // 查看所有服务 ID
+        //dump(app()->getServiceIds()); // 查看所有服务 ID
 
 		//Eloquent 模型的写法
         //$config = Config::where('id', 1)->first()->toArray(); //得到 App\Models\Config 可以使用->toArray()转化
