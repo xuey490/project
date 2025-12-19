@@ -152,7 +152,7 @@ class Captcha
 
         app('redis')->setex(
             $redisKey,
-            $config['expire'],
+            $config['expire']??60,
             password_hash($answer, PASSWORD_BCRYPT)
         );
 
