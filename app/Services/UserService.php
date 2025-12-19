@@ -11,6 +11,14 @@ namespace App\Services;
 
 use PDO;
 
+use Framework\DI\Attribute\Autowire;
+use Framework\DI\Attribute\Inject;
+use Framework\DI\Attribute\Context;
+
+use App\Repository\ModuleRepository;
+use App\Dao\NoticeDao;
+use App\Services\BlogService;
+
 use Framework\Basic\BaseService;
 
 class UserService extends BaseService
@@ -22,10 +30,23 @@ class UserService extends BaseService
         \PDO $pdo // ← 类型声明必须是 \PDO
     ) {}
     */
+    #[Autowire]
+    protected BlogService $moduleRe;
+
+	
+    /**
+     * 子类可根据需要覆盖 lifecycle
+     */
+    protected function initialize(): void
+    {
+		//dump($this->userBusiness);
+    }
+
 
     // 示例方法：通过数据库获取用户
     public function getUsers(int $id): array
     {
+		dump($this->moduleRe);
         // $stmt = $this->pdo->prepare('SELECT * FROM users WHERE id = :id');
         // $stmt->execute(['id' => $id]);
         // return $stmt->fetch(\PDO::FETCH_ASSOC) ?: [];

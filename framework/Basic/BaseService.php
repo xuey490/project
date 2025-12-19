@@ -20,6 +20,7 @@ use Framework\ORM\Trait\ServicesTrait;
 use Illuminate\Support\Facades\DB as LaravelDb;
 use think\facade\DB as ThinkDb;
 use Framework\Basic\BaseDao;
+use Framework\DI\Injectable;
 
 /**
  * @method getModel()
@@ -29,10 +30,26 @@ abstract class BaseService
 
     use ServicesTrait;
 
+    // 引入注入能力
+    use Injectable;	
     /**
      * 模型注入
      */
     protected ?BaseDao $dao;
+
+    // 构造函数不接受参数，完全由内部解决
+    public function __construct()
+    {
+		$this->inject();
+		$this->initialize();
+	}
+	
+    /**
+     * 子类可根据需要覆盖 lifecycle
+     */
+    protected function initialize(): void
+    {
+    }
 
     /**
      * 执行指定框架的事务

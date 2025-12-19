@@ -11,6 +11,7 @@ use think\facade\Db as ThinkDb;
 use Illuminate\Database\Capsule\Manager as IlluminateDb;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use think\db\Query as ThinkQuery;
+use Framework\DI\Injectable;
 
 /**
  * Class BaseRepository
@@ -20,14 +21,28 @@ abstract class BaseRepository implements RepositoryInterface
 {
     protected string $modelClass;
     protected bool $isEloquent;
-
+	
+    // 引入注入能力
+    use Injectable;
+	
     public function __construct(protected DatabaseFactory $factory)
     {
+		$this->inject();
+		
         if (empty($this->modelClass)) {
             throw new RuntimeException('Repository must define property $modelClass');
         }
         $this->isEloquent = $this->factory->isEloquent();
+		
+		$this->initialize();
     }
+	
+    /**
+     * 子类可根据需要覆盖 lifecycle
+     */
+    protected function initialize(): void
+    {
+    }	
 
     /**
      * 判断是否配置了有效的模型类
