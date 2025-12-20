@@ -59,12 +59,12 @@ class ListenerScanner
 
         // 2. 缓存命中且指纹一致 → 直接返回
         if ($cached && is_array($cached) && ($cached['fingerprint'] ?? null) === $currentFingerprint) {
-            app('log')->info('[Event Scan] Subscribers loaded from cache (fingerprint match).');
+            //app('log')->info('[Event Scan] Subscribers loaded from cache (fingerprint match).');
             return $cached['subscribers'] ?? [];
         }
 
         // 3. 缓存未命中 或 指纹不一致 → 重新扫描
-        app('log')->info('[Event Expired] Listener files changed or cache expired. Rescanning...');
+        //app('log')->info('[Event Expired] Listener files changed or cache expired. Rescanning...');
         $result = $this->scanAndBuild();
 
         // 4. 更新缓存
@@ -165,62 +165,7 @@ class ListenerScanner
         return null;
     }
 	 
-	 
-    private function scanAndBuild1(): array
-    {
-        $listenerDir = $this->listenerDir;
 
-        if (! is_dir($listenerDir)) {
-            app('log')->info("[Event NF] Listeners directory not found: {$listenerDir}");
-            return [];
-        }
-
-        $files = glob($listenerDir . '/*.php');
-        if (! $files || ! is_array($files)) {
-            app('log')->info("[Event] No PHP files found in: {$listenerDir}");
-            return [];
-        }
-
-        $subscribers = [];
-
-        foreach ($files as $file) {
-            $className = 'App\Listeners\\' . pathinfo($file, PATHINFO_FILENAME);
-
-            if (! class_exists($className, false)) {
-                try {
-                    require_once $file;
-                } catch (\Throwable $e) {
-                    app('log')->info("[Event] Failed to load listener file: {$file} - " . $e->getMessage());
-                    continue;
-                }
-            }
-
-            if (! class_exists($className)) {
-                app('log')->info("[Event] Class not found after loading: {$className} (file: {$file})");
-                continue;
-            }
-
-            try {
-                $ref = new \ReflectionClass($className);
-            } catch (\ReflectionException $e) {
-                app('log')->info("[Event] Reflection failed for: {$className} - " . $e->getMessage());
-                continue;
-            }
-
-            if (! $ref->isInstantiable()) {
-                continue;
-            }
-
-            if (! $ref->implementsInterface(ListenerInterface::class)) {
-                continue;
-            }
-
-            $subscribers[] = $className;
-        }
-
-        app('log')->info('[Event] Scanned and found ' . count($subscribers) . ' subscribers.');
-        return $subscribers;
-    }
 
     /**
      * 生成监听器目录的指纹（基于文件修改时间）.
