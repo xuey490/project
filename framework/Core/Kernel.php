@@ -53,7 +53,7 @@ class Kernel
         // $debug = app('config')->get('app.debug', false);
         // dump(app()->getServiceIds()); // 查看所有服务 ID
 
-        $this->registerEventListeners();
+        //$this->registerEventListeners();
 
         $this->setupExceptionHandling();
 
