@@ -138,10 +138,10 @@ class Home
 		
 	}
 	
-	##[Auth(required: true, roles: ['admin', 'editor'], guard: 'index')]
+	#[Auth(required: true, roles: ['admin', 'editor'], guard: 'index')]
     public function index(Request $request)
     {
-		dump($this->customDao->getActiveUsers());
+		//dump($this->customDao->getActiveUsers());
 		#$rawRouteMiddleware = $request->attributes->get('_middleware', []);
 		#dump($rawRouteMiddleware);		
 		//dump($request->headers->get('x-csrf-token'));
@@ -394,11 +394,21 @@ $id = $snow->nextId();
     // 基础游标分页（默认按 id 降序排序）
     public function config(Request $request)
     {
+		dump($request->query->all());
+		$cursor = $request->query->get('cursor');
         // 1. 最简单的用法：默认每页 15 条，按 id 降序
-        $users = Custom::toBase()->pluck('id')->toArray();
-        
+        $users = Custom::toBase()->pluck('name' , 'id');
+		//$users1 = Custom::all()->pluck('id');
+        /*
+		 array:4 [▼
+		  1 => "萨尔阿萨德"
+		  2 => "徐州有限公司"
+		  3 => "T三国江东集团"
+		  4 => "sae"
+		]
+		*/
         // 2. 自定义每页条数（例如每页 10 条）
-        // $users = Custom::cursorPaginate(10);
+        //$users = Custom::cursorPaginate(2)->toArray();
         
         // 3. 带查询条件的游标分页（筛选 + 分页）
         // $users = Custom::where('status', 1) // 只查状态为1的用户
@@ -411,19 +421,32 @@ $id = $snow->nextId();
         //             ->orderBy('id', 'desc') // 再按 id 降序（唯一标识，确保排序唯一性）
         //             ->cursorPaginate(10);
 		
-		$query = Custom::query() //->orderBy('create_time', 'desc') 
+		//public function cursorPaginate($perPage = 15, $columns = ['*'], $cursorName = 'cursor', $cursor = null)
+		//columns用法：->cursorPaginate(10, ['id', 'title', 'create_time'])。
+		$paginator = Custom::query() //->orderBy('create_time', 'desc') 
             // 2. 必须追加 id 排序（唯一标识，避免多条记录排序字段相同）
-            ->orderBy('id', 'DESC') 
+            ->orderBy('id', 'ASC') 
             // 3. 保持查询条件一致（如果有筛选条件，确保每次请求都包含）
             ->where('status', 1) // 示例：如果有筛选条件，必须保留
-			->cursorPaginate(1)->toArray();
+			->cursorPaginate(1, ['*'], 'cursor', $cursor);;//->toArray();
+		$paginator->withQueryString();
+		$paginator->withPath('/home/config');
 
 
+		// 如果你需要数组格式
+		$query = $paginator->toArray();
+/*
 $query1 = Schema::table('custom', fn(Blueprint $t) =>
     $t->index(['address','email'])
 )->get();
+*/	
+// 输出链接时，直接使用生成的 URL，不要再手动拼接 "/home/config"
+echo '<a href="'.$query['prev_page_url'].'">Prev link</a>&nbsp;&nbsp;&nbsp;';
+echo '<a href="'.$query['next_page_url'].'">next link</a>&nbsp;&nbsp;&nbsp;';
 
-		dump($query1);
+#echo '<a href="'.$query['hasMorePages'].'">More</a>';
+
+		dump($query);
 		
 		/*
         // 返回分页数据（包含游标链接，前端可直接使用）
