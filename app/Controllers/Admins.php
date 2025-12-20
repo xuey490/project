@@ -84,7 +84,7 @@ class Admins  extends BaseController
 	
     public function index(Request $request): Response
     {
-		dump($this->db);
+		//dump($this->db);
         // 可以通过 $request->attributes->get('user') 读取经过中间件注入的用户信息（若有）
         return new Response(json_encode([
             'ok' => true,
@@ -138,7 +138,7 @@ class Admins  extends BaseController
     public function test(Request $request): Response
     {
 		
-		dump($this->userService->getUsers(1));
+		//dump($this->userService->getUsers(1));
 		#dump($this->logger->info('Inject log'));
 		#echo ($this->req->query->get('name'));
 

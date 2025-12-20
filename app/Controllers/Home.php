@@ -394,7 +394,7 @@ $id = $snow->nextId();
     // 基础游标分页（默认按 id 降序排序）
     public function config(Request $request)
     {
-		dump($request->query->all());
+		//dump($request->query->all());
 		$cursor = $request->query->get('cursor');
         // 1. 最简单的用法：默认每页 15 条，按 id 降序
         $users = Custom::toBase()->pluck('name' , 'id');
@@ -446,7 +446,7 @@ echo '<a href="'.$query['next_page_url'].'">next link</a>&nbsp;&nbsp;&nbsp;';
 
 #echo '<a href="'.$query['hasMorePages'].'">More</a>';
 
-		dump($query);
+		//dump($query);
 		
 		/*
         // 返回分页数据（包含游标链接，前端可直接使用）
@@ -499,7 +499,7 @@ echo '<a href="'.$query['next_page_url'].'">next link</a>&nbsp;&nbsp;&nbsp;';
 		$session = app('session');
 		$userid = $session->get('user_id');
 		
-		dump($userid);
+		//dump($userid);
 		
 		$CaptchaImage =\Framework\Utils\Captcha::base64();
 		
