@@ -85,7 +85,7 @@ class Module extends BaseController
             ],
         ]);	
 		*/
-		dump($vips);
+		//dump($vips);
 
 
         return new JsonResponse([

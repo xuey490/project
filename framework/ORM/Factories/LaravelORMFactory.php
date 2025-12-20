@@ -71,7 +71,6 @@ class LaravelORMFactory
     {
         $special = [];
         foreach ($where as $key => $condition) {
-			#dump($key);
             if (is_array($condition) && count($condition) === 3) {
                 $op = strtolower($condition[1]);
                 if ($op === 'in' || $op === 'not in') {
