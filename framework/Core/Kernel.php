@@ -88,58 +88,6 @@ class Kernel
     }
 
     /**
-     * 3.注册事件监听器（基于扫描的方式）.
-     */
-    private function registerEventListeners(): void
-    {
-        $dispatcher = $this->container->get(Dispatcher::class);
-        $cache      = $this->container->get(CacheFactory::class); // 从容器获取缓存服务
-
-        // 扫描并注册所有事件订阅者
-        $scanner = new ListenerScanner($cache);
-		
-		$scanResult = $scanner->getSubscribers();
-		
-        // 1. 处理传统的 Interface 监听器
-        if (!empty($scanResult['interface'])) {
-            foreach ($scanResult['interface'] as $className) {
-                // 从容器获取实例
-                $subscriber = $this->container->get($className);
-                if ($subscriber instanceof ListenerInterface) {
-                    $dispatcher->addSubscriber($subscriber);
-                }
-            }
-        }
-		
-        // 2. 处理注解监听器
-        if (!empty($scanResult['attribute'])) {
-            foreach ($scanResult['attribute'] as $conf) {
-                // $conf = ['class' => '...', 'method' => '...', 'event' => '...', 'priority' => 0]
-                
-                // 延迟获取：这里传类名字符串给 addListener，
-                // Dispatcher::resolveListener 会在触发时才去容器 get($class)
-                $listenerCallback = [$conf['class'], $conf['method']];
-                
-                $dispatcher->addListener(
-                    $conf['event'], 
-                    $listenerCallback, 
-                    $conf['priority']
-                );
-            }
-		}
-
-		/*
-        foreach ($scanner->getSubscribers() as $subscriberClass) {
-            // 从容器获取订阅者实例（支持依赖注入）
-			dump($subscriberClass);
-
-            $subscriber = $this->container->get($subscriberClass);
-            $dispatcher->addSubscriber($subscriber);
-
-        }*/
-    }
-
-    /**
      * 4.设置异常处理机制（统一接管错误与异常）.
      */
     private function setupExceptionHandling(): void
