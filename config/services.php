@@ -25,9 +25,6 @@ return function (ContainerConfigurator $configurator) {
 
     $services->set('test', \stdClass::class)->public();
 
-	// 注册事件分发
-    $services->set(\Framework\Event\Dispatcher::class)
-        ->arg('$container', service('service_container'))->public(); // ✅ 显式注入容器自身 注意arg，跟args差异
 
 
 	//$services->load('App\\Dao\\', '../app/Dao/');

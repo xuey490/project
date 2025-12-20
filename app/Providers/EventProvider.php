@@ -19,6 +19,13 @@ namespace App\Providers;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
 use Framework\Container\ServiceProviderInterface;
+use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
+use Psr\EventDispatcher\EventDispatcherInterface;
+
+use Framework\Event\Dispatcher;
+use Framework\Event\ListenerScanner;
+use Framework\Event\ListenerInterface;
+
 /*
 * 批量注册事件
 */
@@ -32,12 +39,24 @@ final class EventProvider implements ServiceProviderInterface
             ->autowire()
             ->autoconfigure()
             ->public();
+			
+        // 2. 注册核心服务
+        $services->set(ListenerScanner::class)->autowire()->public();
+		// 注册事件分发
+		$services->set(\Framework\Event\Dispatcher::class)
+			->arg('$container', service('service_container'))->public(); // ✅ 显式注入容器自身 注意arg，跟args差异
+
+		// ✅ 【关键】绑定接口别名
+		// 当控制器请求 EventDispatcherInterface 时，容器会给它 Dispatcher 实例
+		$services->alias(EventDispatcherInterface::class, Dispatcher::class);
     }
 	
-	public function boot(ContainerInterface $container): void
-    #public function boot(ContainerConfigurator $container): void
+    /**
+     * 在 Boot 阶段将扫描到的监听器真正绑定到 Dispatcher
+     */
+    public function boot(ContainerInterface $container): void
     {
 
-    }	
+    }  
 	
 }
