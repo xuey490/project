@@ -8,7 +8,7 @@ declare(strict_types=1);
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
- * @Filename: %filename%
+ * @Filename: App.php
  * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
@@ -17,24 +17,14 @@ declare(strict_types=1);
 namespace Framework\Core;
 
 use Framework\Container\Container;
+use InvalidArgumentException;
+use RuntimeException;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
-# use Psr\Container\ContainerInterface;
-
-/*
-// 框架启动
-Container::init();
-$container = Container::getInstance();
-App::setContainer($container);
-
-// 获取服务
-$loggerService = getService(\Framework\Log\LoggerService::class);
-$logger = getService(\Framework\Log\Logger::class);
-$log = getService('log'); // 别名
-$configLoader = app('config');
-$configService = app(\Framework\Config\ConfigService::class);
-
-*/
+/**
+ * Class App
+ * Static wrapper for the Dependency Injection Container.
+ */
 class App
 {
     protected static ?ContainerInterface $container = null;
@@ -45,31 +35,30 @@ class App
     public static function setContainer(ContainerInterface $container): void
     {
         if (! method_exists($container, 'get') || ! method_exists($container, 'has')) {
-            throw new \InvalidArgumentException(
+            throw new InvalidArgumentException(
                 sprintf('容器必须实现 get() 和 has() 方法，当前类型: %s', get_class($container))
             );
         }
-		
+
         self::$container = $container;
     }
 
     /**
      * 获取全局容器.
      *
-     * @throws \RuntimeException
+     * @throws RuntimeException
      */
     public static function getContainer(): ContainerInterface
     {
         if (self::$container === null) {
-            throw new \RuntimeException('应用容器尚未初始化，请先调用 App::setContainer()。');
+            throw new RuntimeException('应用容器尚未初始化，请先调用 App::setContainer()。');
         }
 
         return self::$container;
     }
-	
+
     /**
      * 从容器中获取一个已注册的服务.
-	 *  (可选) 为了让 get 方法能直接从 App 调用，保持 API 友好
      *
      * @param string $id 服务的唯一ID
      *
@@ -79,7 +68,7 @@ class App
     {
         return self::getContainer()->get($id);
     }
-	
+
     /**
      * 从容器解析服务，或在容器外创建实例.
      *
@@ -91,34 +80,23 @@ class App
         $container = self::getContainer();
 
         // 1. 优先从容器获取（工厂、单例、服务等）
-        if ($container->has($id) && empty($params)) {
+        if (empty($params) && $container->has($id)) {
             $service = $container->get($id);
 
             if (! is_object($service)) {
-                throw new \RuntimeException("服务 {$id} 返回不是对象类型");
+                throw new RuntimeException("服务 {$id} 返回不是对象类型");
             }
 
             return $service;
         }
-		
-        // 如果容器是我们自定义的 Container 类，优先使用其 make 方法
-        #if ($container instanceof Container) {
-        #    return $container->make($id, $params);
-        #}
 
-        // 后备逻辑，与之前版本相同
-        if (empty($params) && $container->has($id)) {
-            return $container->get($id);
-        }
-
+        // 2. 如果容器是我们自定义的 Container 类，使用其 make 方法
         if ($container instanceof Container) {
             return $container->make($id, $params);
         }
 
-        throw new \RuntimeException("无法解析服务 '{$id}'。");
+        throw new RuntimeException("无法解析服务 '{$id}'。");
     }
-	
-	
 
     /**
      * 检查容器是否存在指定服务
@@ -128,7 +106,7 @@ class App
         $container = self::$container;
         return $container !== null && $container->has($id);
     }
-	
+
     // =================================================================
     // 以下是新增的、转发到 Container 实例的静态方法
     // =================================================================
@@ -145,7 +123,7 @@ class App
         if ($container instanceof Container) {
             $container->singleton($id, $factory);
         } else {
-            throw new \RuntimeException('当前容器不支持 singleton 方法。');
+            throw new RuntimeException('当前容器不支持 singleton 方法。');
         }
     }
 
@@ -162,7 +140,7 @@ class App
         if ($container instanceof Container) {
             $container->bind($abstract, $concrete, $shared);
         } else {
-            throw new \RuntimeException('当前容器不支持 bind 方法。');
+            throw new RuntimeException('当前容器不支持 bind 方法。');
         }
     }
 
@@ -179,7 +157,7 @@ class App
         if ($container instanceof Container) {
             $container->factory($id, $factory, $shared);
         } else {
-            throw new \RuntimeException('当前容器不支持 factory 方法。');
+            throw new RuntimeException('当前容器不支持 factory 方法。');
         }
     }
 
@@ -195,7 +173,7 @@ class App
         if ($container instanceof Container) {
             $container->instance($id, $instance);
         } else {
-            throw new \RuntimeException('当前容器不支持 instance 方法。');
+            throw new RuntimeException('当前容器不支持 instance 方法。');
         }
     }
 
@@ -205,7 +183,7 @@ class App
      * @param string $name  参数名
      * @param mixed  $value 参数值
      */
-    public static function parameter(string $name, array|bool|float|int|string|\UnitEnum|null $value): void
+    public static function parameter(string $name, mixed $value): void
     {
         $container = self::getContainer();
         if ($container instanceof Container) {
@@ -215,7 +193,7 @@ class App
             if (method_exists($container, 'setParameter')) {
                 $container->setParameter($name, $value);
             } else {
-                throw new \RuntimeException('当前容器不支持 parameter 方法。');
+                throw new RuntimeException('当前容器不支持 parameter 方法。');
             }
         }
     }
@@ -233,7 +211,7 @@ class App
         if ($container instanceof Container) {
             $container->tag($id, $tag, $attributes);
         } else {
-            throw new \RuntimeException('当前容器不支持 tag 方法。');
+            throw new RuntimeException('当前容器不支持 tag 方法。');
         }
     }
 
@@ -250,7 +228,7 @@ class App
         if ($container instanceof Container) {
             $container->lazy($id, $concrete, $shared);
         } else {
-            throw new \RuntimeException('当前容器不支持 lazy 方法。');
+            throw new RuntimeException('当前容器不支持 lazy 方法。');
         }
-    }	
+    }
 }

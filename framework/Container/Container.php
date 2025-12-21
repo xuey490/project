@@ -8,7 +8,7 @@ declare(strict_types=1);
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
- * @Filename: %filename%
+ * @Filename: Container.php
  * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
@@ -16,14 +16,18 @@ declare(strict_types=1);
 
 namespace Framework\Container;
 
+use ReflectionClass;
+use ReflectionException;
+use ReflectionNamedType;
+use RuntimeException;
 use Symfony\Component\Config\FileLocator;
-use Symfony\Component\DependencyInjection\ContainerBuilder;
-use Symfony\Component\DependencyInjection\ContainerInterface as SymfonyContainerInterface;
-use Symfony\Component\DependencyInjection\Dumper\PhpDumper;
-use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
-use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\Compiler\PassConfig;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\ContainerInterface as SymfonyContainerInterface;
+use Symfony\Component\DependencyInjection\Definition;
+use Symfony\Component\DependencyInjection\Dumper\PhpDumper;
+use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\Dotenv\Dotenv;
 
@@ -39,7 +43,7 @@ class Container implements SymfonyContainerInterface
      * 初始化容器.
      *
      * @param  array             $parameters 全局参数
-     * @throws \RuntimeException
+     * @throws RuntimeException
      */
     public static function init(array $parameters = []): void
     {
@@ -60,12 +64,12 @@ class Container implements SymfonyContainerInterface
         $configDir   = $projectRoot . '/config';
 
         if (! is_dir($configDir)) {
-            throw new \RuntimeException("配置目录不存在: {$configDir}");
+            throw new RuntimeException("配置目录不存在: {$configDir}");
         }
 
         $servicesFile = $configDir . '/services.php';
         if (! file_exists($servicesFile)) {
-            throw new \RuntimeException("服务配置文件不存在: {$servicesFile}");
+            throw new RuntimeException("服务配置文件不存在: {$servicesFile}");
         }
 
         // 创建 Provider 管理器
@@ -89,14 +93,16 @@ class Container implements SymfonyContainerInterface
         $providersManager->bootProviders($containerBuilder);
 
         if ($isProd) {
-            @mkdir(dirname(self::CACHE_FILE), 0777, true);
+            $cacheDir = dirname(self::CACHE_FILE);
+            if (! is_dir($cacheDir) && ! mkdir($cacheDir, 0777, true) && ! is_dir($cacheDir)) {
+                throw new RuntimeException(sprintf('Directory "%s" was not created', $cacheDir));
+            }
+
             $dumper       = new PhpDumper($containerBuilder);
             $cacheContent = $dumper->dump(['class' => 'ProjectServiceContainer']);
             file_put_contents(self::CACHE_FILE, $cacheContent);
 
             $loadedContainer = require self::CACHE_FILE;
-            /*self::$container = new \ProjectServiceContainer();
-            */
             self::$container = $loadedContainer instanceof SymfonyContainerInterface
                 ? $loadedContainer
                 : $containerBuilder;
@@ -109,7 +115,7 @@ class Container implements SymfonyContainerInterface
             self::$providers->bootProviders(self::$container);
         }
     }
-	
+
     /**
      * 内部助手：获取 ContainerBuilder，如果当前不是 Builder 则抛出异常
      * 用于解决 IDE 警告和运行时逻辑错误
@@ -119,9 +125,9 @@ class Container implements SymfonyContainerInterface
         if (self::$container instanceof ContainerBuilder) {
             return self::$container;
         }
-        throw new \RuntimeException('Current container is not an instance of ContainerBuilder (it might be compiled or cached).');
+        throw new RuntimeException('Current container is not an instance of ContainerBuilder (it might be compiled or cached).');
     }
-	
+
     /**
      * 内部助手：获取安全的容器实例
      */
@@ -133,7 +139,6 @@ class Container implements SymfonyContainerInterface
         return self::$container; // @phpstan-ignore-line
     }
 
-	
     /**
      * 1. 简单的 make 实现，用于模拟 Laravel/Webman 的构建行为.
      * @param string $abstract   类名
@@ -149,10 +154,10 @@ class Container implements SymfonyContainerInterface
 
         // 2. 使用反射动态创建实例
         try {
-            $reflector = new \ReflectionClass($abstract);
+            $reflector = new ReflectionClass($abstract);
 
             if (! $reflector->isInstantiable()) {
-                throw new \RuntimeException("Class [{$abstract}] is not instantiable.");
+                throw new RuntimeException("Class [{$abstract}] is not instantiable.");
             }
 
             $constructor = $reflector->getConstructor();
@@ -174,11 +179,10 @@ class Container implements SymfonyContainerInterface
                 // 尝试从容器获取依赖
                 $type = $parameter->getType();
                 // [优化] 增加对 UnionType 的简单处理或忽略，防止 PHP8+ 报错
-                if ($type instanceof \ReflectionNamedType && ! $type->isBuiltin()) {
+                if ($type instanceof ReflectionNamedType && ! $type->isBuiltin()) {
                     $dependencyClassName = $type->getName();
 
                     // 递归：如果容器有，get；如果容器没有，尝试自动 make (递归解决依赖)
-                    // 你的原代码只做了 has() check，如果依赖也是未注册的类（如 Service），这里会失败
                     if (self::$container->has($dependencyClassName)) {
                         $dependencies[] = self::$container->get($dependencyClassName);
                         continue;
@@ -196,43 +200,42 @@ class Container implements SymfonyContainerInterface
                 if ($parameter->isDefaultValueAvailable()) {
                     $dependencies[] = $parameter->getDefaultValue();
                 } else {
-                    throw new \RuntimeException("Unable to resolve dependency [{$parameter->name}] in class {$abstract}");
+                    throw new RuntimeException("Unable to resolve dependency [{$parameter->name}] in class {$abstract}");
                 }
             }
 
             return $reflector->newInstanceArgs($dependencies);
-        } catch (\ReflectionException $e) {
-            throw new \RuntimeException('Container make failed: ' . $e->getMessage());
+        } catch (ReflectionException $e) {
+            throw new RuntimeException('Container make failed: ' . $e->getMessage());
         }
     }
-	
-	
+
     /**
      * 2. 注册一个单例服务到容器.
      *
      * @param string   $id      服务的唯一ID
      * @param callable $factory 一个闭包或可调用对象，用于创建服务实例
      *
-     * @throws \RuntimeException 如果容器已编译或不是 ContainerBuilder 实例
+     * @throws RuntimeException 如果容器已编译或不是 ContainerBuilder 实例
      */
     public function singleton(string $id, callable $factory): void
     {
         // 确保容器实例已经初始化
         if (self::$container === null) {
-            throw new \RuntimeException('容器尚未初始化。');
+            throw new RuntimeException('容器尚未初始化。');
         }
 
         // 动态注册服务只能在未编译的 ContainerBuilder 上进行
-        if (!self::$container instanceof ContainerBuilder) {
-             throw new \RuntimeException(
+        if (! self::$container instanceof ContainerBuilder) {
+            throw new RuntimeException(
                 '无法注册服务。当前容器不是一个可修改的 ContainerBuilder 实例。它可能已经被编译或从缓存加载。'
             );
         }
 
-        $containerBuilder =  $this->getBuilder(); // 确保是 Builder or self::$container;
+        $containerBuilder = $this->getBuilder();
 
         if ($containerBuilder->isCompiled()) {
-            throw new \RuntimeException('容器已经编译，无法再注册新的服务。');
+            throw new RuntimeException('容器已经编译，无法再注册新的服务。');
         }
 
         $definition = new Definition();
@@ -241,155 +244,155 @@ class Container implements SymfonyContainerInterface
 
         $containerBuilder->setDefinition($id, $definition);
     }
-	
-	/*
-	* 3. 绑定接口到实现（Bind Interface to Implementation）
-	* 将一个接口绑定到一个具体的实现类，容器会自动解析接口为对应的实现。
-	*
-	* 使用 setDefinition 注册接口，并指定其实现类。
-	* 可以选择是否为单例。
-	*/
-	public function bind(string $abstract, string $concrete, bool $shared = false): void
-	{
-		if (self::$container === null) {
-			throw new \RuntimeException('容器尚未初始化。');
-		}
 
-		if (!self::$container instanceof ContainerBuilder) {
-			throw new \RuntimeException('当前容器不支持动态注册服务。');
-		}
+    /**
+     * 3. 绑定接口到实现（Bind Interface to Implementation）
+     * 将一个接口绑定到一个具体的实现类，容器会自动解析接口为对应的实现。
+     *
+     * 使用 setDefinition 注册接口，并指定其实现类。
+     * 可以选择是否为单例。
+     */
+    public function bind(string $abstract, string $concrete, bool $shared = false): void
+    {
+        if (self::$container === null) {
+            throw new RuntimeException('容器尚未初始化。');
+        }
 
-		$containerBuilder = $this->getBuilder(); //self::$container;
+        if (! self::$container instanceof ContainerBuilder) {
+            throw new RuntimeException('当前容器不支持动态注册服务。');
+        }
 
-		if ($containerBuilder->isCompiled()) {
-			throw new \RuntimeException('容器已经编译，无法再注册新的服务。');
-		}
+        $containerBuilder = $this->getBuilder();
 
-		$definition = new Definition($concrete);
-		$definition->setShared($shared);
+        if ($containerBuilder->isCompiled()) {
+            throw new RuntimeException('容器已经编译，无法再注册新的服务。');
+        }
 
-		$containerBuilder->setDefinition($abstract, $definition);
-	}
-	
-	/*
-	4. 绑定工厂函数（Bind Factory Function）
-	通过一个工厂函数来创建服务实例，适用于需要复杂初始化逻辑的场景。
-	实现思路
-	使用 setFactory 指定一个闭包或可调用对象作为工厂。
-	可以选择是否为单例。
-	*/
-	public function factory(string $id, callable $factory, bool $shared = false): void
-	{
-		if (self::$container === null) {
-			throw new \RuntimeException('容器尚未初始化。');
-		}
+        $definition = new Definition($concrete);
+        $definition->setShared($shared);
 
-		if (!self::$container instanceof ContainerBuilder) {
-			throw new \RuntimeException('当前容器不支持动态注册服务。');
-		}
+        $containerBuilder->setDefinition($abstract, $definition);
+    }
 
-		$containerBuilder = self::$container;
+    /**
+     * 4. 绑定工厂函数（Bind Factory Function）
+     * 通过一个工厂函数来创建服务实例，适用于需要复杂初始化逻辑的场景。
+     * 实现思路
+     * 使用 setFactory 指定一个闭包或可调用对象作为工厂。
+     * 可以选择是否为单例。
+     */
+    public function factory(string $id, callable $factory, bool $shared = false): void
+    {
+        if (self::$container === null) {
+            throw new RuntimeException('容器尚未初始化。');
+        }
 
-		if ($containerBuilder->isCompiled()) {
-			throw new \RuntimeException('容器已经编译，无法再注册新的服务。');
-		}
+        if (! self::$container instanceof ContainerBuilder) {
+            throw new RuntimeException('当前容器不支持动态注册服务。');
+        }
 
-		$definition = new Definition();
-		$definition->setFactory($factory);
-		$definition->setShared($shared);
+        $containerBuilder = self::$container;
 
-		$containerBuilder->setDefinition($id, $definition);
-	}
+        if ($containerBuilder->isCompiled()) {
+            throw new RuntimeException('容器已经编译，无法再注册新的服务。');
+        }
 
-	/*
-	5. 绑定实例（Bind Instance）
-	直接将一个已存在的对象实例注册到容器中，适用于预初始化的对象。
-	实现思路
-	使用 set 方法直接注册实例（Symfony 容器原生支持）。
-	注意：编译后的容器可能不支持 set 方法，因此需要在编译前调用。
-	*/
-	public function instance(string $id, object $instance): void
-	{
-		if (self::$container === null) {
-			throw new \RuntimeException('容器尚未初始化。');
-		}
+        $definition = new Definition();
+        $definition->setFactory($factory);
+        $definition->setShared($shared);
 
-		// 直接注册实例
-		self::$container->set($id, $instance);
-	}
-	
-	/*
-	6. 绑定参数（Bind Parameter）
-	注册一个参数（如配置值），供其他服务依赖注入时使用。
-	实现思路
-	使用 setParameter 方法注册参数。
-	参数可以是字符串、数组、数字等。
-	*/
-	public function parameter(string $name, mixed $value): void
-	{
-		if (self::$container === null) {
-			throw new \RuntimeException('容器尚未初始化。');
-		}
+        $containerBuilder->setDefinition($id, $definition);
+    }
 
-		self::$container->setParameter($name, $value);
-	}
-		
-	/*
-	7. 绑定带标签的服务（Bind Tagged Services）
-	为服务添加标签，方便批量获取同一类服务（如事件监听器、命令等）。
-	实现思路
-	在服务定义中添加标签。
-	通过 findTaggedServiceIds 方法获取所有带特定标签的服务。
-	*/	
-	public function tag(string $id, string $tag, array $attributes = []): void
-	{
-		if (self::$container === null) {
-			throw new \RuntimeException('容器尚未初始化。');
-		}
+    /**
+     * 5. 绑定实例（Bind Instance）
+     * 直接将一个已存在的对象实例注册到容器中，适用于预初始化的对象。
+     * 实现思路
+     * 使用 set 方法直接注册实例（Symfony 容器原生支持）。
+     * 注意：编译后的容器可能不支持 set 方法，因此需要在编译前调用。
+     */
+    public function instance(string $id, object $instance): void
+    {
+        if (self::$container === null) {
+            throw new RuntimeException('容器尚未初始化。');
+        }
 
-		if (!self::$container instanceof ContainerBuilder) {
-			throw new \RuntimeException('当前容器不支持动态注册服务。');
-		}
+        // 直接注册实例
+        self::$container->set($id, $instance);
+    }
 
-		$containerBuilder = self::$container;
+    /**
+     * 6. 绑定参数（Bind Parameter）
+     * 注册一个参数（如配置值），供其他服务依赖注入时使用。
+     * 实现思路
+     * 使用 setParameter 方法注册参数。
+     * 参数可以是字符串、数组、数字等。
+     */
+    public function parameter(string $name, mixed $value): void
+    {
+        if (self::$container === null) {
+            throw new RuntimeException('容器尚未初始化。');
+        }
 
-		if ($containerBuilder->isCompiled()) {
-			throw new \RuntimeException('容器已经编译，无法再注册新的服务。');
-		}
+        self::$container->setParameter($name, $value);
+    }
 
-		$definition = $containerBuilder->getDefinition($id);
-		$definition->addTag($tag, $attributes);
-	}
-	
-	/*
-	8. 绑定延迟服务（Bind Lazy Services）
-	延迟服务的初始化，直到第一次调用时才创建实例，适用于重量级服务。
-	实现思路
-	在服务定义中设置 setLazy(true)。
-	Symfony 容器会自动生成一个代理类，延迟实例化。
-	*/
-	public function lazy(string $id, string $concrete, bool $shared = true): void
-	{
-		if (self::$container === null) {
-			throw new \RuntimeException('容器尚未初始化。');
-		}
+    /**
+     * 7. 绑定带标签的服务（Bind Tagged Services）
+     * 为服务添加标签，方便批量获取同一类服务（如事件监听器、命令等）。
+     * 实现思路
+     * 在服务定义中添加标签。
+     * 通过 findTaggedServiceIds 方法获取所有带特定标签的服务。
+     */
+    public function tag(string $id, string $tag, array $attributes = []): void
+    {
+        if (self::$container === null) {
+            throw new RuntimeException('容器尚未初始化。');
+        }
 
-		if (!self::$container instanceof ContainerBuilder) {
-			throw new \RuntimeException('当前容器不支持动态注册服务。');
-		}
+        if (! self::$container instanceof ContainerBuilder) {
+            throw new RuntimeException('当前容器不支持动态注册服务。');
+        }
 
-		$containerBuilder = self::$container;
+        $containerBuilder = self::$container;
 
-		if ($containerBuilder->isCompiled()) {
-			throw new \RuntimeException('容器已经编译，无法再注册新的服务。');
-		}
+        if ($containerBuilder->isCompiled()) {
+            throw new RuntimeException('容器已经编译，无法再注册新的服务。');
+        }
 
-		$definition = new Definition($concrete);
-		$definition->setShared($shared);
-		$definition->setLazy(true);
+        $definition = $containerBuilder->getDefinition($id);
+        $definition->addTag($tag, $attributes);
+    }
 
-		$containerBuilder->setDefinition($id, $definition);
-	}	
+    /**
+     * 8. 绑定延迟服务（Bind Lazy Services）
+     * 延迟服务的初始化，直到第一次调用时才创建实例，适用于重量级服务。
+     * 实现思路
+     * 在服务定义中设置 setLazy(true)。
+     * Symfony 容器会自动生成一个代理类，延迟实例化。
+     */
+    public function lazy(string $id, string $concrete, bool $shared = true): void
+    {
+        if (self::$container === null) {
+            throw new RuntimeException('容器尚未初始化。');
+        }
+
+        if (! self::$container instanceof ContainerBuilder) {
+            throw new RuntimeException('当前容器不支持动态注册服务。');
+        }
+
+        $containerBuilder = self::$container;
+
+        if ($containerBuilder->isCompiled()) {
+            throw new RuntimeException('容器已经编译，无法再注册新的服务。');
+        }
+
+        $definition = new Definition($concrete);
+        $definition->setShared($shared);
+        $definition->setLazy(true);
+
+        $containerBuilder->setDefinition($id, $definition);
+    }
 
     public static function setProviderManager(ContainerProviders $p): void
     {
@@ -412,7 +415,7 @@ class Container implements SymfonyContainerInterface
     {
         return self::$container->get($id, intval($invalidBehavior));
     }
-	
+
     public function has(string $id): bool
     {
         return self::$container->has($id);
@@ -434,19 +437,19 @@ class Container implements SymfonyContainerInterface
         return self::$container->getServiceIds();
     }
 
-	/*
-	6. 绑定参数（Bind Parameter）
-	注册一个参数（如配置值），供其他服务依赖注入时使用。
-	实现思路
-	使用 setParameter 方法注册参数。
-	参数可以是字符串、数组、数字等。
-	*/
-    public function setParameter(string $name, array|bool|float|int|string|\UnitEnum|null $value): void
+    /**
+     * 6. 绑定参数（Bind Parameter）
+     * 注册一个参数（如配置值），供其他服务依赖注入时使用。
+     * 实现思路
+     * 使用 setParameter 方法注册参数。
+     * 参数可以是字符串、数组、数字等。
+     */
+    public function setParameter(string $name, mixed $value): void
     {
-		if (self::$container === null) {
-			throw new \RuntimeException('容器尚未初始化。');
-		}
-		
+        if (self::$container === null) {
+            throw new RuntimeException('容器尚未初始化。');
+        }
+
         self::$container->setParameter($name, $value);
     }
 
@@ -472,7 +475,7 @@ class Container implements SymfonyContainerInterface
         if (self::$container instanceof ContainerBuilder) {
             self::$container->compile($resolveEnvPlaceholders);
         }
-    }	
+    }
 
     public function isCompiled(): bool
     {
