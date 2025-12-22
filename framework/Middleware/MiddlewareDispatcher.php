@@ -97,8 +97,14 @@ class MiddlewareDispatcher
             $flattenedRouteMiddleware,
             $this->globalMiddleware
         ));
-		#dump($currentRouteName);
 		
+		//特例
+		//AuthMiddleware 如果在中间件数组里，判断_auth 为true，需要验证
+		if (in_array(AuthMiddleware::class, $uniqueRouteMiddleware) || 
+			in_array(AuthMiddleware::class, $this->globalMiddleware)) {
+			// 设置_auth为true
+			$request->attributes->set('_auth', true);
+		}		
 
         // 3. 处理 Auth 逻辑
         // 直接读取 UrlMatcher 注入的 _auth 和 _roles
