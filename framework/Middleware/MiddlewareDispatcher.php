@@ -70,7 +70,7 @@ class MiddlewareDispatcher
 		$routeInfo = $request->attributes->get('_route');
         $currentRouteName = is_string($routeInfo) ? $routeInfo : (is_array($routeInfo) ? json_encode($routeInfo) : 'unknown_route');
 
-		#dump($rawRouteMiddleware);
+		
 
         // 2. 拍平数组 (处理可能的嵌套)
         $flattenedRouteMiddleware = $this->flattenArray($rawRouteMiddleware);
@@ -97,7 +97,7 @@ class MiddlewareDispatcher
             $flattenedRouteMiddleware,
             $this->globalMiddleware
         ));
-
+		#dump($currentRouteName);
 		
 
         // 3. 处理 Auth 逻辑

@@ -25,10 +25,12 @@ class AuthMiddleware
         $attributes = $request->attributes->get('_attributes', []);
         /** @var Auth|null $auth */
         $auth = $attributes[Auth::class] ?? null;
-
-        $legacyAuth = $request->attributes->get('_auth', false);
 		
-        $needAuth   = ($auth && $auth->required) || $legacyAuth === true;
+		$routeInfo = $request->attributes->get('_route');        
+		#dump($routeInfo['params']['_roles']);
+
+		$legacyAuth = $request->attributes->get('_auth', false);
+		$needAuth   = ($auth && $auth->required) || $legacyAuth === true;
 
         if (! $needAuth) {
             return $next($request);
@@ -39,7 +41,6 @@ class AuthMiddleware
             return $this->unauthorized('请先登录');
         }
 		
-		#dump($accessToken);
 
         /** @var JwtFactory $jwt */
         $jwt = app('jwt');
@@ -54,7 +55,7 @@ class AuthMiddleware
             $exp  = $claims->get('exp')->getTimestamp();
 
             // 2️⃣ 角色校验
-            if (! empty($auth?->roles) && ! in_array($role, $auth->roles, true)) {
+            if ((! empty($auth?->roles) && ! in_array($role, $auth->roles, true))  ||   ! in_array($role, $routeInfo['params']['_roles'], true) ) {
                 return $this->forbidden('无权限访问！');
             }
 

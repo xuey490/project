@@ -73,7 +73,7 @@ class Admins  extends BaseController
      * DocBlock 说明示例（可选）：
      * @menu 列表页
      */
-	##[Route(path: '/',   roles: ['admin'], methods: ['GET'], name: 'demoaa1.index')] //注解路由的auth roles
+	#[Route(path: '/',  auth: true, roles: ['admin'], methods: ['GET'], name: 'demoaa1.index')] //注解路由的auth roles
     /**
      * 旧 DocBlock 
      * 旧式的写法，role admin,super 用,隔开，不能用其他符号
@@ -93,8 +93,10 @@ class Admins  extends BaseController
         ]), 200, ['Content-Type' => 'application/json']);
     }
 
-    // 场景1：普通数据接口，缓存 1 分钟
+    // 场景1：普通数据接口，缓存 1 分钟 
+	// 需要验证：没有中间件的时候加上auth: true,  
     #[Cache(ttl: 60)]
+	#[Route(path: '/caches', auth: true, roles: ['admin1'], methods: ['GET'], name: 'demoaa1.caches')] //注解路由的auth roles
     public function getHotList(): JsonResponse
     {
 		
@@ -135,6 +137,7 @@ class Admins  extends BaseController
      */
 	#[Role(['guest'])] // 只有超级管理员能访问
 	#[Log(description: '创建新产品', level: 'warning')]
+	#[Middlewares([\App\Middlewares\AuthMiddleware::class])]
     public function test(Request $request): Response
     {
 		
