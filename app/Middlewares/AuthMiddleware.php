@@ -49,13 +49,15 @@ class AuthMiddleware
             // 1️⃣ 严格校验 access token
             $parsed = $jwt->parseForAccess($accessToken);
             $claims = $parsed->claims();
+			
 
             $uid  = (int) $claims->get('uid');
             $role = $claims->get('role') ?? 'user';
             $exp  = $claims->get('exp')->getTimestamp();
 
             // 2️⃣ 角色校验
-            if ((! empty($auth?->roles) && ! in_array($role, $auth->roles, true))  ||   ! in_array($role, $routeInfo['params']['_roles'], true) ) {
+            if ((! empty($auth?->roles) && ! in_array($role, $auth->roles, true))  
+				||  (!empty($routeInfo['params']['_roles']) && ! in_array($role, $routeInfo['params']['_roles'], true)) ) {
                 return $this->forbidden('无权限访问！');
             }
 
@@ -78,6 +80,7 @@ class AuthMiddleware
             $request->attributes->set('user_claims', $claims->all());
 
         } catch (\Throwable $e) {
+			dump($e->getMessage());
             return $this->unauthorized('登录已过期或无效');
         }
 
