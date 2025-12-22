@@ -16,11 +16,11 @@ trait CrudFilterTrait
 
     protected function inputFilter(array $data, array $skipKeys = []): array
     {
-        $model = $this->service->getModel();
+        $model   = $this->service->getModel();
         $columns = $model->getFields();
 
         foreach ($data as $col => $v) {
-            if (!in_array($col, $columns) && !in_array($col, $skipKeys)) {
+            if (! in_array($col, $columns) && ! in_array($col, $skipKeys)) {
                 unset($data[$col]);
             }
         }

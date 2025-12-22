@@ -8,7 +8,7 @@ declare(strict_types=1);
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
- * @Filename: %filename%
+ * @Filename: Framework.php
  * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
@@ -19,12 +19,14 @@ namespace Framework\Core;
 use Framework\Container\Container;
 use Framework\Middleware\MiddlewareDispatcher;
 use Psr\Log\LoggerInterface;
+use RuntimeException;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Controller\ArgumentResolver;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\Routing\RouteCollection;
+use Throwable;
 
 /**
  * Class Framework.
@@ -55,7 +57,6 @@ final class Framework
     private Kernel $kernel;
 
     private ?LoggerInterface $logger = null;
-    // private mixed $logger;
 
     /**
      * 单例模式：禁止外部实例化.
@@ -71,17 +72,19 @@ final class Framework
     /**
      * 防止克隆单例实例.
      */
-    private function __clone(): void {}
+    private function __clone(): void
+    {
+    }
 
     /**
      * 防止反序列化单例实例（修正为 public 可见性）.
      *
-     * @throws \RuntimeException
+     * @throws RuntimeException
      */
     public function __wakeup(): void
     {
         // 反序列化时抛出异常，彻底禁止重建实例
-        throw new \RuntimeException('Cannot unserialize singleton');
+        throw new RuntimeException('Cannot unserialize singleton');
     }
 
     /**
@@ -161,8 +164,7 @@ final class Framework
 
             $this->logRequestAndResponse($this->request, $response, $start);
             return $response;
-        } catch (\Throwable $e) {
-
+        } catch (Throwable $e) {
             return $this->handleException($e);
         } finally {
             // Workerman 下必须释放
@@ -179,13 +181,15 @@ final class Framework
 
         if (! is_dir($logDir)) {
             // 使用常量权限
-            @mkdir($logDir, self::DIR_PERMISSION, true);
+            if (! mkdir($logDir, self::DIR_PERMISSION, true) && ! is_dir($logDir)) {
+                return; // 无法创建日志目录，放弃记录
+            }
         }
 
         $file = $logDir . '/error.log';
         $time = date('Y-m-d H:i:s');
 
-        @file_put_contents($file, "[{$time}] {$message}\n", FILE_APPEND);
+        file_put_contents($file, "[{$time}] {$message}\n", FILE_APPEND);
     }
 
     /**
@@ -224,7 +228,7 @@ final class Framework
 
         foreach ($dirs as $dir) {
             if (! is_dir($dir) && ! mkdir($dir, (int) $permission, true) && ! is_dir($dir)) {
-                throw new \RuntimeException(sprintf('无法创建目录: %s', $dir));
+                throw new RuntimeException(sprintf('无法创建目录: %s', $dir));
             }
         }
     }
@@ -245,7 +249,7 @@ final class Framework
         // 3. 从容器获取日志服务
         try {
             $this->logger = $this->container->get('log');
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             // 回退到 null，并在必要时使用 logError
             $this->logger = null;
             // 仅在调试时可能需要知道为什么日志初始化失败
@@ -269,7 +273,7 @@ final class Framework
             } else {
                 $this->middlewareDispatcher = new MiddlewareDispatcher($this->container);
             }
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             // 回退
             $this->middlewareDispatcher = new MiddlewareDispatcher($this->container);
             $this->logError('Failed to initialize MiddlewareDispatcher: ' . $e->getMessage());
@@ -296,16 +300,16 @@ final class Framework
 
         // 生产环境且缓存存在时，直接加载缓存
         if ($isProduction && file_exists(self::ROUTE_CACHE_FILE)) {
-            $serializedRoutes = @file_get_contents(self::ROUTE_CACHE_FILE);
+            $serializedRoutes = file_get_contents(self::ROUTE_CACHE_FILE);
             if ($serializedRoutes !== false) {
-                $routes = @unserialize($serializedRoutes);
+                $routes = unserialize($serializedRoutes);
                 if ($routes instanceof RouteCollection) {
                     $this->logger?->info('Loaded routes from cache');
                     return $routes;
                 }
 
                 $this->logger?->warning('Route cache is invalid, regenerating');
-                @unlink(self::ROUTE_CACHE_FILE);
+                unlink(self::ROUTE_CACHE_FILE);
             }
         }
 
@@ -357,13 +361,13 @@ final class Framework
      */
     private function cacheRoutes(RouteCollection $routes): void
     {
-        $serialized = @serialize($routes);
+        $serialized = serialize($routes);
         if ($serialized === false) {
-            throw new \RuntimeException('Failed to serialize route collection');
+            throw new RuntimeException('Failed to serialize route collection');
         }
 
-        @file_put_contents(self::ROUTE_CACHE_FILE, $serialized);
-        @chmod(self::ROUTE_CACHE_FILE, 0644); // 缓存文件权限只读
+        file_put_contents(self::ROUTE_CACHE_FILE, $serialized);
+        chmod(self::ROUTE_CACHE_FILE, 0644); // 缓存文件权限只读
     }
 
     /**
@@ -408,7 +412,7 @@ final class Framework
     {
         try {
             $reflection = new \ReflectionMethod($controllerClass, $method);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             // 如果反射失败则跳过类型转换
             $this->logger?->warning('ReflectionMethod failed', ['exception' => $e]);
             return;
@@ -466,7 +470,7 @@ final class Framework
         }
 
         if (is_array($response) || is_object($response)) {
-            $payload = @json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            $payload = json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             $payload = $payload === false ? '' : $payload;
 
             return new Response(
@@ -490,35 +494,16 @@ final class Framework
                 'status_code' => 404,
                 'path'        => $this->request->getPathInfo(),
             ]);
-        } catch (\Throwable) {
+        } catch (Throwable) {
             // ignore
         }
         return new Response($content, Response::HTTP_NOT_FOUND);
     }
 
-    /* 遗弃
-    500 错误的友好页面
-    */
-    private function handleException1(\Throwable $e): Response
-    {
-        // 设置HTTP响应头为500
-        http_response_code(500);
-
-        // 渲染Twig模板，并将异常对象传递过去
-        // 注意：我们传递的是整个$e对象，而不是print_r的结果
-        $html = view('errors/500.html.twig', [
-            'exception' => $e,
-        ]);
-
-        // 返回一个包含渲染后HTML的Response对象
-        return new Response($html, 500);
-        // return new Response('500 Server Error', 500);
-    }
-
     /**
      * 处理异常.
      */
-    private function handleException(\Throwable $e): Response
+    private function handleException(Throwable $e): Response
     {
         $statusCode = Response::HTTP_INTERNAL_SERVER_ERROR;
 
@@ -568,7 +553,7 @@ final class Framework
                     'message'     => 'An unexpected error occurred. Please try again later. 程序发生错误，请稍后再试！',
                 ]);
             }
-        } catch (\Throwable $e2) {
+        } catch (Throwable $e2) {
             $this->logError('Failed to render exception view: ' . $e2->getMessage());
             $content = 'Server Error~';
         }
@@ -621,7 +606,7 @@ final class Framework
                 'duration' => round($duration * 1000, 2) . 'ms', // 转换为毫秒
                 'ip'       => $request->getClientIp(),
             ]);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             // 回退到文件日志
             $this->logError('Failed to write structured request log: ' . $e->getMessage());
         }

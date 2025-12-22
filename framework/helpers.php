@@ -8,7 +8,7 @@ declare(strict_types=1);
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
- * @Filename: %filename%
+ * @Filename: helpers.php
  * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
@@ -31,13 +31,14 @@ use Twig\Error\SyntaxError;
 if (! function_exists('validate')) {
     /**
      * 生成验证对象
+     *
      * @param array        $data          数据
      * @param array|string $validate      验证器类名或者验证规则数组
      * @param array        $message       错误提示信息
      * @param bool         $batch         是否批量验证
      * @param bool         $failException 是否抛出异常
      */
-    function validate(array $data, $validate = '', array $message = [], bool $batch = false, bool $failException = true): bool
+    function validate(array $data, array|string $validate = '', array $message = [], bool $batch = false, bool $failException = true): bool
     {
         if (is_array($validate)) {
             $v = new Validate();
@@ -146,10 +147,6 @@ if (! function_exists('getService')) {
      */
     function getService(string $id, array $params = []): object
     {
-        /*
-        $framework = Framework::getInstance();
-        return $framework->getContainer()->get($id);
-        */
         return App::make($id, $params);
     }
 }
@@ -277,7 +274,7 @@ if (! function_exists('config')) {
         $value = $config;
 
         foreach ($segments as $segment) {
-            if (!is_array($value) || !array_key_exists($segment, $value)) {
+            if (! is_array($value) || ! array_key_exists($segment, $value)) {
                 return $default;
             }
             $value = $value[$segment];
@@ -398,7 +395,6 @@ function get_cache_instance(): ?object
 
     if ($cache === null) {
         $cache = Container::getInstance()->get('sf_cache');
-        // $cache = Container::getInstance()->get(TagAwareAdapter::class);
     }
 
     return $cache;

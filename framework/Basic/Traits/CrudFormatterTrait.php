@@ -14,15 +14,15 @@ trait CrudFormatterTrait
         return Json::success([
             'total' => $total,
             'items' => $list,
-        ],'ok');
+        ], 'ok');
     }
 
     protected function formatNormal($list, int $total)
     {
-        return Json::success( [
+        return Json::success([
             'total' => $total,
             'list'  => $list,
-        ],'ok');
+        ], 'ok');
     }
 
     protected function formatTree($items)
@@ -31,12 +31,12 @@ trait CrudFormatterTrait
         foreach ($items as $item) {
             $nodes[] = [
                 'name'  => $item->title ?? $item->name ?? $item->id,
-                'value' => (string)$item->id,
+                'value' => (string) $item->id,
                 'id'    => $item->id,
                 'pid'   => $item->pid ?? 0,
             ];
         }
         $tree = new Tree($nodes);
-        return Json::success($tree->getTree(),'ok');
+        return Json::success($tree->getTree(), 'ok');
     }
 }

@@ -8,7 +8,7 @@ declare(strict_types=1);
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
- * @Filename: %filename%
+ * @Filename: BaseMapping.php
  * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
@@ -16,7 +16,9 @@ declare(strict_types=1);
 
 namespace Framework\Attributes\Routes;
 
-#[\Attribute(\Attribute::TARGET_METHOD)]
+use Attribute;
+
+#[Attribute(Attribute::TARGET_METHOD)]
 abstract class BaseMapping
 {
     public function __construct(
@@ -30,5 +32,6 @@ abstract class BaseMapping
         public array $schemes = [],
         public ?string $host = null,
         public ?string $name = null
-    ) {}
+    ) {
+    }
 }

@@ -16,8 +16,8 @@ declare(strict_types=1);
 
 namespace Framework\Attributes;
 
-use Attribute;
 use App\Middlewares\RoleMiddleware;
+use Attribute;
 
 /**
  * @Role
@@ -35,7 +35,8 @@ class Role implements MiddlewareProviderInterface
      */
     public function __construct(
         public array $roles = []
-    ) {}
+    ) {
+    }
 
     /**
      * 绑定中间件

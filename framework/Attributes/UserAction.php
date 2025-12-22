@@ -16,13 +16,13 @@ declare(strict_types=1);
 
 namespace Framework\Attributes;
 
-use Attribute;
 use App\Middlewares\UserActionMiddleware;
+use Attribute;
 
 /**
  * @UserAction
  * 用于在控制器业务执行成功后，记录用户行为到数据库表。
- * 
+ *
  * 示例：
  * #[UserAction(type: 'login')]
  * #[UserAction(type: 'register')]
@@ -31,11 +31,12 @@ use App\Middlewares\UserActionMiddleware;
 class UserAction implements MiddlewareProviderInterface
 {
     /**
-     * @param string $type 动作类型标识
+     * @param string|null $type 动作类型标识
      */
     public function __construct(
-        public ?string $type =null
-    ) {}
+        public ?string $type = null
+    ) {
+    }
 
     public function getMiddleware(): string|array
     {

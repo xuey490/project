@@ -8,7 +8,7 @@ declare(strict_types=1);
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
- * @Filename: %filename%
+ * @Filename: BaseDao.php
  * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
@@ -16,10 +16,10 @@ declare(strict_types=1);
 
 namespace Framework\Basic;
 
-use Framework\Core\App;
-use Framework\ORM\Adapter\ORMAdapterFactory;
 use Framework\DI\Injectable;
-
+use Framework\ORM\Adapter\ORMAdapterFactory;
+use RuntimeException;
+use Throwable;
 
 /**
  * @method count(array $where = [], bool $search = true)
@@ -53,69 +53,54 @@ use Framework\DI\Injectable;
  */
 abstract class BaseDao
 {
-	/** @var mixed ORM Adapter，如 LaravelORMFactory 或 ThinkphpORMFactory */
+    // 引入注入能力
+    use Injectable;
+
+    /** @var mixed ORM Adapter，如 LaravelORMFactory 或 ThinkphpORMFactory */
     protected mixed $instance = null;
-	
-	protected ?string $mode =null ;
+
+    protected ?string $mode = null;
 
     /** @var mixed Eloquent/ThinkORM 模型类名 */
     protected string $modelClass = '';
 
-    // 引入注入能力
-    use Injectable;	
-
     public function __construct(?string $mode = null, object|string|null $modelClass = null)
     {
-		$this->inject();
-		
+        $this->inject();
+
         // 1. 获取 ORM 模式
         if ($mode === null) {
-            $mode = config('database.engine' , 'thinkORM') ?? env('ORM_DRIVER');
+            $mode = config('database.engine', 'thinkORM') ?? env('ORM_DRIVER');
         }
-		$this->mode = $mode;
-		
+        $this->mode = $mode;
+
         // 2. 获取模型类
         $modelClass = $modelClass ?? $this->setModel();
-		
 
         // 3. 创建适配器
         $this->instance = ORMAdapterFactory::createAdapter($mode, $modelClass);
         //dump($this->instance);
         //dump("created model: " . get_class($this->instance));
-		$this->initialize();
+        $this->initialize();
     }
-	
-	
+
     /**
-     * 子类可根据需要覆盖 lifecycle
-     */
-    protected function initialize(): void
-    {
-    }	
-	
-    /**
-     * 获取底层 ORM 适配器实例
-     *
-     * @return mixed
+     * 获取底层 ORM 适配器实例.
      */
     public function getAdapter(): mixed
     {
         return $this->instance;
     }
-	
+
     /**
-     * 动态代理调用 —— 将所有方法转发给 ORM Adapter
+     * 动态代理调用 —— 将所有方法转发给 ORM Adapter.
      *
-     * @param string $name
-     * @param array  $arguments
-     * @return mixed
-     *
-     * @throws Exception
+     * @throws RuntimeException
      */
     public function __call(string $name, array $arguments): mixed
     {
-        if (!$this->instance) {
-            throw new \RuntimeException(
+        if (! $this->instance) {
+            throw new RuntimeException(
                 sprintf(
                     '[DAO ERROR] %s 未初始化 ORM 适配器',
                     static::class
@@ -124,8 +109,8 @@ abstract class BaseDao
         }
 
         // 检查适配器是否支持该方法
-        if (!method_exists($this->instance, $name)) {
-            throw new \RuntimeException(
+        if (! method_exists($this->instance, $name)) {
+            throw new RuntimeException(
                 sprintf(
                     "[DAO ERROR] 方法不存在: %s::%s()\nAdapter: %s\nModel: %s",
                     static::class,
@@ -138,10 +123,8 @@ abstract class BaseDao
 
         try {
             return $this->instance->{$name}(...$arguments);
-
-        } catch (\Throwable $e) {
-
-            throw new \RuntimeException(
+        } catch (Throwable $e) {
+            throw new RuntimeException(
                 sprintf(
                     "[DAO ERROR] 调用 %s::%s() 时发生异常\nAdapter: %s\nModel: %s\nMessage: %s",
                     static::class,
@@ -150,19 +133,27 @@ abstract class BaseDao
                     $this->modelClass,
                     $e->getMessage()
                 ),
-                previous: $e
+                0,
+                $e
             );
         }
     }
 
-	public function getModel(): mixed
-	{
-		if (method_exists($this->instance, 'getModel')) {
-			return $this->instance->getModel();
-		}
+    public function getModel(): mixed
+    {
+        if (method_exists($this->instance, 'getModel')) {
+            return $this->instance->getModel();
+        }
 
-		throw new \RuntimeException("当前 ORM 适配器不支持 getModel()");
-	}
+        throw new RuntimeException('当前 ORM 适配器不支持 getModel()');
+    }
+
+    /**
+     * 子类可根据需要覆盖 lifecycle.
+     */
+    protected function initialize(): void
+    {
+    }
 
     /**
      * 获取当前模型类名.

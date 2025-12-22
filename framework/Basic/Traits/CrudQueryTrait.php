@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Framework\Basic\Traits;
 
-use Symfony\Component\HttpFoundation\Request;
 use Framework\Utils\DateTime;
+use Symfony\Component\HttpFoundation\Request;
 
 trait CrudQueryTrait
 {
     protected array $prefixes = [
-        'IN_', 'LIKE_', 'EQ_', 'GT_', 'LT_', 'GTE_', 'LTE_', 'NE_', 'BETWEEN_'
+        'IN_', 'LIKE_', 'EQ_', 'GT_', 'LT_', 'GTE_', 'LTE_', 'NE_', 'BETWEEN_',
     ];
 
     protected function selectInput(Request $request): array
@@ -20,21 +20,21 @@ trait CrudQueryTrait
         $field  = $params['field'] ?? '*';
         $sort   = $params['order'] ?? 'id desc';
         $format = $params['format'] ?? 'normal';
-        $limit  = max(1, (int)($params['limit'] ?? 10));
-        $page   = max(1, (int)($params['page'] ?? 1));
+        $limit  = max(1, (int) ($params['limit'] ?? 10));
+        $page   = max(1, (int) ($params['page'] ?? 1));
 
         $model = $this->service->getModel();
         $allow = $model->getFields();
 
         // 排序处理
-        $order = '';
+        $order        = '';
         [$col, $rank] = array_pad(explode(' ', $sort), 2, 'desc');
         if (in_array($col, $allow)) {
             $order = "$col $rank";
         }
 
         // 字段验证
-        if ($field !== '*' && !in_array($field, $allow)) {
+        if ($field !== '*' && ! in_array($field, $allow)) {
             $field = '*';
         }
 
@@ -48,22 +48,21 @@ trait CrudQueryTrait
         $where = [];
 
         foreach ($params as $column => $value) {
-
-            $prefix = '';
+            $prefix       = '';
             $actualColumn = $column;
 
             if (preg_match('/^([A-Z_]+)_(.*)$/', $column, $m)) {
-                $prefix = rtrim($m[1], '_');
+                $prefix       = rtrim($m[1], '_');
                 $actualColumn = strtolower($m[2]);
             }
 
-            if (!in_array($actualColumn, $allowColumns)) {
+            if (! in_array($actualColumn, $allowColumns)) {
                 continue;
             }
 
             switch ($prefix) {
                 case 'IN':
-                    $where[] = [$actualColumn, 'IN', (array)$value];
+                    $where[] = [$actualColumn, 'IN', (array) $value];
                     break;
 
                 case 'LIKE':

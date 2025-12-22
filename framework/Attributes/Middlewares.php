@@ -34,7 +34,8 @@ class Middlewares implements MiddlewareProviderInterface
      */
     public function __construct(
         public array $middlewares = []
-    ) {}
+    ) {
+    }
 
     /**
      * 直接返回中间件数组

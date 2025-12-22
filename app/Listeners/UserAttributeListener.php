@@ -14,13 +14,13 @@ class UserAttributeListener
 	//public function onUserLogin(UserLoginEvent $event): void
     {
 		
-        echo "🚀 UserLoginEvent {$event->user->name}注解监听器触发! Priority 999<br>";
+        dump( "🚀 UserLoginEvent {$event->user->name}注解监听器触发! Priority 999<br>");
     }
 
     // 方式 2: 自动推断事件类型 (推荐)
     #[EventListener(priority: 1000)]
     public function sendWelcomeEmail(UserLoggedIn $event): void
     {
-        echo "📧 UserLoggedIn 发送邮件... 1000<br>";
+        dump( "📧 UserLoggedIn 发送邮件... 1000<br>");
     }
 }

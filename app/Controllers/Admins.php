@@ -155,9 +155,9 @@ class Admins  extends BaseController
         ]), 200, ['Content-Type' => 'application/json']);
     }
 
-
-    #[UserAction(type: 'register')] // ✅ 注册成功后，自动写入 user_logs 表
-	#[Middlewares([\App\Middlewares\LogMiddleware::class])]
+	#[Auth()]
+    ##[UserAction(type: 'register')] // ✅ 注册成功后，自动写入 user_logs 表
+	##[Middlewares([\App\Middlewares\AuthMiddleware::class])]
     public function register(Request $request): JsonResponse
     {
         // 1. 创建用户

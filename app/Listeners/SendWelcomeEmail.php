@@ -12,14 +12,14 @@ class SendWelcomeEmail
     public function onUserRegistered(UserLoggedIn $event): void
     {
 
-		echo "[EMAIL] 已向用户 {$event->userId} 发送欢迎邮件。： 101\n<br>";
+		dump( "[EMAIL] 已向用户 {$event->userId} 发送欢迎邮件。： 101\n<br>");
     }
 	
 	#[EventListener(priority: 102)]
     public function handleUserLogin(UserLoggedIn $event): void
     {
 
-		echo "EventListener handleUserLogin succesfully ： 102<br>";
+		dump( "EventListener handleUserLogin succesfully ： 102<br>");
     }	
 	
 	
