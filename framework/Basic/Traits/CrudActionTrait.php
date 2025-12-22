@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Framework\Basic\Traits;
 
-use Symfony\Component\HttpFoundation\Request;
 use Framework\Utils\Json;
+use Symfony\Component\HttpFoundation\Request;
+use Throwable;
 
 trait CrudActionTrait
 {
@@ -26,8 +27,7 @@ trait CrudActionTrait
 
             $method = $methodMap[$format] ?? 'formatNormal';
             return $this->$method($list, $total);
-
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             return $this->fail($e->getMessage());
         }
     }
@@ -35,16 +35,15 @@ trait CrudActionTrait
     public function show(Request $request)
     {
         try {
-            $id = $request->get('id');
+            $id   = $request->get('id');
             $data = $this->service->get($id);
-			
-            if (!$data) {
+
+            if (! $data) {
                 return $this->fail('数据不存在');
             }
 
-            return Json::success($data->toArray() , 'ok');
-
-        } catch (\Throwable $e) {
+            return Json::success($data->toArray(), 'ok');
+        } catch (Throwable $e) {
             return $this->fail($e->getMessage());
         }
     }
@@ -54,14 +53,13 @@ trait CrudActionTrait
         try {
             $data = $this->insertInput($request);
 
-            if ($this->validator && !$this->validator->scene('store')->check($data)) {
+            if ($this->validator && ! $this->validator->scene('store')->check($data)) {
                 return $this->fail($this->validator->getError());
             }
 
             $model = $this->service->save($data);
-            return Json::success($model->toArray(),'ok');
-
-        } catch (\Throwable $e) {
+            return Json::success($model->toArray(), 'ok');
+        } catch (Throwable $e) {
             return $this->fail($e->getMessage());
         }
     }
@@ -69,17 +67,16 @@ trait CrudActionTrait
     public function update(Request $request)
     {
         try {
-            $id = $request->attributes->get('id');
+            $id   = $request->attributes->get('id');
             $data = $this->insertInput($request);
 
-            if ($this->validator && !$this->validator->scene('update')->check($data)) {
+            if ($this->validator && ! $this->validator->scene('update')->check($data)) {
                 return $this->fail($this->validator->getError());
             }
 
             $this->service->update($id, $data);
             return $this->success();
-
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             return $this->fail($e->getMessage());
         }
     }
@@ -91,8 +88,7 @@ trait CrudActionTrait
 
             $this->service->delete($id);
             return $this->success();
-
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             return $this->fail($e->getMessage());
         }
     }

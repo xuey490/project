@@ -15,7 +15,7 @@ class LogUserLogin
     #[EventListener(priority: 100)]
     public function handleLoggedIn(UserLoggedIn $event): void
     {
-        echo "✅ [用户日志事件注解版] handleLoggedIn triggered User: {$event->userId}\r\n<br>";
+        dump( "✅ [用户日志事件注解版] handleLoggedIn triggered User: {$event->userId}\r\n<br>");
         app('log')->info("用户日志: ID={$event->userId}, IP={$event->ip} ");
     }
     
@@ -24,7 +24,7 @@ class LogUserLogin
     #[EventListener(priority: 200)]
     public function handleUserLogin(UserLoginEvent $event): void
     {
-        echo "✅ [用户登录事件注解版] handleUserLogin triggered User: {$event->user->id}，权重：200\r\n<br>";
+        dump( "✅ [用户登录事件注解版] handleUserLogin triggered User: {$event->user->id}，权重：200\r\n<br>");
         app('log')->info("用户登录: ID={$event->user->id}, IP={$event->ip}");
     }
 	

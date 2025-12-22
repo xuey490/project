@@ -138,7 +138,7 @@ class Home
 		
 	}
 	
-	#[Auth(required: true, roles: ['admin', 'editor'], guard: 'index')]
+	##[Auth(required: true, roles: ['admin', 'editor'], guard: 'index')]
     public function index(Request $request)
     {
 		//dump($this->customDao->getActiveUsers());
@@ -441,8 +441,8 @@ $query1 = Schema::table('custom', fn(Blueprint $t) =>
 )->get();
 */	
 // 输出链接时，直接使用生成的 URL，不要再手动拼接 "/home/config"
-echo '<a href="'.$query['prev_page_url'].'">Prev link</a>&nbsp;&nbsp;&nbsp;';
-echo '<a href="'.$query['next_page_url'].'">next link</a>&nbsp;&nbsp;&nbsp;';
+//echo '<a href="'.$query['prev_page_url'].'">Prev link</a>&nbsp;&nbsp;&nbsp;';
+//echo '<a href="'.$query['next_page_url'].'">next link</a>&nbsp;&nbsp;&nbsp;';
 
 #echo '<a href="'.$query['hasMorePages'].'">More</a>';
 

@@ -8,7 +8,7 @@ declare(strict_types=1);
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
- * @Filename: %filename%
+ * @Filename: Prefix.php
  * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
@@ -16,7 +16,9 @@ declare(strict_types=1);
 
 namespace Framework\Attributes\Routes;
 
-#[\Attribute(\Attribute::TARGET_CLASS)]
+use Attribute;
+
+#[Attribute(Attribute::TARGET_CLASS)]
 class Prefix
 {
     public function __construct(
@@ -24,5 +26,6 @@ class Prefix
         public array $middleware = [],
         public ?bool $auth = null,
         public array $roles = []
-    ) {}
+    ) {
+    }
 }

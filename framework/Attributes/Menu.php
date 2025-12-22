@@ -8,15 +8,15 @@ declare(strict_types=1);
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
- * @Filename: %filename%
+ * @Filename: Menu.php
  * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
  */
 
-// src/Attributes/Menu.php
-
 namespace Framework\Attributes;
+
+use Attribute;
 
 /**
  * @Menu
@@ -26,7 +26,7 @@ namespace Framework\Attributes;
  * #[Menu(title: '用户管理', icon: 'users', order: 10)]
  * #[Menu(title: '编辑用户', parent: '用户管理', hidden: true)]
  */
-#[\Attribute(\Attribute::TARGET_CLASS | \Attribute::TARGET_METHOD)]
+#[Attribute(Attribute::TARGET_CLASS | Attribute::TARGET_METHOD)]
 class Menu
 {
     /**
@@ -42,5 +42,6 @@ class Menu
         public int $order = 0,
         public ?string $parent = null,
         public bool $hidden = false
-    ) {}
+    ) {
+    }
 }

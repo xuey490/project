@@ -11,13 +11,15 @@ namespace App\Controllers;
 
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Framework\Attributes\Route;
+use Symfony\Component\HttpFoundation\Cookie;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Framework\Utils\CookieManager;
+use Framework\Utils\Json;
+use Framework\Basic\BaseJsonResponse;
 use App\Middlewares\AuthMiddleware;
 use Framework\Attributes\Auth;
-use Symfony\Component\HttpFoundation\JsonResponse;
+use Framework\Attributes\Route;
 
-#[Route(prefix: '/jwts/apijwt',auth: true, group: 'apijwt' , middleware: [AuthMiddleware::class] )]
 class Jwt
 {
 	private string $tokenString;
@@ -27,74 +29,230 @@ class Jwt
     ) {}
 	
 	
-	public function issue(Request $request)
+	public function issue(Request $request): Response
 	{
+		$userId = 42;
+
+		// 1. access token（短期）
+		$access = app('jwt')->issue([
+			'uid'  => $userId,
+			'name' => '张三',
+			'role' => 'admin'
+		]);
+
+		// 2. refresh token（长期，仅服务器 + 浏览器）
+		$refreshToken = app('jwt')->issueRefreshToken($userId);
+
+		$response = new JsonResponse([
+			'code' => 0,
+			'data' => [
+				'tokenValue' => $access['token'],
+				'expireTime'   => $access['ttl'],
+				'userId'	 => $userId,
+				'userName'	 => '张三',
+			],
+		]);
 		
-		#$response = app('response')->setContent('Hello NovaPHP!');
-		$response = new Response('非常复杂的html内容:'); // 可传空字符串
+		$response->headers->set('x-token-refresh', $access['token']);
+
+		// ✅ 只写 refresh token（HttpOnly）
+		$response->headers->setCookie(
+			new Cookie(
+				'refresh_token',
+				$refreshToken,
+				time() + 86400 * 7,
+				'/',
+				null,
+				true,   // secure
+				true,   // httponly
+				false,
+				'Strict'
+			)
+		);
 		
-		// 登录页面登录-->获取uid，role，name-->签发token-->token存入cookie/缓存-->到下一个页面的时候
-		//-->中间件请求头（或 Cookie）中提取 Token，验证 JWT 签名、issuer、exp、nbf 等标准 claims，再验证Redis 中是否存在 login:token:{jti}（用于判断是否被提前注销）-->验证失败，跳转到登录，
-		$token = app('jwt')->issue(['uid' => 42, 'name'=>'张三' ,'role'=>'admin']);
-		
-		#print_r($token);
-		
-		
-		//$token = "  Token: {$this->tokenString}<br/>";
+		$response->headers->setCookie(
+			new Cookie(
+				'access_token',
+				$access['token'],
+				time() +3600,
+				'/',
+				null,
+				true,   // secure
+				true,   // httponly
+				false,
+				'Strict'
+			)
+		);		
 
-
-		
-		app('cookie')->queueCookie('token', $token['token'], 3600);
-		app('cookie')->queueCookie('token_123', 'hello world', 3600); //适合FPM 和部分workerman启动器
-
-		// 快捷设置 Cookie 可以这样设置
-		//app('cookie')->setResponseCookie($response, 'token1111', $this->tokenString , 3600); //兼容fpm和所有workerman启动器
-		//app('cookie')->setResponseCookie($response, 'token123', $this->tokenString , 3600); //兼容fpm和所有workerman启动器
-
-		// 在发送 Response 前统一绑定队列中的 Cookie
-		app('cookie')->sendQueuedCookies($response);
-		
-		#dump($response);
-
-		// 快捷删除 Cookie
-		//app('cookie')->forgetResponseCookie($response, 'old_cookie');
-
-		// 如果续期了，可以获取新 token：
-		//$newToken = $request->attributes->get('_new_token');
-		//if ($newToken) {
-			// 在日志或前端提示中使用
-		//	$logger->info("Token refreshed for user {$user['uid']}");
-		//}
-
-
-		//解析结果
-		# $string = app('jwt')->getPayload($this->tokenString);
-
-
-		
 		return $response;
+	}
+
+	//刷新jwt token
+	public function refresh(Request $request): Response
+	{
+		$isSecure = $request->isSecure(); 
 		
-		
+		$refreshToken = $request->cookies->get('refresh_token');
+		if (! $refreshToken) {
+			return Json::fail('Refresh token missing', [], 401);
+		}
+
+		try {
+			// 1. rotation（旧 refresh 立即失效）
+			$newRefreshToken = app('jwt')->rotateRefreshToken($refreshToken);
+
+			// 2. 验证并取 uid
+			$uid = app('jwt')->validateRefreshToken($newRefreshToken);
+
+			// 3. 签发新的 access token
+			$access = app('jwt')->issue([
+				'uid' => $uid,
+			]);
+
+			$response = BaseJsonResponse::success([
+				'access_token' => $access['token'],
+				'expires_in'   => $access['ttl'],
+			]);
+			
+			$response->headers->set('x-token-refresh', $access['token']);
+
+			// 4. 只写 refresh token（HttpOnly）
+			$response->headers->setCookie(
+				new Cookie(
+					'refresh_token',
+					$newRefreshToken,
+					time() + 86400 * 7,
+					'/',
+					null,
+					true,
+					true,
+					false,
+					'Strict'
+				)
+			);
+			
+			// 5. 写 access token（HttpOnly）
+			$response->headers->setCookie(
+				new Cookie(
+					'access_token',
+					$access['token'],
+					time() + $access['ttl'],
+					'/',
+					null,
+					true,
+					true,
+					false,
+					'Strict'
+				)
+			);
+			
+
+			return $response;
+
+		} catch (\Throwable $e) {
+			return BaseJsonResponse::error('Refresh failed', 401);
+		}
 	}
 	
+
+	// 获取当前可用 access_token（必要时自动 refresh）
+	public function getJwtToken(Request $request): Response
+	{
+		$accessToken  = $request->cookies->get('access_token');
+		$refreshToken = $request->cookies->get('refresh_token');
+
+		// ① refreshToken 不存在 → 会话无效
+		if (empty($refreshToken)) {
+			return BaseJsonResponse::error('Refresh Token Missed', 401);
+		}
+
+		// ② access_token 仍有效
+		if (is_string($accessToken) && $accessToken !== '') {
+
+			$response = BaseJsonResponse::success([
+				'access_token' => $accessToken,
+			]);
+
+			// 可选：同步 cookie / 滑动过期
+			$response->headers->setCookie(
+				new Cookie(
+					'access_token',
+					$accessToken,
+					time() + 3600,
+					'/',
+					null,
+					true,
+					true,
+					false,
+					'Strict'
+				)
+			);
+
+			return $response;
+		}
+
+		// ③ access 不在，但 refresh 在 → 静默刷新
+		return $this->refresh($request);
+	}
+
+
+
 	
+	//退出登录 清空jwt token
+	public function logout(Request $request): Response
+	{
+		$refreshToken = $request->cookies->get('refresh_token');
+
+		if ($refreshToken) {
+			try {
+				// 1. 服务端吊销 refresh token（Redis / DB）
+				app('jwt')->revokeRefreshToken($refreshToken);
+			} catch (\Throwable $e) {
+				// 忽略异常，保证登出流程不中断
+			}
+		}
+
+		$response = Json::success('Logout success');
+
+		// 2. 清空 refresh_token cookie
+		$response->headers->setCookie(
+			new Cookie(
+				'refresh_token',
+				'',
+				time() - 3600,
+				'/',
+				null,
+				true,
+				true,
+				false,
+				'Strict'
+			)
+		);
+
+		// 3. 清空 access_token cookie
+		$response->headers->setCookie(
+			new Cookie(
+				'access_token',
+				'',
+				time() - 3600,
+				'/',
+				null,
+				true,
+				true,
+				false,
+				'Strict'
+			)
+		);
+
+		return $response;
+	}
+
 	
-	
-    /**
-     * 创建新产品 vvv1/admins/testadmin
-     * 
-     * @method get
-     * @path /setlogin
-     * @name products.store
-     * @auth true
-     * @role admin,manager
-     * @middleware App\Middlewares\AuthMiddleware, App\Middlewares\LogMiddleware
-     * @menu 创建产品
-     */	
+
 	public function login() 
     {
         // ... 验证用户凭证 ...
-        $userId = 123;
+        $userId = 42;
         
         // 1. 核心业务：签发 JWT Token（JwtFactory 仅关注 Token 内容和Redis持久化）
         $jwtFactory = app('jwt');
@@ -120,40 +278,39 @@ class Jwt
             'message' => 'Login successful',
             'expires_in' => $ttl
         ]);
-
+		
+		/*
+		
+		return new Response(
+			json_encode($data),
+			Response::HTTP_OK,
+			['Content-Type' => 'application/json']
+		);
+		*/
     }	
 	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	public function refresh()
+	#[Route(path: '/jwts/xss', methods: ['GET'], name: 'jwts.xss', auth: true, roles: ['admin'], middleware: [\App\Middlewares\AuthMiddleware::class] )]
+
+	public function xss():Response
 	{
+		return new Response('xss');
+	}
 
-		$token = app('session')->get('jwttoken');
-
-		// 刷新
-		//$newToken = $jwt->refresh($token);
+	/*
+	* 从token 解析出用户信息
+	*/
+	public function getdatas(Request $request):JsonResponse
+	{
+		$access_token ='eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJGc3NQaHAuSW5jIiwianRpIjoiNGE0MzJkZDUyZWY2YmUzZjFiMWI3M2VhZWY2ZTEwMDAiLCJpc3MiOiJGc3NQaHAiLCJpYXQiOjE3NjU2MzE0NzUuODA2MTc0LCJuYmYiOjE3NjU2MzE0NzUuODA2MTc0LCJleHAiOjE3NjU2MzUwNzUuODA2MTc0LCJ1aWQiOjQyfQ.uxQqPIFS5m2kfrUgoXhn0vk36NWFmp3iedoP7bclmXM' ;// $request->cookies->get('access_token');
 		
-		//解析token
-		$string = app('jwt')->getPayload($token);
-
+		$userInfo = app('jwt')->getPayload($access_token);
 		
-		return new Response('token:' . $token);
+		#dump($userInfo);
+		
+		return new JsonResponse(($userInfo));
 	}
 	
-	#[Route(path: '/get', methods: ['GET'], name: 'demo1.index' )]
-	public function getdatas()
-	{
-		return new Response('hello router');
-	}
-	
-	//banner uid=42的token
+
 	public function banner()
 	{
 		app('jwt')->revokeAllForUser(42);
@@ -166,36 +323,33 @@ class Jwt
 	//获取cookie，cookie字符长度单项为超过4k
 	public function getcookie( Request $request):Response
 	{
-		//$this->cookie->make('token' , 'okkkkkk');
-		//$token = $request->cookies->get('token');
-		
-		
+
 		$token = app('cookie')->get($request , 'token');
 		//return new Response('token:'.$token );
 		$user = app('jwt')->getPayload($token);
 		
 		dump($user);
 		
-/*
-#原生cookie操作
-// 1. 获取单个 Cookie（带默认值）
-$username = $request->cookies->get('username', '匿名用户'); // 若 cookie 不存在，返回 "匿名用户"
+		/*
+		#原生cookie操作
+		// 1. 获取单个 Cookie（带默认值）
+		$username = $request->cookies->get('username', '匿名用户'); // 若 cookie 不存在，返回 "匿名用户"
 
-// 2. 判断 Cookie 是否存在
-if ($request->cookies->has('token')) {
-$token = $request->cookies->get('token');
-} else {
-$token = '无 token Cookie';
-}
+		// 2. 判断 Cookie 是否存在
+		if ($request->cookies->has('token')) {
+		$token = $request->cookies->get('token');
+		} else {
+		$token = '无 token Cookie';
+		}
 
-// 3. 获取整数/布尔类型 Cookie（自动转换）
-#$uid = $request->cookies->getInt('uid', 0); // 非整数返回 0
-#$isVip = $request->cookies->getBoolean('is_vip', false); // 非布尔返回 false
+		// 3. 获取整数/布尔类型 Cookie（自动转换）
+		#$uid = $request->cookies->getInt('uid', 0); // 非整数返回 0
+		#$isVip = $request->cookies->getBoolean('is_vip', false); // 非布尔返回 false
 
-// 4. 获取所有 Cookie
-#$allCookies = $request->cookies->all();
-#dump($allCookies);
-*/
+		// 4. 获取所有 Cookie
+		#$allCookies = $request->cookies->all();
+		#dump($allCookies);
+		*/
 		return new Response('token:'.$token );
 	}
 
@@ -213,7 +367,7 @@ $token = '无 token Cookie';
 	
 
 	// 退出接口
-	public function logout(Request $request): Response
+	public function logout1(Request $request): Response
 	{
 		$token = app('cookie')->get('token');
 

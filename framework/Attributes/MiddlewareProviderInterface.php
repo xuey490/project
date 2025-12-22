@@ -8,7 +8,7 @@ declare(strict_types=1);
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
- * @Filename: %filename%
+ * @Filename: MiddlewareProviderInterface.php
  * @Date: 2025-12-17
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
@@ -24,7 +24,7 @@ interface MiddlewareProviderInterface
 {
     /**
      * 返回该注解关联的中间件类名 (或类名数组)
-     * @return string|array
+     * @return string|array<string>
      */
     public function getMiddleware(): string|array;
 }
