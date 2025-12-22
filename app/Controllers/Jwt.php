@@ -54,35 +54,49 @@ class Jwt
 		]);
 		
 		$response->headers->set('x-token-refresh', $access['token']);
-
-		// ✅ 只写 refresh token（HttpOnly）
-		$response->headers->setCookie(
-			new Cookie(
-				'refresh_token',
-				$refreshToken,
-				time() + 86400 * 7,
-				'/',
-				null,
-				true,   // secure
-				true,   // httponly
-				false,
-				'Strict'
-			)
-		);
 		
-		$response->headers->setCookie(
-			new Cookie(
-				'access_token',
-				$access['token'],
-				time() +3600,
-				'/',
-				null,
-				true,   // secure
-				true,   // httponly
-				false,
-				'Strict'
-			)
-		);		
+        // 判断是否为 API/Ajax 请求
+        $isApi = false;
+        if ($request) {
+            $accept = $request->headers->get('Accept');
+            $ajax   = $request->headers->get('X-Requested-With');
+            // 简单的 API 判断逻辑：Accept 头包含 'json' 或 X-Requested-With 是 'XMLHttpRequest' (Ajax)
+            $isApi  = str_contains((string) $accept, 'json') || $ajax === 'XMLHttpRequest';
+        }
+
+        if ($isApi) {
+            // === API / Ajax 场景：添加 Authorization 头 ===
+            $response->headers->set('Authorization', 'Bearer ' . $access['token'] );
+        } else {
+			// ✅ 只写 refresh token（HttpOnly）
+			$response->headers->setCookie(
+				new Cookie(
+					'refresh_token',
+					$refreshToken,
+					time() + 86400 * 7,
+					'/',
+					null,
+					true,   // secure
+					true,   // httponly
+					false,
+					'Strict'
+				)
+			);
+			
+			$response->headers->setCookie(
+				new Cookie(
+					'access_token',
+					$access['token'],
+					time() +3600,
+					'/',
+					null,
+					true,   // secure
+					true,   // httponly
+					false,
+					'Strict'
+				)
+			);		
+		}
 
 		return $response;
 	}
@@ -116,36 +130,49 @@ class Jwt
 			
 			$response->headers->set('x-token-refresh', $access['token']);
 
-			// 4. 只写 refresh token（HttpOnly）
-			$response->headers->setCookie(
-				new Cookie(
-					'refresh_token',
-					$newRefreshToken,
-					time() + 86400 * 7,
-					'/',
-					null,
-					true,
-					true,
-					false,
-					'Strict'
-				)
-			);
-			
-			// 5. 写 access token（HttpOnly）
-			$response->headers->setCookie(
-				new Cookie(
-					'access_token',
-					$access['token'],
-					time() + $access['ttl'],
-					'/',
-					null,
-					true,
-					true,
-					false,
-					'Strict'
-				)
-			);
-			
+			// 判断是否为 API/Ajax 请求
+			$isApi = false;
+			if ($request) {
+				$accept = $request->headers->get('Accept');
+				$ajax   = $request->headers->get('X-Requested-With');
+				// 简单的 API 判断逻辑：Accept 头包含 'json' 或 X-Requested-With 是 'XMLHttpRequest' (Ajax)
+				$isApi  = str_contains((string) $accept, 'json') || $ajax === 'XMLHttpRequest';
+			}
+
+			if ($isApi) {
+				// === API / Ajax 场景：添加 Authorization 头 ===
+				$response->headers->set('Authorization', 'Bearer ' . $access['token'] );
+			} else {
+				// 4. 只写 refresh token（HttpOnly）
+				$response->headers->setCookie(
+					new Cookie(
+						'refresh_token',
+						$newRefreshToken,
+						time() + 86400 * 7,
+						'/',
+						null,
+						true,
+						true,
+						false,
+						'Strict'
+					)
+				);
+				
+				// 5. 写 access token（HttpOnly）
+				$response->headers->setCookie(
+					new Cookie(
+						'access_token',
+						$access['token'],
+						time() + $access['ttl'],
+						'/',
+						null,
+						true,
+						true,
+						false,
+						'Strict'
+					)
+				);
+			}
 
 			return $response;
 
@@ -249,51 +276,13 @@ class Jwt
 
 	
 
-	public function login() 
-    {
-        // ... 验证用户凭证 ...
-        $userId = 42;
-        
-        // 1. 核心业务：签发 JWT Token（JwtFactory 仅关注 Token 内容和Redis持久化）
-        $jwtFactory = app('jwt');
-        $result = $jwtFactory->issue(['uid' => $userId]);
-        
-        $token   = $result['token'];
-        $expires = $result['expiresAt'];
-        $ttl     = $result['ttl'];
-        
-        // 2. 传输逻辑：处理 HTTP 响应 (JwtResponseHelper 仅关注 Header/Cookie)
-        $request = app('request');  // 从容器获取 Request
-        $response = app('response'); // 从容器获取 Response
-        
-        try {
-            \Framework\Utils\JwtResponseHelper::setTokenResponse($token, $expires, $ttl, $request, $response);
-        } catch (\Throwable $e) {
-            // 忽略响应设置错误，或记录日志
-        }
-        
-        // 3. 返回最终响应
-        return new JsonResponse([
-            'token' => $token, 
-            'message' => 'Login successful',
-            'expires_in' => $ttl
-        ]);
-		
-		/*
-		
-		return new Response(
-			json_encode($data),
-			Response::HTTP_OK,
-			['Content-Type' => 'application/json']
-		);
-		*/
-    }	
+
 	
 	#[Route(path: '/jwts/xss', methods: ['GET'], name: 'jwts.xss', auth: true, roles: ['admin'], middleware: [\App\Middlewares\AuthMiddleware::class] )]
-
 	public function xss():Response
 	{
-		return new Response('xss');
+		$response  = (app('response')->setContent('hello world！'));
+		return $response;
 	}
 
 	/*
