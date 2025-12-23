@@ -233,21 +233,21 @@ class Home
 $currentPage = max(1, (int) $request->query->get('page', 1));
 
 #dump($page);
-$limit = 3;
+$limit = 1;
 
 $list = $this->customDao->selectModel(
     ['status' => 1],
     '*',
     $currentPage,
     $limit,
-) ;
+)->paginate(1, ['*'], 'page', 1)->toArray();
 
-
+dump($list);
 //->toArray(); TP 
 // ->get()->toArray();
 //->paginate(3, ['*'], 'page', 1)->toArray(); //Laravel
 
-//dump ($this->customDao->get(['status' => 1]));
+dump ($this->customDao->get(['status' => 1])->toArray());
 
 
 #$model = new Custom();

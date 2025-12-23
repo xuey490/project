@@ -16,71 +16,75 @@ declare(strict_types=1);
 
 namespace Framework\Basic;
 
-#use app\services\system\SystemRecycleBinService;
-use Illuminate\Support\Carbon;
-use Framework\Basic\Exception\Exception;
-use Framework\Utils\Snowflake;
-#use Framework\Core\App;
-#use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
+use Framework\Utils\Snowflake;
+use Framework\Basic\Traits\LaBelongsToTenant; // 引入多租户Trait
 use RuntimeException;
 
 class BaseLaORMModel extends Model
 {
-    private const WORKER_ID = 1;
-    private const DATA_CENTER_ID = 1;
+    // 如果你的所有业务表都需要多租户，可以直接在这里引入。
+    // 如果系统表不需要，建议在具体的业务 Model 里引入这个 Trait。
+    use LaBelongsToTenant; 
 
     /**
-     * 指明模型的ID是否自动递增。
+     * 指明模型的ID是否自动递增 (雪花算法不是自增).
      *
      * @var bool
      */
     public $incrementing = false;
 
+    /**
+     * 主键类型
+     */
+    protected $keyType = 'int'; // 雪花ID通常是bigint，PHP端作为int处理
+
     const CREATED_AT = 'created_at';
     const UPDATED_AT = 'updated_at';
     const DELETED_AT = 'deleted_at';
 
-	protected $appends = [];
-	
     /**
-     * 模型日期字段的存储格式。
+     * 模型日期字段的存储格式 (时间戳).
      *
      * @var string
      */
     protected $dateFormat = 'U';
 
     /**
-     * 指示模型是否主动维护时间戳。
-     *
-     * @var bool
+     * 自动转换日期格式
+     * 让 created_at 和 updated_at 拿出来时自动变成 Carbon 对象，
+     * 配合 serializeDate 可以控制输出格式
      */
-    public $timestamps = true;
+    protected $casts = [
+        'created_at' => 'timestamp',
+        'updated_at' => 'timestamp',
+        'deleted_at' => 'timestamp',
+    ];
 
     /**
-     * 存储动态隐藏字段
-     *
-     * @var array
+     * 动态隐藏字段
      */
     protected array $dynamicHidden = [];
 
     /**
-     * 雪花算法实例化类
-     *
-     * @var Snowflake|null
+     * 雪花算法实例
      */
     private static ?Snowflake $snowflake = null;
-
 
     protected static function boot()
     {
         parent::boot();
-        //注册创建事件
+
+        // 注册创建事件
         static::creating(function ($model) {
-            if (!isset($model->{$model->getKeyName()})) {
-                $model->{$model->getKeyName()} = self::generateSnowflakeID(); // 生成雪花 ID
+            // 1. 生成雪花 ID
+            if (empty($model->{$model->getKeyName()})) {
+                $model->{$model->getKeyName()} = self::generateSnowflakeID();
             }
+            // 2. 自动填充创建人
             self::setCreatedBy($model);
         });
 
@@ -96,46 +100,49 @@ class BaseLaORMModel extends Model
     }
 
     /**
-     * 是否开启软删
-     *
-     * @return bool
+     * 准备日期序列化格式 (API返回JSON时会自动调用)
      */
-    public static function isSoftDeleteEnabled(): bool
+    protected function serializeDate(\DateTimeInterface $date)
     {
-        return in_array(SoftDeletes::class, class_uses(static::class));
+        return $date->setTimezone(config('app.time_zone', 'PRC'))->format('Y-m-d H:i:s');
     }
 
     /**
-     * 获取主键名称
-     *
-     * @return string
+     * 兼容 TP: 动态隐藏字段
      */
-    public function getPk(): string
+    public function hidden(array $fields): static
     {
-        return $this->getKeyName();
+        $this->makeHidden($fields); // Eloquent 原生支持 makeHidden
+        return $this;
     }
 
     /**
-     * 获取模型字段数据 兼容tp写法
-     *
-     * @param string $field
-     *
-     * @return mixed
+     * 兼容 TP: 获取数据
      */
     public function getData(string $field): mixed
     {
-        return $this->attributes[$field] ?? null;
+        return $this->getAttribute($field);
     }
 
     /**
-     * 写入模型字段数据 兼容 TP 
-     *
-     * @param string $name
-     * @param mixed  $value
+     * 兼容 TP: 设置数据
      */
     public function set(string $name, mixed $value): void
     {
-        $this->attributes[$name] = $value;
+        $this->setAttribute($name, $value);
+    }
+
+    /**
+     * 获取表字段列表 (使用 Schema 门面，兼容性更好)
+     */
+    public function getFields_1(): array
+    {
+        try {
+            return Schema::connection($this->getConnectionName())
+                ->getColumnListing($this->getTable());
+        } catch (\Exception $e) {
+            return [];
+        }
     }
 
     public function getTable(): string
@@ -181,180 +188,91 @@ class BaseLaORMModel extends Model
         }
     }
 
-
     /**
-     * 兼容tp 重写动态输出隐藏
-     *
-     * @param array $fields
-     *
-     * @return $this
+     * 获取主键名称
      */
-    public function hidden(array $fields): static
+    public function getPk(): string
     {
-        $this->dynamicHidden = array_merge($this->dynamicHidden, $fields);
-        return $this; // 支持链式调用
+        return $this->getKeyName();
     }
 
-
     /**
-     * 追加创建时间 created_at
-     *
-     * @return string|null
+     * 是否开启软删
      */
-    public function getCreatedDateAttribute(): ?string
+    public static function isSoftDeleteEnabled(): bool
     {
-        if ($this->getAttribute($this->getCreatedAtColumn())) {
-            try {
-                $timestamp = $this->getRawOriginal($this->getCreatedAtColumn());
-                if (empty($timestamp)) {
-                    return null;
-                }
-                $carbonInstance = Carbon::createFromTimestamp($timestamp);
-                return $carbonInstance->setTimezone(config('app.time_zone'))->format('Y-m-d H:i:s');
-            } catch (\Exception $e) {
-                return null;
-            }
-        }
-        return null;
-    }
-	
-    /**
-     * 追加更新时间 updated_at
-     *
-     * @return string|null
-     */
-    public function getUpdatedDateAttribute(): ?string
-    {
-        if ($this->getAttribute($this->getUpdatedAtColumn())) {
-            try {
-                $timestamp = $this->getRawOriginal($this->getUpdatedAtColumn());
-                if (empty($timestamp)) {
-                    return null;
-                }
-                $carbonInstance = Carbon::createFromTimestamp($timestamp);
-                return $carbonInstance->setTimezone(config('app.time_zone'))->format('Y-m-d H:i:s');
-            } catch (\Exception $e) {
-                return null;
-            }
-        }
-        return null;
-    }
-	
-
-
-    public function getCreateTimeAttribute($value): string
-    {
-        return Carbon::parse($value)->format('Y-m-d H:i:s');
-    }
-
-    public function getExpiresTimeAttribute($value): string
-    {
-        return Carbon::parse($value)->format('Y-m-d H:i:s');
-    }
-
-    public function getUpdateTimeAttribute($value): string
-    {
-        return Carbon::parse($value)->format('Y-m-d H:i:s');
-    }
-
-    public static function onAfterDelete(Model $model)
-    {
-        try {
-            if ($model->isSoftDeleteEnabled()) {
-                return;
-            }
-            $table     = $model->getTable();
-			
-            $service = App(SysRecycleBinService::class);
-            $config  = $service->getTableConfig($table);
-
-            // 检查是否启用回收站
-            if (!$config['enabled'] || $model->isSoftDeleteEnabled() || $config['strategy'] === 'logical') {
-                return;
-            }
-			
-            $tableData = $model->getAttributes();
-            $prefix    = $model->getConnection()->getTablePrefix();
-            /*if (self::shouldStoreInRecycleBin($table)) {
-                $data                    = self::prepareRecycleBinData($tableData, $table,$prefix);
-                $systemRecycleBinService = App::make(SystemRecycleBinService::class);
-                $systemRecycleBinService->save($data);
-            }*/
-        } catch (\Exception $e) {
-            throw new \RuntimeException($e->getMessage());
-        }
+        return in_array(SoftDeletes::class, class_uses(static::class));
     }
 
     /**
-     * 设置创建人
-     *
-     * @param Model $model
-     *
-     * @return void
+     * 自动设置创建人
      */
     private static function setCreatedBy(Model $model): void
     {
-        $uid = getCurrentUser();
-        if ($uid && $model->isFillable('created_by')) {
+        // 需确保 getCurrentUser() 存在且安全
+        $uid = function_exists('getCurrentUser') ? \getCurrentUser() : null;
+        
+        // 检查 created_by 是否在 fillable 中或数据库有此字段，防止报错
+        // 这里假设只要数据库有这个字段就填，不强制 fillable
+        if ($uid && Schema::hasColumn($model->getTable(), 'created_by')) {
             $model->setAttribute('created_by', $uid);
         }
     }
 
     /**
-     * 设置更新人
-     *
-     * @param Model $model
-     *
-     * @return void
+     * 自动设置更新人
      */
     private static function setUpdatedBy(Model $model): void
     {
-        $uid = getCurrentUser();
-        if ($uid && $model->isFillable('updated_by')) {
-            $model->setAttribute('updated_by', $uid);
+        $uid = function_exists('getCurrentUser') ? \getCurrentUser() : null;
+        
+        if ($uid && Schema::hasColumn($model->getTable(), 'updated_by')) {
+             $model->setAttribute('updated_by', $uid);
         }
     }
 
     /**
-     *  实例化雪花算法
-     *
-     * @return Snowflake
+     * 处理删除后的逻辑 (回收站)
      */
-    private static function createSnowflake(): Snowflake
+    public static function onAfterDelete(Model $model)
     {
-        if (self::$snowflake == null) {
-            self::$snowflake = new Snowflake(self::WORKER_ID, self::DATA_CENTER_ID);
+        // 如果开启了软删除，Eloquent 会自动处理 deleted_at，
+        // 这里通常用于处理“真删除”时的归档，或者同步到额外的回收站表
+        if ($model::isSoftDeleteEnabled()) {
+            return;
         }
-        return self::$snowflake;
+
+        try {
+            // 这里建议使用 Facade 或依赖注入，不要直接 new Service
+            // 假设 SysRecycleBinService 已经绑定
+            /*
+            $service = app(\app\services\system\SystemRecycleBinService::class);
+            $config = $service->getTableConfig($model->getTable());
+            if ($config['enabled']) {
+                // 保存逻辑...
+            }
+            */
+        } catch (\Exception $e) {
+            // 记录日志，不要抛出异常打断删除流程，除非业务必须
+            \Illuminate\Support\Facades\Log::error("Recycle bin error: " . $e->getMessage());
+        }
     }
+
+    // ================= 雪花算法部分优化 =================
 
     /**
      * 生成雪花ID
-     *
-     * @return int
      */
-    private static function generateSnowflakeID(): int
+    public static function generateSnowflakeID(): int
     {
-        $snowflake = self::createSnowflake();
-        return $snowflake->nextId();
+        if (self::$snowflake === null) {
+            // 优化：从配置读取 WorkerId 和 DataCenterId
+            // 确保不同服务器配置不同，否则ID会冲突
+            $workerId = (int) config('app.snowflake_worker_id', 1);
+            $dataCenterId = (int) config('app.snowflake_datacenter_id', 1);
+            
+            self::$snowflake = new Snowflake($workerId, $dataCenterId);
+        }
+        return self::$snowflake->nextId();
     }
-
-    private static function shouldStoreInRecycleBin($table): bool
-    {
-        return config('app.store_in_recycle_bin') && !in_array($table, config('app.exclude_from_recycle_bin'));
-    }
-
-    private static function prepareRecycleBinData($tableData, $table, $prefix): array
-    {
-        return [
-            'data'         => json_encode($tableData),
-			'original_id'  => $tableData['id'] ?? '',
-            'table_name'   => $table,
-            'table_prefix' => $prefix,
-            'enabled'      => 0,
-            'ip'           => app('request')->getRealIp(),
-            'operate_id'   => getCurrentUser(),
-        ];
-    }
-
 }
