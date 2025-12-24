@@ -19,6 +19,7 @@ use Framework\Middleware\MiddlewareXssFilter;
 use Framework\Security\CsrfTokenManager;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Framework\Utils\Captcha as CCaptcha;
 use Framework\Utils\CookieManager;
@@ -42,6 +43,19 @@ use Framework\Utils\Snowflake;
 #use Framework\Config\Cache\ConfigCache;
 
 #use think\facade\Db;
+
+
+
+
+
+use Framework\Attributes\Validate; // 引入注解
+use App\Validate\NewUser as UserValidate; // 引入你的验证器类
+
+
+
+
+
+
 
 ##[Auth(roles: ['admin'])]
 ##[Prefix('/secures', middleware: [AuthMiddleware::class])]
@@ -242,7 +256,7 @@ $list = $this->customDao->selectModel(
     $limit,
 )->paginate(1, ['*'], 'page', 1)->toArray();
 
-dump($list);
+dump((new Custom())->getPk());
 //->toArray(); TP 
 // ->get()->toArray();
 //->paginate(3, ['*'], 'page', 1)->toArray(); //Laravel
@@ -510,7 +524,11 @@ $query1 = Schema::table('custom', fn(Blueprint $t) =>
         // 传递给模板
         return new Response("<form method='POST' action='/home/checkCaptcha'>
             <input type='hidden' name='_token' value='{$token}'>
-			<input type='text' name='code'>
+			用户：<input type='text' name='name' value='chen'><br/>
+			年龄：<input type='text' name='age' value='333'><br/>
+			生日：<input type='text' name='birthday' value='1898-12-11'><br/>
+			邮箱：<input type='text' name='email' value='aa@admn.com'><br/>
+			验证码：<input type='text' name='code'>
 			<input type='text' name='userid' value={$userid}>
 			<img src='{$base64}'>
             <input name='key' value='{$key}'>
@@ -518,9 +536,19 @@ $query1 = Schema::table('custom', fn(Blueprint $t) =>
         </form>");
     }
 
-
+	
+	
+	#[Validate(validator: UserValidate::class, scene: 'create')] 
     public function checkCaptcha(Request $request): Response
     {
+		
+        $data =  array_merge($request->query->all(), $request->request->all());  //$request->toArray();
+        #dump($data);
+        // save to db...
+        
+        return new JsonResponse(['msg' => 'User created', 'data' => $data]);
+		
+		
 		/*
         $config    = require __DIR__ . '/../../config/captcha.php';
         $captcha   = new CCaptcha($config);

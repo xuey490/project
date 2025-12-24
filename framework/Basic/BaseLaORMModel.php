@@ -137,6 +137,7 @@ class BaseLaORMModel extends Model
      */
     public function getFields_1(): array
     {
+		#dump($this->getConnectionName());
         try {
             return Schema::connection($this->getConnectionName())
                 ->getColumnListing($this->getTable());
