@@ -24,25 +24,22 @@ use Symfony\Component\HttpFoundation\RequestStack;
 use Framework\Utils\Captcha as CCaptcha;
 use Framework\Utils\CookieManager;
 use Framework\Attributes\Auth;
-use Symfony\Component\HttpFoundation\Session\SessionInterface;
 use Framework\Attributes\Route;
 
 use Framework\Core\App;
 
 
 use Framework\Database\DatabaseFactory;
-use Illuminate\Database\Capsule\Manager as Capsule;
+#use Illuminate\Database\Capsule\Manager as Capsule;
 #use Illuminate\Support\Facades\DB;
-use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
+#use Illuminate\Database\Schema\Blueprint;
+#use Illuminate\Support\Facades\Schema;
 
 use Framework\Utils\Snowflake;
 
 
-//use Framework\Config\Config ;
-#use Framework\Config\Cache\ConfigCache;
 
-#use think\facade\Db;
+use think\facade\Db;
 
 
 
@@ -236,6 +233,29 @@ class Home
 			
 		//ThinkORM Model的写法
         $user =App::make( Custom::class);
+			
+			//通用插入
+			/*
+        // 2. 给模型属性赋值（对应数据库表字段）
+        $user->name = 'test_user';
+        $user->englishname = 'test_user';
+        $user->nickname = '王五11';
+        $user->email = 'test11@example.com';
+        $user->group_id = 111;
+        //$user->create_time = date('Y-m-d H:i:s'); // 若开启自动时间戳，可省略
+        
+        // 3. 调用save()方法插入数据
+        $result = $user->save();
+        if ($result) {
+            // 获取插入后的自增主键ID
+            $insertId = $user->id;
+            return "插入成功，主键ID：{$insertId}";
+        } else {
+            // 获取错误信息
+            return "插入失败：" . $user->getError();
+        }
+		*/
+
       
 		//ThinkORM Model的写法
         #$user = (new Custom())->getTableName();
@@ -254,14 +274,16 @@ $list = $this->customDao->selectModel(
     '*',
     $currentPage,
     $limit,
-)->paginate(1, ['*'], 'page', 1)->toArray();
+);
 
-dump((new Custom())->getPk());
+//dump( ($this->db)( Custom::class)->getFields() );
+
+dump($user->getFields_1());
 //->toArray(); TP 
 // ->get()->toArray();
 //->paginate(3, ['*'], 'page', 1)->toArray(); //Laravel
 
-dump ($this->customDao->get(['status' => 1])->toArray());
+//dump ($this->customDao->get(['status' => 1])->toArray());
 
 
 #$model = new Custom();
