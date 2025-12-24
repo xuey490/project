@@ -2,7 +2,9 @@
 // app/Validate/User.php
 namespace App\Validate;
 
-use Framework\Validation\Validate; // ← 改为使用你自己的基类
+use Framework\Validation\ThinkValidatorFactory; // ← 改为使用你自己的基类
+
+use think\Validate;
 
 class User extends Validate
 {
@@ -21,8 +23,8 @@ class User extends Validate
     ];
 
     protected $message = [
+		'name.alphaDash'    => '姓名只能包含字母、数字、下划线和中划线',
         'name.required'     => '姓名不能为空',
-        'name.alphaDash'    => '姓名只能包含字母、数字、下划线和中划线',
         'age.numeric'   	=> '年龄必须是数字',
         'age.between'  		=> '年龄只能在1-120之间',
         'password.confirmed'=> '两次输入的密码不一致',
