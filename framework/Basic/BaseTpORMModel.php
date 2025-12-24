@@ -6,35 +6,40 @@ namespace Framework\Basic;
 
 use Framework\Basic\Scope\TpTenantScope;
 use Framework\Utils\Snowflake;
-use think\Model;
-use think\model\concern\SoftDelete;
+use think\Model as TpModel;
+use think\model\concern\SoftDelete as TpSoftDelete;
 use think\facade\Config;
 
 /**
- * ThinkPHP 模型基类封装
+ * ThinkPHP 模型基类封装 (适配 TP6.0 / TP8.0)
  */
-class BaseTpORMModel extends Model
+class BaseTpORMModel extends TpModel
 {
-    // 引入软删除 (TP自带)
-    use SoftDelete;
-
-    // 自动写入时间戳字段 (TP自带功能)
-    protected $autoWriteTimestamp = true; // 开启自动写入
-    protected $createTime = 'create_time'; // 定义创建时间字段名
-    protected $updateTime = 'update_time'; // 定义更新时间字段名
-    protected $deleteTime = 'delete_time'; // 定义软删除字段名
+    // [重要] 如果 ModelTrait 里面有 use Illuminate\... 或者定义了 restore() 方法，会再次报错！
+    // 建议先排查 ModelTrait，确认无误后再开启。
+    use \Framework\ORM\Trait\ModelTrait;
     
-    // 默认时间格式 (根据你的数据库类型，如果是int存时间戳，这里留空或 'int')
-    // protected $dateFormat = 'Y-m-d H:i:s'; 
+    // 引入 ThinkPHP 自带的软删除
+    use TpSoftDelete;
 
-    // 设置主键类型为 string (因为雪花ID是bigint，前端JS丢失精度，通常转字符串，或者后端用 bigint)
-    // 如果 PHP 是 64位，可以保持 int，但建议 string 兼容性更好
+    // =========================================================================
+    //  基础配置
+    // =========================================================================
+
+    // 自动写入时间戳字段
+    protected $autoWriteTimestamp = true; 
+    protected $createTime = 'create_time'; 
+    protected $updateTime = 'update_time'; 
+    protected $deleteTime = 'delete_time'; 
+    
+    // 软删除字段默认值
+    protected $defaultSoftDelete = null;
+
+    // 设置主键类型 (雪花ID需设为 string 避免 JS 精度丢失)
     protected $pkType = 'string'; 
 
     /**
-     * 注册全局作用域
-     * 这里直接引入 TpTenantScope，所有继承该类的模型都会自动隔离租户
-     * @var array
+     * 注册全局作用域 (实现 SaaS 多租户隔离)
      */
     protected $globalScope = [TpTenantScope::class];
 
@@ -46,128 +51,170 @@ class BaseTpORMModel extends Model
      */
     private static ?Snowflake $snowflake = null;
 
-    /**
-     * 模型初始化
-     * TP模型的入口，相当于 Laravel 的 boot()
-     */
-    protected static function init()
-    {
-        parent::init();
-
-        // 注册：新增前 (Insert)
-        static::event('before_insert', function (Model $model) {
-            // 1. 生成雪花ID
-            self::setPrimaryKey($model);
-            // 2. 自动设置租户ID
-            self::setTenantId($model);
-            // 3. 设置创建人
-            self::setCreatedBy($model);
-        });
-
-        // 注册：写入前 (Insert & Update)
-        static::event('before_write', function (Model $model) {
-            self::setUpdatedBy($model);
-        });
-
-        // 注册：删除后
-        static::event('after_delete', function (Model $model) {
-            self::onAfterDelete($model);
-        });
-    }
+    // =========================================================================
+    //  模型事件 (ThinkPHP 6/8 标准静态方法)
+    // =========================================================================
 
     /**
-     * 获取模型定义的字段列表.
-     *
-     * @return mixed
+     * 模型事件：新增前
+     * 注意：这里必须用 TpModel，因为上面 use ... as TpModel
      */
-    public function getFields(?string $field = null): array
+    public static function onBeforeInsert(TpModel $model): void
     {
-        // 父类原版逻辑
-        $array = parent::getFields($field);
-        if (! $array) {
-            return [];
+        try {
+			self::setPrimaryKey($model);
+			self::setTenantId($model);
+			self::setCreatedBy($model);
+        } catch (\Exception $e) {
+            throw new \BadMethodCallException($e->getMessage());
         }
-        return parent::getFields($field);
+		
     }
 
     /**
-     * 是否开启软删.
+     * 模型事件：更新后事件
      */
-    public function isSoftDeleteEnabled(): bool
+    public static function onAfterUpdate(TpModel $model): void
     {
-        return in_array(SoftDelete::class, class_uses(static::class));
+        self::setUpdatedBy($model);
     }
 
     /**
-     * 获取模型定义的数据库表名【全称】.
+     * 模型事件：删除后
      */
-    public static function getTableName(): string
+    public static function onAfterDelete(TpModel $model): void
     {
-        $self = new static();
-        $prefix = (string) $self->getConfig('prefix');
-        if (!empty($self->table)) {
-            return $self->table;
+        if ($model->isSoftDeleteEnabled()) {
+            return;
         }
-        return $prefix . (string) $self->name;
+        $table     = $model->getName();
+        $tableData = $model->getData();
+        $prefix    = $model->getConfig('prefix');
+		
+        try {
+
+
+
+        } catch (\Exception $e) {
+            throw new \BadMethodCallException($e->getMessage());
+        }
+		
     }
 
+    // =========================================================================
+    //  核心方法
+    // =========================================================================
+
+    /**
+     * 构造函数
+     * 兼容处理表前缀逻辑
+     */
     public function __construct(array $data = [])
     {
         parent::__construct($data);
-        $prefix = (string) $this->getConfig('prefix');
         
-        if (!empty($this->table) && empty($this->name)) {
-            $t = (string) $this->table;
-            if ($prefix !== '' && strncmp($t, $prefix, strlen($prefix)) === 0) {
-                $this->name = substr($t, strlen($prefix));
-                
-            } else {
-                $this->name = $t;
-                if ($prefix !== '') {
-                    $this->table = $prefix . $t;
-                }
+        if (empty($this->name) && empty($this->table)) {
+            $prefix = (string) $this->getConfig('prefix');
+            $this->name = $this->getName();
+            if ($prefix) {
+                $this->table = $prefix . $this->name;
             }
-        }
-        
-        if (!empty($this->name) && empty($this->table)) {
-            $this->table = ($prefix !== '' ? $prefix . $this->name : $this->name);
-        }
-    }
-
- /**
-     * 设置主键 (雪花ID)
-     */
-    private static function setPrimaryKey(Model $model): void
-    {
-        $pk = $model->getPk();
-        // 如果主键为空，则生成
-        if (empty($model->{$pk})) {
-            $model->{$pk} = self::generateSnowflakeID();
         }
     }
 
     /**
-     * 设置租户ID (SaaS核心)
+     * 初始化 (非静态)
      */
-    private static function setTenantId(Model $model): void
+    protected function init()
     {
-        // 只有当模型没有手动设置 tenant_id 时才自动填充
+        parent::init();
+        // 如果需要默认过滤软删除，TpSoftDelete 会自动处理，无需手动 withScope
+    }
+
+
+	/**
+     * 获取模型定义的字段列表
+     * 修正：移除 :array 强类型限制，因为当传入 $field 时，父类会返回 string
+     *
+     * @param string|null $field
+     * @return mixed
+     */
+    public function getFields(?string $field = null):mixed
+    {
+        $res = parent::getFields($field);
+        
+        // 如果查询具体字段，直接返回结果（可能是字符串）
+        if ($field) {
+            return $res;
+        }
+        
+        // 如果查询全部字段，确保返回数组
+        return $res ?: [];
+    }
+
+    /**
+     * 判断是否开启软删
+     */
+    public function isSoftDeleteEnabled(): bool
+    {
+        return in_array(TpSoftDelete::class, class_uses(static::class));
+    }
+
+    /**
+     * 强制物理删除
+     */
+    public static function forceDeleteById($id): bool
+    {
+        // withTrashed() 是 ThinkPHP SoftDelete 提供的
+        return self::withTrashed()->where((new static)->getPk(), $id)->delete(true);
+    }
+    
+    /**
+     * 恢复软删除数据
+     * 注意：不要命名为 restore，会和 Trait 冲突。这里叫 restoreById
+     */
+    public static function restoreById($id): bool
+    {
+        // TP 的 SoftDelete trait 已经自带了 restore() 方法用于实例调用
+        // 这里是静态封装
+        $model = self::onlyTrashed()->find($id);
+        if ($model) {
+            return $model->restore();
+        }
+        return false;
+    }
+
+    /**
+     * 获取完整表名
+     */
+    public static function getTableName(): string
+    {
+        return (new static)->getTable();
+    }
+
+    // =========================================================================
+    //  辅助私有方法
+    // =========================================================================
+
+    private static function setPrimaryKey(TpModel $model): void
+    {
+        $pk = $model->getPk();
+        if (is_string($pk) && empty($model->{$pk})) {
+            $model->{$pk} = (string) self::generateSnowflakeID();
+        }
+    }
+
+    private static function setTenantId(TpModel $model): void
+    {
         if (!isset($model->tenant_id)) {
-            // 假设 getCurrentTenantId() 是全局函数
             $tenantId = function_exists('getCurrentTenantId') ? \getCurrentTenantId() : null;
-            
-            // 简单检测：如果数据表里没有 tenant_id 字段，不要强行设置，防止报错
-            // 注意：schema检测会消耗性能，建议开发规范强制要求业务表必须有 tenant_id
             if ($tenantId) {
                 $model->setAttr('tenant_id', $tenantId);
             }
         }
     }
 
-    /**
-     * 设置创建人
-     */
-    private static function setCreatedBy(Model $model): void
+    private static function setCreatedBy(TpModel $model): void
     {
         $uid = function_exists('getCurrentUser') ? \getCurrentUser() : null;
         if ($uid) {
@@ -175,10 +222,7 @@ class BaseTpORMModel extends Model
         }
     }
 
-    /**
-     * 设置更新人
-     */
-    private static function setUpdatedBy(Model $model): void
+    private static function setUpdatedBy(TpModel $model): void
     {
         $uid = function_exists('getCurrentUser') ? \getCurrentUser() : null;
         if ($uid) {
@@ -186,47 +230,13 @@ class BaseTpORMModel extends Model
         }
     }
 
-    /**
-     * 生成雪花ID
-     */
     protected static function generateSnowflakeID(): int
     {
         if (self::$snowflake === null) {
-            // 优化：从配置读取，防止硬编码
-            $workerId = (int) Config::get('snowflake.worker_id', 1);
-            $datacenterId = (int) Config::get('snowflake.data_center_id', 1);
+            $workerId =1;
+            $datacenterId = 1;
             self::$snowflake = new Snowflake($workerId, $datacenterId);
         }
         return self::$snowflake->nextId();
-    }
-
-    /**
-     * 删除后逻辑
-     */
-    public static function onAfterDelete(Model $model)
-    {
-        // TP的 SoftDelete Trait 只有在 force/destroy(true) 时才是真删
-        // 如果你使用了 SoftDelete，普通的 ->delete() 不会触发物理删除，而是更新 delete_time
-        
-        // 你的回收站逻辑：
-        // 如果开启了软删除，这里通常不需要做什么，因为 delete_time 已经标记了
-        // 如果需要记录操作日志或移动到归档表，可以在这里写
-        
-        /* 
-        try {
-           // ... 你的回收站逻辑
-        } catch (\Exception $e) {
-           // 记录日志，不要抛出异常中断流程
-        } 
-        */
-    }
-
-    /**
-     * 辅助方法：判断是否开启软删
-     */
-    public function isSoftDeleteEnabled(): bool
-    {
-        // 检查是否使用了 SoftDelete trait
-        return in_array(SoftDelete::class, class_uses(static::class));
     }
 }

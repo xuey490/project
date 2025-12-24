@@ -17,11 +17,12 @@ declare(strict_types=1);
 namespace Framework\Basic;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\SoftDeletes as LaSoftDeletes;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 use Framework\Utils\Snowflake;
 use Framework\Basic\Traits\LaBelongsToTenant; // 引入多租户Trait
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 class BaseLaORMModel extends Model
@@ -29,6 +30,8 @@ class BaseLaORMModel extends Model
     // 如果你的所有业务表都需要多租户，可以直接在这里引入。
     // 如果系统表不需要，建议在具体的业务 Model 里引入这个 Trait。
     use LaBelongsToTenant; 
+	
+	//use LaSoftDeletes;
 
     /**
      * 指明模型的ID是否自动递增 (雪花算法不是自增).
@@ -37,6 +40,9 @@ class BaseLaORMModel extends Model
      */
     public $incrementing = false;
 
+    // 时间戳自动管理（默认true，自动维护created_at/updated_at）
+    //public $timestamps = true;
+	
     /**
      * 主键类型
      */
@@ -46,6 +52,9 @@ class BaseLaORMModel extends Model
     const UPDATED_AT = 'updated_at';
     const DELETED_AT = 'deleted_at';
 
+    // 软删除字段（默认deleted_at，可自定义）
+    #protected $dates = ['deleted_at'];
+	
     /**
      * 模型日期字段的存储格式 (时间戳).
      *
@@ -137,10 +146,11 @@ class BaseLaORMModel extends Model
      */
     public function getFields_1(): array
     {
-		#dump($this->getConnectionName());
+		
+		$tableName = $this->getConnection()->getTablePrefix().$this->getTable();
+		#dump(Schema::getColumnListing($this->getTable()));#
         try {
-            return Schema::connection($this->getConnectionName())
-                ->getColumnListing($this->getTable());
+            return Schema::getColumnListing($this->getTable());
         } catch (\Exception $e) {
             return [];
         }
@@ -202,7 +212,7 @@ class BaseLaORMModel extends Model
      */
     public static function isSoftDeleteEnabled(): bool
     {
-        return in_array(SoftDeletes::class, class_uses(static::class));
+        return in_array(LaSoftDeletes::class, class_uses(static::class));
     }
 
     /**
@@ -210,12 +220,13 @@ class BaseLaORMModel extends Model
      */
     private static function setCreatedBy(Model $model): void
     {
+		$self = new static();
         // 需确保 getCurrentUser() 存在且安全
         $uid = function_exists('getCurrentUser') ? \getCurrentUser() : null;
-        
+
         // 检查 created_by 是否在 fillable 中或数据库有此字段，防止报错
         // 这里假设只要数据库有这个字段就填，不强制 fillable
-        if ($uid && Schema::hasColumn($model->getTable(), 'created_by')) {
+        if ($uid && in_array('created_by', $self->getFields())) {
             $model->setAttribute('created_by', $uid);
         }
     }
@@ -225,9 +236,10 @@ class BaseLaORMModel extends Model
      */
     private static function setUpdatedBy(Model $model): void
     {
+		$self = new static();
         $uid = function_exists('getCurrentUser') ? \getCurrentUser() : null;
         
-        if ($uid && Schema::hasColumn($model->getTable(), 'updated_by')) {
+        if ($uid && in_array('updated_by' ,$self->getFields())) {
              $model->setAttribute('updated_by', $uid);
         }
     }
