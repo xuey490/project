@@ -16,6 +16,7 @@ declare(strict_types=1);
 
 namespace Framework\Basic;
 
+use Symfony\Component\DependencyInjection\ContainerInterface;
 use Framework\Basic\Traits\CrudActionTrait;
 use Framework\Basic\Traits\CrudFilterTrait;
 use Framework\Basic\Traits\CrudFormatterTrait;
@@ -23,6 +24,7 @@ use Framework\Basic\Traits\CrudQueryTrait;
 use Framework\Database\DatabaseFactory;
 use Framework\DI\Injectable;
 use Symfony\Component\HttpFoundation\Request;
+
 
 abstract class BaseController
 {
@@ -44,11 +46,16 @@ abstract class BaseController
     protected string $serviceClass = '';
 
     protected ?object $validator = null;
+	
+	protected ContainerInterface $container;
 
     // 构造函数不接受参数，完全由内部解决
     public function __construct()
     {
         $this->inject();
+		
+		$this->container = app();
+		
         // 1. 获取全局 Request
         $this->request = app('request');
 

@@ -149,8 +149,17 @@ class Home
 		
 	}
 	
+	public function index():Response
+	{
+		return new Response(
+			'<html><body><h1>Hello, World!</h1></body></html>',
+			Response::HTTP_OK, // 状态码（200）
+			['Content-Type' => 'text/html'] // 响应头
+		);	
+	}
+	
 	##[Auth(required: true, roles: ['admin', 'editor'], guard: 'index')]
-    public function index(Request $request)
+    public function index1(Request $request)
     {
 		//dump($this->customDao->getActiveUsers());
 		#$rawRouteMiddleware = $request->attributes->get('_middleware', []);
@@ -194,7 +203,7 @@ class Home
         #dump($users);
 
 		
-		
+		#dump(app('db')(('App\Models\Config'))->getFields());
 		// 用 __invoke()  == > ($this->db)('App\Models\Config') 完整模型名不带::class
 		//$config1 = ($this->db)('App\Models\Config')->where('id', 1)->first()->toArray();
 		//dump($config1);
@@ -233,15 +242,19 @@ class Home
 			
 		//ThinkORM Model的写法
         $user =App::make( Custom::class);
-			
+		//dump($user->getFields());
+		
+		//$user = App::make( Custom::class)->find(4152240944932200448);//更新操作
+			#dump($user);
 			//通用插入
-			/*
+		
+		/*
         // 2. 给模型属性赋值（对应数据库表字段）
-        $user->name = 'test_user';
-        $user->englishname = 'test_user';
-        $user->nickname = '王五11';
+        $user->name = '777';
+        $user->englishname = '777';
+        $user->nickname = '王111';
         $user->email = 'test11@example.com';
-        $user->group_id = 111;
+        $user->group_id = 000;
         //$user->create_time = date('Y-m-d H:i:s'); // 若开启自动时间戳，可省略
         
         // 3. 调用save()方法插入数据
@@ -255,6 +268,7 @@ class Home
             return "插入失败：" . $user->getError();
         }
 		*/
+		
 
       
 		//ThinkORM Model的写法
@@ -278,7 +292,7 @@ $list = $this->customDao->selectModel(
 
 //dump( ($this->db)( Custom::class)->getFields() );
 
-dump($user->getFields_1());
+//dump($user->getFields_1());
 //->toArray(); TP 
 // ->get()->toArray();
 //->paginate(3, ['*'], 'page', 1)->toArray(); //Laravel

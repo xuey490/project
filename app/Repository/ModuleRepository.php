@@ -9,7 +9,9 @@ use App\Models\Module;
 
 class ModuleRepository extends BaseRepository
 {
-    protected string $modelClass = Module::class;
+    #protected string $modelClass = 'admin_module';//Module::class;
+	
+	protected string $modelClass = \App\Models\Module::class; //或上面那一句
 
     /**
      * 获取列表 (支持搜索、状态、关联)
