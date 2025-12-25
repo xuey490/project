@@ -68,7 +68,7 @@ class Database
 
 		// 方式 B: 表名 (Eloquent模式下返回 Builder, Think模式下返回 Query)
 		$users = $dbFactory->make('config')->where('id', '>', 1)->get();
-		dump($users);
+		//dump($users);
 		return new Response('database test!');
 	}
 
