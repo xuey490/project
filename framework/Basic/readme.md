@@ -1,3 +1,12 @@
+
+### 其它上手教程：
+
+* ### [数据层（Dao）的操作是如何与模型层交互的？](https://github.com/xuey490/project/blob/main/framework/Basic/Index0.md "Index0.md")
+* ### [ 如何在控制器中调用服务层的方法？](https://github.com/xuey490/project/blob/main/framework/Basic/Index1.md "Index1.md")
+* ### [ 服务层调用数据层（DAO/Repository）](https://github.com/xuey490/project/blob/main/framework/Basic/Index2.md "Index2.md")
+* ### [ 如何在模型层中调用数据层的方法？](https://github.com/xuey490/project/blob/main/framework/Basic/Index3.md "Index3.md")
+
+
 ## 如何写控制器的代码
 
 在很多情况下**连构造函数都不需要写**。
