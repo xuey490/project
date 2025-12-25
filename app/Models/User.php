@@ -19,7 +19,7 @@ use think\model\relation\HasMany;
  * @property string $create_time
  * @property string $update_time
  */
-class User extends Model
+class User extends \Framework\Utils\BaseModel
 {
     // 1. 指定表名
     // ThinkPHP 默认将类名转蛇形，即 User => user。显式定义更安全。
