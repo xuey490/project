@@ -9,7 +9,7 @@ declare(strict_types=1);
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
  * @Filename: %filename%
- * @Date: 2025-11-24
+ * @Date: 2025-12-25
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
  */
@@ -28,8 +28,7 @@ class DebugMiddleware implements MiddlewareInterface
     {
         $this->debug = $debug ?? false;
     }
-	
-	
+
     /**
      * 中间件入口.
      */
@@ -47,9 +46,7 @@ class DebugMiddleware implements MiddlewareInterface
         $frameworkDebugInfo = '';
         
         if ($this->debug) {
-            // [NEW] 检测是否为 Ajax 请求
-            // 1. 使用 Symfony 标准方法 isXmlHttpRequest (检测 X-Requested-With 头)
-            // 2. 补充检测 Accept 头是否明确只请求 JSON (针对 fetch API 未带 Header 的情况)
+            // 检测是否为 Ajax 请求
             $isAjax = $request->isXmlHttpRequest() || 
                       str_contains($request->headers->get('Accept', ''), 'application/json');
 
@@ -68,8 +65,6 @@ class DebugMiddleware implements MiddlewareInterface
 
             // 更可靠的 HTML 检测
             $isHtml = false;
-
-            // 排除 JSON 响应 (Content-Type)
             $contentType = $response->headers->get('Content-Type', '');
             if (stripos($contentType, 'application/json') !== false) {
                 $isHtml = false;
@@ -83,9 +78,8 @@ class DebugMiddleware implements MiddlewareInterface
                 $isHtml = true;
             }
 
-            // [MODIFIED] 判断条件增加：必须不是 Ajax 请求 (前面已拦截，这里作为双重保险逻辑也可)
             if ($isHtml && ($requestDebugInfo || $responseDebugInfo || $frameworkDebugInfo)) {
-                // 构建美化且可折叠的 HTML
+                // 构建带开关的Tab切换调试面板
                 $debugHtml = $this->buildDebugPanel($requestDebugInfo, $responseDebugInfo, $frameworkDebugInfo);
 
                 // 注入到 </body> 标签前
@@ -104,109 +98,297 @@ class DebugMiddleware implements MiddlewareInterface
     }
 
     /**
-     * [MODIFIED] 构建美化的、默认折叠的 Debug 面板 HTML.
-     *
-     * @param string $frameworkInfo [NEW] 新增框架信息参数
+     * 构建带开关的Tab切换模式Debug面板
      */
     protected function buildDebugPanel(string $requestInfo, string $responseInfo, string $frameworkInfo): string
     {
-        // --- 内联 CSS 样式 ---
-        $styles = [
-            'container'       => 'clear:both; background-color:#1e1e1e; border-top:3px solid #007acc; margin:15px 0; font-family:Consolas, Menlo, Courier, monospace; font-size:13px; z-index:99998; position:relative; line-height:1.6; text-align:left;',
-            'main_details'    => 'border:1px solid #444; border-top:0; background-color:#252526; color:#d4d4d4;',
-            'main_summary'    => 'padding:10px 15px; cursor:pointer; font-weight:bold; background-color:#333337; color:#00a3ff; font-size:16px; list-style:revert; list-style-position:inside;',
-            'content_wrapper' => 'padding:15px; background-color:#1e1e1e;',
-            'inner_details'   => 'margin-bottom:10px; background-color:#252526; border:1px solid #444; border-radius:4px; overflow:hidden;',
-            'inner_summary'   => 'padding:10px; cursor:pointer; font-weight:bold; background-color:#333337; list-style-position:inside;',
-            'summary_req'     => 'color:#9cdcfe;', // 蓝色
-            'summary_fw'      => 'color:#b5cea8;', // [NEW] 绿色
-            'summary_res'     => 'color:#c586c0;', // [NEW] 紫色
-            'pre'             => 'padding:15px; margin:0; background-color:#1e1e1e; white-space:pre-wrap; word-wrap:break-word; border-top:1px solid #444; font-family:inherit; font-size:inherit; color:#d4d4d4;',
-        ];
-        // --- 结束 CSS ---
+        // 内联CSS样式（新增开关按钮样式+折叠逻辑）
+        $styles = <<<CSS
+        <style>
+            /* 调试面板开关按钮 */
+            .debug-toggle-btn {
+                position: fixed;
+                bottom: 0;
+                right: 5px;
+                z-index: 99999;
+                padding: 8px 15px;
+                background-color: #007acc;
+                color: white;
+                border: none;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                cursor: pointer;
+                font-family: Consolas, Menlo, Courier, monospace;
+                font-weight: bold;
+                box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
+                transition: background-color 0.2s ease;
+            }
 
-        // [NEW] 动态样式，用于移除 *最后一个* 面板的 margin-bottom
-        $reqStyle = $fwStyle = $resStyle = $styles['inner_details'];
-        if ($responseInfo) {
-            $resStyle = rtrim($resStyle, ' margin-bottom:10px;');
-        } elseif ($frameworkInfo) {
-            $fwStyle = rtrim($fwStyle, ' margin-bottom:10px;');
-        } elseif ($requestInfo) {
-            $reqStyle = rtrim($reqStyle, ' margin-bottom:10px;');
-        }
+            .debug-toggle-btn:hover {
+                background-color: #005ea6;
+            }
 
-        $requestBlock = '';
+            /* 调试面板容器 - 固定在底部，默认隐藏 */
+            .debug-panel-container {
+                clear: both;
+                background-color: #1e1e1e;
+                border-top: 3px solid #007acc;
+                font-family: Consolas, Menlo, Courier, monospace;
+                font-size: 13px;
+                z-index: 99998;
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                line-height: 1.6;
+                text-align: left;
+                max-height: 80vh;
+                box-sizing: border-box;
+                display: none; /* 默认隐藏 */
+            }
+
+            /* 面板展开时显示 */
+            .debug-panel-container.show {
+                display: block;
+            }
+
+            /* Tab导航栏 */
+            .debug-tabs {
+                display: flex;
+                background-color: #333337;
+                border-bottom: 1px solid #444;
+                overflow-x: auto;
+                white-space: nowrap;
+                scrollbar-width: thin;
+            }
+
+            /* Tab按钮 */
+            .debug-tab {
+                padding: 10px 20px;
+                cursor: pointer;
+                border: none;
+                background: none;
+                color: #a0a0a0;
+                font-weight: bold;
+                font-family: inherit;
+                font-size: 14px;
+                position: relative;
+                transition: color 0.2s ease;
+            }
+
+            .debug-tab:hover {
+                color: #00a3ff;
+            }
+
+            /* 激活的Tab样式 */
+            .debug-tab.active {
+                color: #00a3ff;
+            }
+
+            .debug-tab.active::after {
+                content: '';
+                position: absolute;
+                bottom: -1px;
+                left: 0;
+                right: 0;
+                height: 2px;
+                background-color: #007acc;
+            }
+
+            /* Tab内容区域 */
+            .debug-tab-content {
+                display: none;
+                padding: 15px;
+                background-color: #1e1e1e;
+                color: #d4d4d4;
+                max-height: calc(20vh - 15px);
+                overflow-y: auto;
+                scrollbar-width: thin;
+                scrollbar-color: #444 #1e1e1e;
+            }
+
+            /* 激活的内容显示 */
+            .debug-tab-content.active {
+                display: block;
+            }
+
+            /* 代码样式 */
+            .debug-pre {
+                padding: 15px;
+                margin: 0;
+                background-color: #252526;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                border-radius: 4px;
+                border: 1px solid #444;
+            }
+
+            /* 关闭按钮样式 */
+            .debug-close-btn {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                padding: 5px 10px;
+                background-color: #333337;
+                color: #ff6b6b;
+                border: 1px solid #444;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 12px;
+                transition: background-color 0.2s ease;
+            }
+
+            .debug-close-btn:hover {
+                background-color: #444;
+            }
+
+            /* 滚动条样式优化 */
+            .debug-tab-content::-webkit-scrollbar,
+            .debug-tabs::-webkit-scrollbar {
+                width: 8px;
+                height: 8px;
+            }
+
+            .debug-tab-content::-webkit-scrollbar-track,
+            .debug-tabs::-webkit-scrollbar-track {
+                background: #252526;
+            }
+
+            .debug-tab-content::-webkit-scrollbar-thumb,
+            .debug-tabs::-webkit-scrollbar-thumb {
+                background-color: #444;
+                border-radius: 4px;
+            }
+        </style>
+        CSS;
+
+        // Tab切换+折叠开关核心JS
+        $script = <<<JS
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                // 元素获取
+                const toggleBtn = document.getElementById('debug-toggle');
+                const debugPanel = document.querySelector('.debug-panel-container');
+                const closeBtn = document.getElementById('debug-close');
+                const tabs = document.querySelectorAll('.debug-tab');
+                const contents = document.querySelectorAll('.debug-tab-content');
+                
+                // 默认激活第一个Tab（仅在面板展开时生效）
+                const activateFirstTab = () => {
+                    if (tabs.length > 0) {
+                        tabs.forEach(t => t.classList.remove('active'));
+                        contents.forEach(c => c.classList.remove('active'));
+                        tabs[0].classList.add('active');
+                        contents[0].classList.add('active');
+                    }
+                };
+
+                // 展开面板逻辑
+                toggleBtn.addEventListener('click', function() {
+                    debugPanel.classList.add('show');
+                    activateFirstTab();
+                    // 按钮移到面板内，避免遮挡
+                    toggleBtn.style.display = 'none';
+                });
+
+                // 关闭面板逻辑
+                closeBtn.addEventListener('click', function() {
+                    debugPanel.classList.remove('show');
+                    toggleBtn.style.display = 'block';
+                });
+
+                // Tab切换逻辑
+                tabs.forEach(tab => {
+                    tab.addEventListener('click', function() {
+                        // 移除所有激活状态
+                        tabs.forEach(t => t.classList.remove('active'));
+                        contents.forEach(c => c.classList.remove('active'));
+                        
+                        // 激活当前Tab
+                        this.classList.add('active');
+                        const target = this.getAttribute('data-target');
+                        document.getElementById(target).classList.add('active');
+                    });
+                });
+            });
+        </script>
+        JS;
+
+        // 构建各个Tab的内容
+        $tabs = [];
+        $contents = [];
+        
+        // 请求信息Tab
         if ($requestInfo) {
-            $requestBlock = sprintf(
-                '<details open style="%s">
-                    <summary style="%s %s">Request Info</summary>
-                    <pre style="%s">%s</pre>
-                </details>',
-                $reqStyle, // [MODIFIED]
-                $styles['inner_summary'],
-                $styles['summary_req'],
-                $styles['pre'],
-                htmlspecialchars($requestInfo, ENT_QUOTES, 'UTF-8')
-            );
+            $tabs[] = '<button class="debug-tab" data-target="debug-request">Request Info</button>';
+            $contents[] = <<<HTML
+            <div id="debug-request" class="debug-tab-content">
+                <pre class="debug-pre">{$this->escapeHtml($requestInfo)}</pre>
+            </div>
+            HTML;
         }
 
-        // [NEW] 框架信息面板
-        $frameworkBlock = '';
+        // 框架信息Tab
         if ($frameworkInfo) {
-            $frameworkBlock = sprintf(
-                '<details open style="%s">
-                    <summary style="%s %s">Framework Runtime</summary>
-                    <pre style="%s">%s</pre>
-                </details>',
-                $fwStyle, // [MODIFIED]
-                $styles['inner_summary'],
-                $styles['summary_fw'],
-                $styles['pre'],
-                htmlspecialchars($frameworkInfo, ENT_QUOTES, 'UTF-8')
-            );
+            $tabs[] = '<button class="debug-tab" data-target="debug-framework">Framework Runtime</button>';
+            $contents[] = <<<HTML
+            <div id="debug-framework" class="debug-tab-content">
+                <pre class="debug-pre">{$this->escapeHtml($frameworkInfo)}</pre>
+            </div>
+            HTML;
         }
 
-        $responseBlock = '';
+        // 响应信息Tab
         if ($responseInfo) {
-            $responseBlock = sprintf(
-                '<details open style="%s">
-                    <summary style="%s %s">Response Info</summary>
-                    <pre style="%s">%s</pre>
-                </details>',
-                $resStyle, // [MODIFIED]
-                $styles['inner_summary'],
-                $styles['summary_res'],
-                $styles['pre'],
-                htmlspecialchars($responseInfo, ENT_QUOTES, 'UTF-8')
-            );
+            $tabs[] = '<button class="debug-tab" data-target="debug-response">Response Info</button>';
+            $contents[] = <<<HTML
+            <div id="debug-response" class="debug-tab-content">
+                <pre class="debug-pre">{$this->escapeHtml($responseInfo)}</pre>
+            </div>
+            HTML;
         }
 
-        return sprintf(
-            "\n\n"
-            . '<div style="%s">
-                <details style="%s">
-                    <summary style="%s">
-                        🚀 Framework Debug Panel (Click to expand)
-                    </summary>
-                    <div style="%s">
-                        %s
-                        %s
-                        %s
-                    </div>
-                </details>
-            </div>',
-            $styles['container'],
-            $styles['main_details'],
-            $styles['main_summary'],
-            $styles['content_wrapper'],
-            $requestBlock,
-            $frameworkBlock, // [NEW]
-            $responseBlock
-        );
+        // 拼接最终HTML（新增开关按钮+关闭按钮）
+        $debugHtml = $styles . <<<HTML
+        <!-- 调试面板开关按钮 -->
+        <button id="debug-toggle" class="debug-toggle-btn">🚀 Debug Panel</button>
+
+        <!-- 调试面板容器 -->
+        <div class="debug-panel-container">
+            <!-- 关闭按钮 -->
+            <button id="debug-close" class="debug-close-btn">× Close</button>
+            
+            <div class="debug-tabs">
+                {$this->joinHtml($tabs)}
+            </div>
+            <div class="debug-tab-contents">
+                {$this->joinHtml($contents)}
+            </div>
+        </div>
+        {$script}
+        HTML;
+
+        return $debugHtml;
     }
 
     /**
-     * [NEW] 收集并格式化框架运行时信息.
+     * HTML转义辅助方法
+     */
+    protected function escapeHtml(string $content): string
+    {
+        return htmlspecialchars($content, ENT_QUOTES, 'UTF-8');
+    }
+
+    /**
+     * HTML拼接辅助方法
+     */
+    protected function joinHtml(array $parts): string
+    {
+        return implode("\n", $parts);
+    }
+
+    /**
+     * 收集并格式化框架运行时信息
      */
     protected function dumpFrameworkInfo(): string
     {
@@ -227,12 +409,10 @@ class DebugMiddleware implements MiddlewareInterface
                 if ($ref->isInternal()) {
                     ++$internalClassesCount;
                 } else {
-                    // 只收集用户定义的类
                     $userClasses[] = $class;
                 }
             } catch (\Throwable $e) {
-                // 捕获异常，例如 ReflectionClass 无法处理匿名类
-                ++$internalClassesCount; // 算作内部或无法处理的类
+                ++$internalClassesCount;
             }
         }
 
@@ -249,24 +429,19 @@ class DebugMiddleware implements MiddlewareInterface
         if (empty($userClasses)) {
             $output .= "(none)\n";
         } else {
-            sort($userClasses); // 按字母排序
-            array_pop($userClasses);
-            // $output .= implode("\n", $userClasses) . "\n"; // 不输出类
+            sort($userClasses);
+            $output .= "(hidden for brevity)\n"; // 如需显示类列表，替换为 implode("\n", $userClasses) . "\n"
         }
-
-        # dump($userClasses);
 
         $output .= "==========================================================\n\n";
         return $output;
     }
 
     /**
-     * 打印请求信息.
-     * (保持不变，返回 string).
+     * 打印请求信息
      */
     protected function dumpRequest(Request $request): string
     {
-        // ... (此方法代码与上一版完全相同) ...
         $output = "==================== [REQUEST DEBUG] ====================\n";
         $output .= 'Method: ' . $request->getMethod() . "\n";
         $output .= 'Path:   ' . $request->getPathInfo() . "\n";
@@ -290,12 +465,10 @@ class DebugMiddleware implements MiddlewareInterface
     }
 
     /**
-     * 打印响应信息.
-     * (保持不变，返回 string).
+     * 打印响应信息
      */
     protected function dumpResponse(Response $response): string
     {
-        // ... (此方法代码与上一版完全相同) ...
         $output = "\n==================== [RESPONSE DEBUG] ====================\n";
         $output .= 'Status: ' . $response->getStatusCode() . "\n";
         $output .= "\n--- Headers ---\n";
