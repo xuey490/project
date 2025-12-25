@@ -20,6 +20,7 @@ use Framework\DI\Injectable;
 abstract class BaseRepository implements RepositoryInterface
 {
     protected string $modelClass;
+	
     protected bool $isEloquent;
 	
     // 引入注入能力

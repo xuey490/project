@@ -38,7 +38,7 @@ class UserRepository extends BaseRepository
      */
     protected function initialize(): void
     {
-		dump($this->userService);
+		//dump($this->userService);
     }	
 	
     /**
