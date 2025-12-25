@@ -2,7 +2,8 @@
 namespace App\Models;
 use think\Model;
 
-class Module extends \Framework\Utils\BaseModel {
+class Module extends \Framework\Utils\BaseModel
+{
 	
     protected $name = 'admin_module'; // 对应 module 表
 	
