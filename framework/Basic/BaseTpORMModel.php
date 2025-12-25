@@ -20,7 +20,7 @@ class BaseTpORMModel extends TpModel
     use \Framework\ORM\Trait\ModelTrait;
     
     // 引入 ThinkPHP 自带的软删除
-    use TpSoftDelete;
+    #use TpSoftDelete;
 
     // =========================================================================
     //  基础配置
