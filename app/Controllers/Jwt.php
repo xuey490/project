@@ -317,7 +317,7 @@ class Jwt
 		//return new Response('token:'.$token );
 		$user = app('jwt')->getPayload($token);
 		
-		dump($user);
+		#dump($user);
 		
 		/*
 		#原生cookie操作

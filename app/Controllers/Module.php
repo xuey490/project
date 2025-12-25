@@ -19,9 +19,9 @@ use Framework\DI\Attribute\Context;
 
 class Module extends BaseController
 {
-
-    #[Inject(id: 'db')] 
-    protected DatabaseFactory $db;
+	
+    ##[Inject(id: 'db')] 
+    #protected DatabaseFactory $db;
 
     #[Autowire]
     protected ModuleRepository $moduleRepo;	
@@ -33,14 +33,22 @@ class Module extends BaseController
     protected LogRepository $logRepo;
 
 	/*
+    protected ModuleRepository $moduleRepo;
+	
+    protected UserRepository $userRepo;
+	
+    protected LogRepository $logRepo;
+
     // 可以在构造函数中注入 DatabaseFactory 或 ModuleRepository
     public function __construct(DatabaseFactory $dbFactory)
     {
+
         $this->moduleRepo = new ModuleRepository($dbFactory);
         $this->userRepo = 	new UserRepository($dbFactory);
         $this->logRepo = 	new LogRepository($dbFactory);
     }
 	*/
+
 	
 	
     /**
@@ -49,8 +57,6 @@ class Module extends BaseController
      */
     public function index(Request $request): Response
     {
-		#dump($this->moduleRepo);
-		
         // 从 URL 查询字符串获取参数 ($_GET)
         // all() 获取所有参数数组，get() 获取单个
         $params = $request->query->all(); 
@@ -68,6 +74,10 @@ class Module extends BaseController
             'page'  => $page,
             'limit' => $limit,
         ];
+		
+		
+		
+		
 
 		$list = $this->logRepo->SelectLogs(7);
 		$vips = $this->userRepo->findActiveVips(5);
@@ -85,8 +95,9 @@ class Module extends BaseController
             ],
         ]);	
 		*/
-		//dump($vips);
-
+		
+		dump($activeUsers);
+		return new Response('aa');
 
         return new JsonResponse([
             'code' => Response::HTTP_OK, // 200
