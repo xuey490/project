@@ -23,27 +23,29 @@ class User extends \Framework\Utils\BaseModel
 {
     // 1. 指定表名
     // ThinkPHP 默认将类名转蛇形，即 User => user。显式定义更安全。
-    protected $name = 'admin_module'; 
+    protected $name = 'custom'; 
 
     // 2. 主键
     protected $pk = 'id';
 
-    // 3. 自动时间戳
-    // 'datetime' 表示数据库存的是 Y-m-d H:i:s 格式
-    // 如果是 'int' 表示存时间戳整数
-    protected $autoWriteTimestamp = 'datetime';
+    // 3. 覆盖基类的时间字段名（核心） 这里定义后会直接覆盖掉BaseTpORMModel基类
+    protected $createTime = 'created_at';  // 映射到数据库 created_at
+    protected $updateTime = 'updated_at';  // 映射到数据库 updated_at
 
-    // ThinkPHP 默认时间字段是 create_time 和 update_time
-    // 如果你的数据库是 created_at / updated_at (Laravel风格)，需要映射
-    protected $createTime = 'created_at';
-    protected $updateTime = 'updated_at';
-
-    // 4. 字段类型定义 (类似 Laravel 的 casts)
+    // 4. 字段类型定义（强制转换，适配int）
     protected $type = [
-        'status'    => 'integer',
-        'vip_level' => 'integer',
-        'balance'   => 'float', // ThinkORM 没有 decimal:2 这种语法，通常用 float 或 string
+        'status'     => 'integer',
+        'vip_level'  => 'integer',
+        'group_id'   => 'integer',
+        'balance'    => 'float',
+        'created_at' => 'integer', // 匹配数据库 int(11)
+        'updated_at' => 'integer', // 匹配数据库 int(11)
+        'tenant_id'  => 'integer',
+        'created_by' => 'integer',
     ];
+
+    // 5. 覆盖只读字段（添加自定义时间字段）
+    protected $readonly = ['created_by', 'created_at', 'tenant_id'];
 
     // 5. 批量赋值
     // ThinkORM 默认允许所有字段写入，可以通过 $field 定义允许的字段

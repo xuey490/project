@@ -18,6 +18,8 @@ class CustomDao extends BaseDao
 	
 	#[Autowire]
     protected NoticeDao $noticedao;	
+	
+	protected string $modelClass = \App\Models\Custom::class;
 
     // 指定该 DAO 操作哪个模型
     protected function setModel(): string

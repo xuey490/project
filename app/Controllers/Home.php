@@ -26,6 +26,9 @@ use Framework\Utils\CookieManager;
 use Framework\Attributes\Auth;
 use Framework\Attributes\Route;
 
+
+use Framework\DI\Attribute\Inject;
+use Framework\DI\Attribute\Autowire;
 use Framework\Core\App;
 
 
@@ -36,12 +39,12 @@ use Framework\Database\DatabaseFactory;
 #use Illuminate\Support\Facades\Schema;
 
 use Framework\Utils\Snowflake;
-
+use Framework\Basic\BaseController;
 
 
 use think\facade\Db;
 
-
+use App\Repository\UserRepository;
 
 
 
@@ -49,8 +52,8 @@ use Framework\Attributes\Validate; // 引入注解
 use App\Validate\NewUser as UserValidate; // 引入你的验证器类
 
 
-
-
+use App\Services\UserService;
+use Framework\Tenant\TenantContext;	//启用租户隔离
 
 
 
@@ -61,8 +64,13 @@ use App\Validate\NewUser as UserValidate; // 引入你的验证器类
  * @auth true
  * @role super
 */
-class Home
+class Home 
 {
+	
+    // 注解注入服务
+    #[Autowire]
+    private UserService $UserService;	
+
 	
 	private CustomDao $customDao;
 	
@@ -73,6 +81,7 @@ class Home
 		private Request $request,
 		private CookieManager $cookie, 
 		private DatabaseFactory $db,
+		private UserRepository $userRepo,
 		CustomDao $customDao,
 
 		#private DB $db1,
@@ -242,19 +251,19 @@ class Home
 			
 		//ThinkORM Model的写法
         $user =App::make( Custom::class);
-		//dump($user->getFields());
+		dump($user);
 		
 		//$user = App::make( Custom::class)->find(4152240944932200448);//更新操作
 			#dump($user);
 			//通用插入
-		
 		/*
+		
         // 2. 给模型属性赋值（对应数据库表字段）
-        $user->name = '777';
+        $user->name = '9999';
         $user->englishname = '777';
         $user->nickname = '王111';
         $user->email = 'test11@example.com';
-        $user->group_id = 000;
+        $user->group_id = 101;
         //$user->create_time = date('Y-m-d H:i:s'); // 若开启自动时间戳，可省略
         
         // 3. 调用save()方法插入数据
@@ -262,14 +271,65 @@ class Home
         if ($result) {
             // 获取插入后的自增主键ID
             $insertId = $user->id;
-            return "插入成功，主键ID：{$insertId}";
+            $string =  "插入成功，主键ID：{$insertId}";
         } else {
             // 获取错误信息
-            return "插入失败：" . $user->getError();
+            $string =  "插入失败：" . $user->getError();
         }
 		*/
+
+		$data = [
+			'name' => '李四11',
+			'nickname' => '李四11',
+			'englishname' => 'aaa',
+			'email'=> 'zs@test.com',
+			'group_id'=>1001,
+			'status'=>1,
+			#'created_at'=> time(),
+			#'updated_at'=> time(),
+			
+		];
+		
+		#($this->userRepo)(\App\Models\User::class)->save($data);
+		//TenantContext::restore();
+		//TenantContext::setTenantId(1001);
+		#$userList = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->select()->toArray(); 
+		#dump($userList);
+		
+		
+		#$userList1 = $user->withoutGlobalScope('tenant')->select();
+		#dump(array_keys($user->getFields()));
 		
 
+		/*
+		TenantContext::restore();
+		TenantContext::setTenantId(100111);	//tenant_id 不存在
+		
+		//执行语句：SELECT * FROM `oa_custom` WHERE  `id` = '4152317653350096896'  AND `oa_custom`.`tenant_id` = '100111' LIMIT 1
+		$info = $user::where('id' ,'4152317653350096896')->find();//查询结果null
+		if($info) {
+			$info->nickname = 'hack';
+			$info->update_time = time();
+			$info->save();
+		}
+		
+		//执行语句：UPDATE `oa_custom`  SET `nickname` = 'KKKKKKKKK'  WHERE  `id` = '4152257913374908416'  AND `oa_custom`.`tenant_id` = '100111'
+		$user::where('id', '4152257913374908416')->update([
+			'nickname' => 'KKKKKKKKK',
+		]);
+
+		//执行语句：UPDATE `oa_custom`  SET `nickname` = 'hack'  WHERE  `id` = '1'  AND `oa_custom`.`tenant_id` = '100111'
+		$user::where('id', 1)->update([
+			'nickname' => 'hack',
+		]);
+		*/
+		
+		
+		$info = $user::where('id' ,'4152317653350096896')->find();
+		$user->where('id', '4152317653350096896')->delete();
+		
+		#dump($user->getData());
+		#dump(($this->userRepo)(\App\Models\User::class));
       
 		//ThinkORM Model的写法
         #$user = (new Custom())->getTableName();
@@ -290,6 +350,32 @@ $list = $this->customDao->selectModel(
     $limit,
 );
 
+
+
+// App\Models\Custom 
+#dump($this->customDao->getModel());//得到 App\Models\Custom 模型
+
+/*
+ Framework\ORM\Factories\LaravelORMFactory {#949 ▼
+  -modelClass: "App\Models\Custom"
+  -modelInstance: 
+App\Models
+\
+Custom
+ {#964 ▶}
+}
+*/
+/*
+dump($this->customDao->getAdapter()->selectModel(
+    ['status' => 1],
+    '*',
+    $currentPage,
+    $limit,
+)->paginate(3, ['*'], 'page', 1)->toArray());
+*/
+//dump($this->customDao);		// 几乎等于$this->customDao->getAdapter();
+//dump($this->customDao->getAdapter());
+
 //dump( ($this->db)( Custom::class)->getFields() );
 
 //dump($user->getFields_1());
@@ -299,6 +385,7 @@ $list = $this->customDao->selectModel(
 
 //dump ($this->customDao->get(['status' => 1])->toArray());
 
+#dump($this->UserService);
 
 #$model = new Custom();
 #echo $model->getTableName(); // 应该输出 oa_custom
