@@ -4,30 +4,29 @@ declare(strict_types=1);
 
 namespace Framework\Basic;
 
-use Framework\Basic\Scope\TpTenantScope;
+use Framework\Basic\Scopes\TpTenantScope;
 use Framework\Utils\Snowflake;
 use think\Model as TpModel;
 use think\model\concern\SoftDelete as TpSoftDelete;
 use think\facade\Config;
+use think\db\Query;
+use Framework\Tenant\TenantContext;
 
 /**
  * ThinkPHP 模型基类封装 (适配 TP6.0 / TP8.0)
  */
 class BaseTpORMModel extends TpModel
 {
-    // [重要] 如果 ModelTrait 里面有 use Illuminate\... 或者定义了 restore() 方法，会再次报错！
-    // 建议先排查 ModelTrait，确认无误后再开启。
     use \Framework\ORM\Trait\ModelTrait;
-    
-    // 引入 ThinkPHP 自带的软删除
     #use TpSoftDelete;
 
     // =========================================================================
-    //  基础配置
+    //  基础配置（修改：让子类可覆盖）
     // =========================================================================
 
-    // 自动写入时间戳字段
-    protected $autoWriteTimestamp = true; 
+    // 自动写入时间戳字段（改为 int 类型，适配数据库 int(11)）
+    protected $autoWriteTimestamp = 'int'; 
+    // 默认时间字段（子类可覆盖）
     protected $createTime = 'create_time'; 
     protected $updateTime = 'update_time'; 
     protected $deleteTime = 'delete_time'; 
@@ -41,10 +40,11 @@ class BaseTpORMModel extends TpModel
     /**
      * 注册全局作用域 (实现 SaaS 多租户隔离)
      */
-    protected $globalScope = [TpTenantScope::class];
+    #protected $globalScope = [TpTenantScope::class];
+	protected $globalScope = ['tenant'];
 
-    // 只读字段
-    protected $readonly = ['created_by', 'create_time', 'tenant_id'];
+    // 只读字段（修改：用变量引用，支持子类覆盖）
+    protected $readonly = ['created_by', 'tenant_id'];
 
     /**
      * 雪花算法单例
@@ -55,21 +55,134 @@ class BaseTpORMModel extends TpModel
     //  模型事件 (ThinkPHP 6/8 标准静态方法)
     // =========================================================================
 
+    // 主键策略配置（核心：支持雪花ID）
+    protected $pkGenerateType = 'auto'; // auto=自增，snowflake=雪花ID
+    
+    /**
+     * 新增前钩子：主键生成+自动时间戳（修改：适配自定义时间字段）
+     */
+    protected function beforeInsert(TpModel $model): void
+    {
+        // 雪花ID生成逻辑
+        if ($this->pkGenerateType === 'snowflake' && empty($model->{$model->getPk()})) {
+            $model->{$model->getPk()} = (string) self::generateSnowflakeID();
+        }
+        
+        // 关键修复：直接读取模型的 $createTime/$updateTime 属性（字段名）
+        $createTimeField = $this->createTime; // 直接获取子类配置的字段名，如果子类未定义直接获取父类（如 created_at）
+		
+        $updateTimeField = $this->updateTime; // 直接获取子类配置的字段名，如果子类未定义直接获取父类（如 updated_at）
+        
+        // 自动填充int类型时间戳
+        if (empty($model->$createTimeField)) {
+            $model->setAttr($createTimeField, time()); // 用 setAttr 安全赋值
+        }
+        if (empty($model->$updateTimeField)) {
+            $model->setAttr($updateTimeField, time()); // 用 setAttr 安全赋值
+        }
+    }
+    
+    /**
+     * 更新前钩子：自动填充更新时间（修改：适配自定义时间字段）
+     */
+    protected function beforeUpdate(): void
+    {
+        $updateTimeField = $this->getUpdateTime(); // 获取子类配置的更新时间字段名
+        $this->$updateTimeField = time(); // 赋值 int 时间戳
+    }
+    
+    // 支持手动切换主键策略
+    public function setPkGenerateType(string $type): void
+    {
+        $this->pkGenerateType = in_array($type, ['auto','snowflake']) ? $type : 'auto';
+    }
+
     /**
      * 模型事件：新增前
-     * 注意：这里必须用 TpModel，因为上面 use ... as TpModel
      */
     public static function onBeforeInsert(TpModel $model): void
     {
+		$static = new static;
+		
         try {
+			$static->beforeInsert($model); // 恢复调用（之前被注释了）
 			self::setPrimaryKey($model);
 			self::setTenantId($model);
 			self::setCreatedBy($model);
         } catch (\Exception $e) {
             throw new \BadMethodCallException($e->getMessage());
         }
-		
     }
+	
+    /**
+     * 模型事件：更新前事件
+     */
+    public static function onBeforeUpdate(TpModel $model): void
+    {
+        // 1. 检查是否越权（仅针对已存在的模型对象操作）
+        self::checkTenantAccess($model);
+        
+        // 2. 自动填充更新人
+        self::setUpdatedBy($model);
+
+        // 3. 执行原有的 beforeUpdate 逻辑（处理时间戳等）
+        // 注意：静态事件中调用非静态方法需要 trick，或者将 beforeUpdate 逻辑挪到这里
+        // TP的标准做法是 $model->beforeUpdate() 是内部回调，这里是事件
+        // 如果你依赖 $model->beforeUpdate()，请确保它被调用
+    }
+	 /* 此函数用于带上下文的操作
+	public static function onBeforeUpdate(TpModel $model): void
+	{
+		// 超管可绕过
+		if (!TenantContext::shouldApplyTenant()) {
+			return;
+		}
+
+		// 没有 tenant_id 字段，不参与租户校验
+		if (!array_key_exists('tenant_id', $model->getData())) {
+			return;
+		}
+	
+		$currentTenant = TenantContext::getTenantId();
+		
+		$recordTenant  = $model->getData()['tenant_id'] ?? null;
+
+		// 🚫 尝试更新不属于当前租户的数据
+		if ($recordTenant != $currentTenant) {
+			throw new \Exception('Tenant access denied (update)', 403);
+		}
+	}
+	*/
+	
+	/*
+	* 模型事件：删除前校验（物理 & 软删通吃）
+	*/
+    public static function onBeforeDelete(TpModel $model): void
+    {
+        // 1. 检查是否越权
+        self::checkTenantAccess($model);
+    }
+	
+	/* 此函数用于带上下文的操作
+	public static function onBeforeDelete(TpModel $model): void
+	{
+
+		if (!TenantContext::shouldApplyTenant()) {
+			return;
+		}
+
+		if (!array_key_exists('tenant_id', $model->getData())) {
+			return;
+		}
+
+		$currentTenant = TenantContext::getTenantId();
+		
+		$recordTenant  = $model->getData()['tenant_id'] ?? null;
+		
+		if ($recordTenant != $currentTenant) {
+			throw new Exception('Tenant access denied (delete)', 403);
+		}
+	}*/
 
     /**
      * 模型事件：更新后事件
@@ -78,6 +191,8 @@ class BaseTpORMModel extends TpModel
     {
         self::setUpdatedBy($model);
     }
+
+
 
     /**
      * 模型事件：删除后
@@ -92,15 +207,82 @@ class BaseTpORMModel extends TpModel
         $prefix    = $model->getConfig('prefix');
 		
         try {
-
-
-
+            // 你的删除后逻辑（如果有）
         } catch (\Exception $e) {
             throw new \BadMethodCallException($e->getMessage());
         }
-		
     }
+	
+    /**
+     * 定义名为 tenant 的作用域
+     * ThinkPHP 会自动调用 scopeTenant($query)
+     */
+    public function scopeTenant(Query $query)
+    {
+        // 实例化你的作用域类并执行逻辑
+        (new TpTenantScope())->apply($query, $this);
+    }	
+	
+	//可用，依赖上下文传递类
+	public function scopeTenant2($query): void
+	{
+		// 1. 当前上下文不启用租户隔离
+		if (!TenantContext::shouldApplyTenant()) {
+			return;
+		}
 
+		// 2. 当前模型没有 tenant_id 字段
+		if (!in_array('tenant_id', array_keys($this->getFields()))) {
+			return;
+		}
+
+		// 3. 正常加租户条件
+		$query->where(
+			$this->getTable() . '.tenant_id',
+			TenantContext::getTenantId()
+		);
+	}
+
+	//可用不严谨
+	public function scopeTenant1($query): void
+	{
+
+		$tenantId = function_exists('getCurrentTenantId')
+			? getCurrentTenantId()
+			: 1001;
+		
+		if ($tenantId && in_array('tenant_id' , array_keys($this->getFields()) ) ) {
+			$query->where(
+				$this->getTable() . '.tenant_id',
+				$tenantId
+			);
+		}
+	}
+	
+/**
+     * 安全的 Join 方法，自动追加租户ID
+     * @param string $joinTable  关联表名 (如 'oa_order')
+     * @param string $alias      关联表别名 (如 'o')
+     * @param string $condition  关联条件 (如 'o.user_id = u.id')
+     * @param string $type       JOIN类型 (LEFT, INNER等)
+     */
+	 /*// 使用封装好的 scopeJoinTenant
+$list = User::alias('u')
+    ->joinTenant('oa_order', 'o', 'o.user_id = u.id') // 自动补全 tenant_id
+    ->select();*/
+    public function scopeJoinTenant($query, string $joinTable, string $alias, string $condition, string $type = 'LEFT')
+    {
+        $tenantId = function_exists('getCurrentTenantId') ? \getCurrentTenantId() : null;
+        
+        // 只有当存在租户ID时，才追加限制
+        if ($tenantId) {
+            $condition .= " AND {$alias}.tenant_id = {$tenantId}";
+        }
+        
+        // 执行原生 join
+        $query->join("{$joinTable} {$alias}", $condition, $type);
+    }
+	
     // =========================================================================
     //  核心方法
     // =========================================================================
@@ -127,28 +309,21 @@ class BaseTpORMModel extends TpModel
      */
     protected function init()
     {
-        parent::init();
-        // 如果需要默认过滤软删除，TpSoftDelete 会自动处理，无需手动 withScope
-    }
+        parent::init();	
 
+    }
 
 	/**
      * 获取模型定义的字段列表
-     * 修正：移除 :array 强类型限制，因为当传入 $field 时，父类会返回 string
-     *
-     * @param string|null $field
-     * @return mixed
      */
     public function getFields(?string $field = null):mixed
     {
         $res = parent::getFields($field);
         
-        // 如果查询具体字段，直接返回结果（可能是字符串）
         if ($field) {
             return $res;
         }
         
-        // 如果查询全部字段，确保返回数组
         return $res ?: [];
     }
 
@@ -165,18 +340,14 @@ class BaseTpORMModel extends TpModel
      */
     public static function forceDeleteById($id): bool
     {
-        // withTrashed() 是 ThinkPHP SoftDelete 提供的
         return self::withTrashed()->where((new static)->getPk(), $id)->delete(true);
     }
     
     /**
      * 恢复软删除数据
-     * 注意：不要命名为 restore，会和 Trait 冲突。这里叫 restoreById
      */
     public static function restoreById($id): bool
     {
-        // TP 的 SoftDelete trait 已经自带了 restore() 方法用于实例调用
-        // 这里是静态封装
         $model = self::onlyTrashed()->find($id);
         if ($model) {
             return $model->restore();
@@ -195,6 +366,32 @@ class BaseTpORMModel extends TpModel
     // =========================================================================
     //  辅助私有方法
     // =========================================================================
+	
+    /**
+     * 【新增】安全检查：防止越权操作
+     * 场景：管理员A查询了数据，然后切换了租户身份，或者Session混乱时尝试修改数据
+     */
+    protected static function checkTenantAccess(TpModel $model): void
+    {
+        // 获取当前租户
+        $currentTenantId = function_exists('getCurrentTenantId') ? \getCurrentTenantId() : null;
+        
+        // 如果没有开启多租户或当前是超管模式，跳过
+        if (!$currentTenantId) {
+            return;
+        }
+
+        // 获取数据原本的 tenant_id
+        // getOrigin() 获取原始数据，防止被修改后的数据欺骗
+        $dataTenantId = $model->getOrigin('tenant_id');
+
+        // 如果数据本身有 tenant_id，且不等于当前租户ID，抛出异常
+        if ($dataTenantId && (string)$dataTenantId !== (string)$currentTenantId) {
+            // 这里抛出异常，前端会收到 500 错误，保护数据
+            throw new \think\exception\ValidateException('无权操作此条数据（租户不匹配）');
+        }
+    }
+	
 
     private static function setPrimaryKey(TpModel $model): void
     {
@@ -225,6 +422,7 @@ class BaseTpORMModel extends TpModel
     private static function setUpdatedBy(TpModel $model): void
     {
         $uid = function_exists('getCurrentUser') ? \getCurrentUser() : null;
+		$model->setAttr('update_time', time());
         if ($uid) {
             $model->setAttr('updated_by', $uid);
         }

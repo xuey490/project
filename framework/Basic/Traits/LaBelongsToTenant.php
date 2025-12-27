@@ -16,25 +16,33 @@ declare(strict_types=1);
 
 namespace Framework\Basic\Traits;
 
-
+use Illuminate\Database\Eloquent\Model;
 use Framework\Basic\Scopes\LaTenantScope;
 
 trait LaBelongsToTenant
 {
-    public static function bootBelongsToTenant()
+    public static function bootLaBelongsToTenant()
     {
         // 1. 添加全局作用域（读、改、删限制）
-        static::addGlobalScope(new LaTenantScope);
+        static::addGlobalScope(new LaTenantScope());
 
         // 2. 创建时自动写入租户ID（新增限制）
-        static::creating(function ($model) {
+        static::creating(function (Model $model) {
+			$tenantId =  function_exists('getCurrentTenantId') ? \getCurrentTenantId() : null;
+            // 如果有租户ID，且模型里还没有设置该字段
+            if ($tenantId && !isset($model->tenant_id)) {
+                $model->setAttribute('tenant_id', $tenantId);
+            }
+			/*
             // 如果模型并未手动设置 tenant_id，则自动填充
             if (!isset($model->tenant_id)) {
                 $tenantId = \getCurrentTenantId();
                 if ($tenantId) {
                     $model->tenant_id = $tenantId;
                 }
+				
             }
+			*/
         });
     }
 

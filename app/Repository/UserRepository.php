@@ -40,7 +40,13 @@ class UserRepository extends BaseRepository
     {
 		//dump($this->userService);
     }	
-	
+
+    // 1.插入：单条（返回主键）
+    public function create(array $data):mixed
+    {
+        return $this->insertGetId($data);
+    }
+
     /**
      * 示例自定义方法：查找活跃用户并返回带 posts 关系（避免 N+1）
      */

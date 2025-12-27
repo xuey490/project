@@ -71,6 +71,7 @@ class BaseLaORMModel extends Model
         'created_at' => 'timestamp',
         'updated_at' => 'timestamp',
         'deleted_at' => 'timestamp',
+        'id'         => 'string', // 前端JS精度丢失问题，建议序列化时转string		
     ];
 
     /**
@@ -83,7 +84,10 @@ class BaseLaORMModel extends Model
      */
     private static ?Snowflake $snowflake = null;
 
-    protected static function boot()
+    // 【优化】静态内存缓存表字段，避免重复查询数据库
+    protected static array $tableColumns = [];
+	
+    protected static function boot1()
     {
         parent::boot();
 
@@ -107,6 +111,80 @@ class BaseLaORMModel extends Model
             self::onAfterDelete($model);
         });
     }
+
+
+
+
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($model) {
+            // 1. 生成雪花 ID
+            if (empty($model->{$model->getKeyName()})) {
+                $model->{$model->getKeyName()} = self::generateSnowflakeID();
+            }
+            // 2. 填充创建人
+            $model->fillAuditColumn('created_by');
+        });
+
+        static::updating(function ($model) {
+            $model->fillAuditColumn('updated_by');
+        });
+
+        // 删除事件建议交给业务层或特定Trait，基类尽量纯净
+    }
+
+    /**
+     * 【性能优化核心】填充审计字段
+     * 避免使用 SHOW COLUMNS，改用 Schema 缓存 或 静态变量
+     */
+    protected function fillAuditColumn(string $column): void
+    {
+        $uid = function_exists('getCurrentUser') ? \getCurrentUser() : null;
+        if (!$uid) return;
+
+        // 方案A：如果使用了 Schema 缓存 (Laravel默认支持)
+        // if (Schema::hasColumn($this->getTable(), $column)) {
+        //     $this->setAttribute($column, $uid);
+        // }
+
+        // 方案B：内存级缓存 (当前请求内有效，性能最高)
+        if ($this->hasColumnCached($column)) {
+            $this->setAttribute($column, $uid);
+        }
+    }
+
+    /**
+     * 检查字段是否存在（带静态缓存）
+     */
+    protected function hasColumnCached1(string $column): bool
+    {
+        $table = $this->getTable();
+        
+        if (!isset(self::$tableColumns[$table])) {
+            // 使用 Schema 获取字段，这里通常会被框架缓存
+            self::$tableColumns[$table] = Schema::getColumnListing($table);
+        }
+
+        return in_array($column, self::$tableColumns[$table]);
+    }
+
+	protected function hasColumnCached(string $column): bool
+	{
+		$table = $this->getTable();
+		
+		if (!isset(self::$tableColumns[$table])) {
+			// 修改点：通过当前模型的连接对象获取 SchemaBuilder
+			// 这样不依赖全局容器，非常稳定
+			self::$tableColumns[$table] = $this->getConnection()
+											   ->getSchemaBuilder()
+											   ->getColumnListing($table);
+		}
+
+		return in_array($column, self::$tableColumns[$table]);
+	}
 
     /**
      * 准备日期序列化格式 (API返回JSON时会自动调用)
@@ -178,11 +256,11 @@ class BaseLaORMModel extends Model
     }
 
     /**
-     * 获取模型的字段列表
+     * 获取模型的字段列表 兼容性不高
      *
      * @return array
      */
-    public function getFields(): array
+    public function getFields_2(): array
     {
         try {
             $tableName     = $this->getTable();
@@ -198,6 +276,21 @@ class BaseLaORMModel extends Model
             return [];
         }
     }
+
+	public function getFields(): array
+	{
+		try {
+			// 不要用 Schema::getColumnListing($this->getTable());
+			
+			// 改用：
+			return $this->getConnection()
+						->getSchemaBuilder()
+						->getColumnListing($this->getTable());
+		} catch (\Exception $e) {
+			return [];
+		}
+	}
+
 
     /**
      * 获取主键名称
