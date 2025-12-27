@@ -82,11 +82,13 @@ class Module extends BaseController
 		#$vips = $this->userRepo->findActiveVips(5);
 		#$nameExists = $this->moduleRepo->nameExists($name = 'adm' , 1);
 		
-		$activeUsers = $this->moduleRepo->activeUsers()->paginate([
+		$activeUsers = $this->moduleRepo->activeUsers()->paginate(3, ['*'], 'page', $page);
+		
+		/*->paginate([
 			'list_rows' => 3, // 每页条数
 			'page'      => $page, // 传入手动获取的页码
 			]);//->paginate(3, '*', 'page', $page);
-		
+		*/
 		//return new Response('aa');
 		/*分页
         return json([

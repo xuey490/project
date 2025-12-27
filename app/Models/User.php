@@ -33,6 +33,7 @@ class User extends \Framework\Utils\BaseModel
     protected $updateTime = 'updated_at';  // 映射到数据库 updated_at
 
     // 4. 字段类型定义（强制转换，适配int）
+	/*
     protected $type = [
         'status'     => 'integer',
         'vip_level'  => 'integer',
@@ -43,6 +44,23 @@ class User extends \Framework\Utils\BaseModel
         'tenant_id'  => 'integer',
         'created_by' => 'integer',
     ];
+	*/
+	
+    /**
+     * 允许批量赋值的字段白名单
+     * 需包含所有要通过 create/fill/save(批量) 赋值的字段
+     *
+     * @var array
+     */
+    protected $fillable = [
+        'name',          // 异常提示需要添加的字段
+        'nickname',      // 你的批量赋值数据中的字段
+        'englishname',   // 你的批量赋值数据中的字段
+        'email',         // 你的批量赋值数据中的字段
+        'group_id',      // 你的批量赋值数据中的字段
+        'status'         // 你的批量赋值数据中的字段
+        // 可根据业务需求补充其他字段（如 created_by、updated_by 等）
+    ];	
 
     // 5. 覆盖只读字段（添加自定义时间字段）
     protected $readonly = ['created_by', 'created_at', 'tenant_id'];

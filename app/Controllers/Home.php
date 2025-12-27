@@ -251,13 +251,13 @@ class Home
 			
 		//ThinkORM Model的写法
         $user =App::make( Custom::class);
-		//dump($user->getFields_1());
+		dump($user->getPk());
 		
 		//$user = App::make( Custom::class)->find(4152240944932200448);//更新操作
 			#dump($user);
 			//通用插入
 		/*
-		
+		$user =App::make( Custom::class);
         // 2. 给模型属性赋值（对应数据库表字段）
         $user->name = '9999';
         $user->englishname = '777';
@@ -275,56 +275,78 @@ class Home
         } else {
             // 获取错误信息
             $string =  "插入失败：" . $user->getError();
-        }
-		*/
+        }*/
+		
+		
 
+		
+		
+		// 直接使用模型 create 方法，测试批量赋值
 		$data = [
-			'name' => '李四11',
-			'nickname' => '李四11',
+			'name' => '1111',
+			'nickname' => '111',
 			'englishname' => 'aaa',
 			'email'=> 'zs@test.com',
-			'group_id'=>1001,
+			'group_id'=>133,
 			'status'=>1,
-			#'created_at'=> time(),
-			#'updated_at'=> time(),
-			
 		];
+		#$custom = \App\Models\Custom::create($data);
+		#dd($custom); // 查看模型实例中是否包含上述字段的值，若包含则模型正常，问题在仓库
+		//($this->userRepo)(\App\Models\Custom::class)->fill($data)->save();//illuminate的做法
+		#dump($this->userRepo->save($data));//illuminate的做法
+		//dump($this->userRepo->create($data));//illuminate / thinkphp 通用的做法
 		
-		#($this->userRepo)(\App\Models\User::class)->save($data);
 		
-		/*
+		
+		
+		
+		
+		
+		//($this->userRepo)(\App\Models\Custom::class)->save();//thinkphp的做法
+		
+		#dump(($this->userRepo)(\App\Models\Custom::class));
+		#dump(App::make( Custom::class));
+		
+		
+		/*illuminate 的多租户演示
 		// find 会自动加上 AND tenant_id = 1001
 		// 把 get() 改为 first()
+		*/
+		/*
 		$info = $user->where('id', '4152317470889484288')->first(); 
 
 		if ($info) {
 			// 此时 $info 是 User 模型对象，可以正常赋值
-			$info->nickname = '王五';
+			$info->nickname = '8888';
+			$info->status 	= 	1;
 			$info->save(); 
 		}
-		
+		*/
+		/*
 		$info = $user->find('4152317470889484288');
 		if ($info) {
 		$info->nickname = '王五11111111';
 		$info->save();
 		}		
 		*/
-
+		//($this->userRepo)(\App\Models\User::class)->where('id', 4152317470889484288)->update(['status' => 13]);
 
 		
 		
 		//上下文操作
 		//TenantContext::restore();
 		//TenantContext::setTenantId(1001);
-		$userList = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->get()->toArray(); 
-		dump($userList);
+		#$userList = ($this->userRepo)(\App\Models\User::class)->dynamicHidden(['group_id'])->where('status', 1)->get()->toArray(); //illuminate的做法
+		#dump($userList);
+		
+		//return new Response($string);
 		
 		// 手动排除
 		#$list = ($this->userRepo)(\App\Models\User::class)->withoutGlobalScope(['tenant'])->select()->toArray();
 		// SQL: SELECT * FROM custom		
 		#dump($userList);
 		
-($this->userRepo)(\App\Models\User::class)->where('id', 4152317470889484288)->update(['status' => 12]);
+
 		
 		//thinkphp的多租户演示
 		#$userList1 = $user->withoutGlobalScope(['tenant'])->select();
