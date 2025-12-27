@@ -342,6 +342,7 @@ $list = User::alias('u')
     {
         return self::withTrashed()->where((new static)->getPk(), $id)->delete(true);
     }
+
     
     /**
      * 恢复软删除数据

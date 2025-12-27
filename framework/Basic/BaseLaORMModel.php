@@ -41,7 +41,7 @@ class BaseLaORMModel extends Model
     public $incrementing = false;
 
     // 时间戳自动管理（默认true，自动维护created_at/updated_at）
-    //public $timestamps = true;
+    public $timestamps = true;
 	
     /**
      * 主键类型
@@ -85,7 +85,7 @@ class BaseLaORMModel extends Model
     private static ?Snowflake $snowflake = null;
 
     // 【优化】静态内存缓存表字段，避免重复查询数据库
-    protected static array $tableColumns = [];
+    private static array $tableColumns = [];
 	
     protected static function boot1()
     {
@@ -113,28 +113,30 @@ class BaseLaORMModel extends Model
     }
 
 
+	protected static function boot()
+	{
+		parent::boot();
 
+		// 注册创建事件
+		static::creating(function ($model) {
+			// 1. 生成雪花 ID
+			if (empty($model->{$model->getKeyName()})) {
+				$model->{$model->getKeyName()} = self::generateSnowflakeID();
+			}
+			// 2. 自动填充创建人（使用优化后的 fillAuditColumn 方法）
+			$model->fillAuditColumn('created_by');
+		});
 
+		// 注册更新事件
+		static::updating(function ($model) {
+			$model->fillAuditColumn('updated_by');
+		});
 
-    protected static function boot()
-    {
-        parent::boot();
-
-        static::creating(function ($model) {
-            // 1. 生成雪花 ID
-            if (empty($model->{$model->getKeyName()})) {
-                $model->{$model->getKeyName()} = self::generateSnowflakeID();
-            }
-            // 2. 填充创建人
-            $model->fillAuditColumn('created_by');
-        });
-
-        static::updating(function ($model) {
-            $model->fillAuditColumn('updated_by');
-        });
-
-        // 删除事件建议交给业务层或特定Trait，基类尽量纯净
-    }
+		// 注册删除事件
+		static::deleted(function ($model) {
+			self::onAfterDelete($model);
+		});
+	}
 
     /**
      * 【性能优化核心】填充审计字段
@@ -142,8 +144,11 @@ class BaseLaORMModel extends Model
      */
     protected function fillAuditColumn(string $column): void
     {
-        $uid = function_exists('getCurrentUser') ? \getCurrentUser() : null;
-        if (!$uid) return;
+		// 更安全的函数存在性检查
+		$uid = (function_exists('getCurrentUser') && is_callable('getCurrentUser')) 
+			? \getCurrentUser() 
+			: null;
+		if (!$uid) return;
 
         // 方案A：如果使用了 Schema 缓存 (Laravel默认支持)
         // if (Schema::hasColumn($this->getTable(), $column)) {
@@ -157,20 +162,8 @@ class BaseLaORMModel extends Model
     }
 
     /**
-     * 检查字段是否存在（带静态缓存）
+     * 检查字段是否存在
      */
-    protected function hasColumnCached1(string $column): bool
-    {
-        $table = $this->getTable();
-        
-        if (!isset(self::$tableColumns[$table])) {
-            // 使用 Schema 获取字段，这里通常会被框架缓存
-            self::$tableColumns[$table] = Schema::getColumnListing($table);
-        }
-
-        return in_array($column, self::$tableColumns[$table]);
-    }
-
 	protected function hasColumnCached(string $column): bool
 	{
 		$table = $this->getTable();
@@ -194,14 +187,23 @@ class BaseLaORMModel extends Model
         return $date->setTimezone(config('app.time_zone', 'PRC'))->format('Y-m-d H:i:s');
     }
 
-    /**
-     * 兼容 TP: 动态隐藏字段
-     */
-    public function hidden(array $fields): static
-    {
-        $this->makeHidden($fields); // Eloquent 原生支持 makeHidden
-        return $this;
-    }
+	/**
+	 * 兼容 TP: 动态隐藏字段（语义优化，避免与原生 $hidden 冲突）
+	 */
+	public function dynamicHidden(array $fields): static
+	{
+		$this->makeHidden($fields);
+		return $this;
+	}
+
+	/**
+	 * 补充：动态显示字段（双向兼容，功能更完整）
+	 */
+	public function dynamicVisible(array $fields): static
+	{
+		$this->makeVisible($fields);
+		return $this;
+	}
 
     /**
      * 兼容 TP: 获取数据
@@ -263,12 +265,22 @@ class BaseLaORMModel extends Model
         }
     }
 
+	/**
+	 * 获取模型对应表的字段列表（复用静态缓存，性能最优）
+	 *
+	 * @return array
+	 */
 	public function getFields(): array
 	{
 		try {
-			return $this->getConnection()
-						->getSchemaBuilder()
-						->getColumnListing($this->getTable());
+			$table = $this->getTable();
+			// 复用已缓存的字段列表，避免重复调用 Schema
+			if (!isset(self::$tableColumns[$table])) {
+				self::$tableColumns[$table] = $this->getConnection()
+												   ->getSchemaBuilder()
+												   ->getColumnListing($table);
+			}
+			return self::$tableColumns[$table];
 		} catch (\Exception $e) {
 			return [];
 		}
@@ -352,7 +364,7 @@ class BaseLaORMModel extends Model
     /**
      * 生成雪花ID
      */
-    public static function generateSnowflakeID(): int
+    public static function generateSnowflakeID1(): int
     {
         if (self::$snowflake === null) {
             // 优化：从配置读取 WorkerId 和 DataCenterId
@@ -364,4 +376,164 @@ class BaseLaORMModel extends Model
         }
         return self::$snowflake->nextId();
     }
+	
+	/**
+	 * 生成雪花ID（公共静态方法，支持外部调用）
+	 */
+	public static function generateSnowflakeID(): string
+	{
+		// 懒加载雪花算法实例，全局只初始化一次
+		if (self::$snowflake === null) {
+			self::$snowflake = self::createSnowflakeInstance();
+		}
+
+		// 生成雪花ID并转为字符串（避免精度丢失）
+		return (string) self::$snowflake->nextId();
+	}
+
+	/**
+	 * 创建雪花算法实例（独立方法，便于扩展和自定义）
+	 */
+	private static function createSnowflakeInstance(): Snowflake
+	{
+		// 从Laravel配置文件读取worker_id和datacenter_id，避免硬编码
+		// 建议在config/app.php中添加：'snowflake_worker_id' => 0, 'snowflake_datacenter_id' => 0
+		$workerId = (int) config('app.snowflake_worker_id', 0);
+		$dataCenterId = (int) config('app.snowflake_datacenter_id', 0);
+
+		// 校验worker_id和datacenter_id范围（雪花算法标准：0-31）
+		if ($workerId < 0 || $workerId > 31 || $dataCenterId < 0 || $dataCenterId > 31) {
+			throw new \InvalidArgumentException("雪花算法WorkerId和DataCenterId必须在0-31之间");
+		}
+
+		return new Snowflake($workerId, $dataCenterId);
+	}
+
+	/**
+	 * 重置雪花算法实例（可选，供子类/特殊场景自定义）
+	 */
+	public static function resetSnowflakeInstance(?Snowflake $snowflake = null): void
+	{
+		if ($snowflake === null) {
+			self::$snowflake = self::createSnowflakeInstance();
+		} else {
+			self::$snowflake = $snowflake;
+		}
+	}
+		
+	/**
+	 * 获取表字段的详细结构信息（基于 Schema，无原生 SQL 依赖）
+	 *
+	 * @return array 格式：[字段名 => [type: 字段类型, nullable: 是否允许为空, default: 默认值, ...]]
+	 */
+	public function getFieldDetails(): array
+	{
+		try {
+			$table = $this->getTable();
+			$connection = $this->getConnection();
+			$schema = $connection->getSchemaBuilder();
+			$columns = $schema->getColumns($table);
+			
+			// 1. 先获取当前表的所有主键字段（复合主键也支持）
+			$primaryKeys = $this->getPrimaryKeys();
+			#return $columns;
+			$fieldDetails = [];
+			foreach ($columns as $column) {
+				$fieldName = $column['name'] ?? '';
+				if (empty($fieldName)) {
+					continue; // 过滤无效字段
+				}
+				$fieldDetails[$fieldName] = [
+					'auto_increment' => $column['auto_increment'],
+					'type_name'     => $column['type_name'] ?? 'unknown',
+					'type'     		=> $column['type'] ?? 'unknown',
+					'nullable' 		=> $column['nullable'] ?? null,
+					'default'  		=> $column['default'] ?? null,
+					'length'   		=> $column['length'] ?? null,
+					'comment'  		=> $column['comment'] ?? null,
+					'primary'  		=> in_array($fieldName, $primaryKeys), // 2. 通过主键列表判断，无兼容问题
+				];
+			}
+
+			return $fieldDetails;
+		} catch (\Exception $e) {
+			#\Illuminate\Support\Facades\Log::error("获取表结构失败：{$e->getMessage()}");
+			return [];
+		}
+	}
+
+	/**
+	 * 检查指定字段是否为目标类型（基于 Schema，兼容性强）
+	 *
+	 * @param string $column 字段名
+	 * @param string|array $targetTypes 目标类型（如 'varchar'、['int', 'bigint']）
+	 * @return bool
+	 */
+	public function isFieldType(string $column, string|array $targetTypes): bool
+	{
+		if (!is_array($targetTypes)) {
+			$targetTypes = [$targetTypes];
+		}
+
+		$fieldDetails = $this->getFieldDetails();
+		if (!isset($fieldDetails[$column])) {
+			return false;
+		}
+
+		// 忽略大小写，提升兼容性
+		$fieldType = strtolower($fieldDetails[$column]['type']);
+		$targetTypes = array_map('strtolower', $targetTypes);
+
+		return in_array($fieldType, $targetTypes);
+	}
+	
+	/**
+	 * 获取表的主键字段（基于 Schema） 获取表的主键字段（独立方法，供关联使用）
+	 *
+	 * @return array 主键字段列表（复合主键返回多个，单主键返回单个元素数组）
+	 */
+	public function getPrimaryKeys1(): array
+	{
+		$fieldDetails = $this->getFieldDetails();
+		$primaryKeys = [];
+
+		foreach ($fieldDetails as $fieldName => $details) {
+			if ($details['primary']) {
+				$primaryKeys[] = $fieldName;
+			}
+		}
+
+		return $primaryKeys;
+	}
+	/**
+	 * 获取表的主键字段（独立方法，供关联使用）
+	 */
+	public function getPrimaryKeys(): array
+	{
+		try {
+			$table = $this->getTable();
+			$connection = $this->getConnection();
+			$schema = $connection->getSchemaBuilder();
+			
+			// 获取主键信息（兼容所有 Laravel 版本和数据库驱动）
+			$indexes = $schema->getIndexes($table);
+			$primaryKeys = [];
+
+			foreach ($indexes as $index) {
+				if ($index['primary']) {
+					// 复合主键会返回多个字段，普通主键仅一个
+					$primaryKeys = array_merge($primaryKeys, $index['columns']);
+					break; // 主键索引唯一，找到后直接退出循环
+				}
+			}
+
+			return $primaryKeys;
+		} catch (\Exception $e) {
+			\Illuminate\Support\Facades\Log::error("获取主键失败：{$e->getMessage()}");
+			return [];
+		}
+	}
+	
+	
+	
 }

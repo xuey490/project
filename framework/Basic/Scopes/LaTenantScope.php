@@ -15,11 +15,11 @@ class LaTenantScope implements Scope
      */
     public function apply(Builder $builder, Model $model)
     {
-		#dump($model->tenant_id);
+		
         $tenantId = function_exists('getCurrentTenantId') ? \getCurrentTenantId() : null;
 
         // 只有获取到租户ID，且当前没有请求移除租户限制时才生效
-        if ($tenantId && isset($model->tenant_id) ) {
+        if ($tenantId && !isset($model->tenant_id) ) {
             // 使用 qualiftyColumn 防止联表字段冲突 (输出 table.tenant_id)
             $column = $model->qualifyColumn('tenant_id');
             $builder->where($column, '=', $tenantId);

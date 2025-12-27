@@ -12,6 +12,7 @@ use Illuminate\Database\Capsule\Manager as IlluminateDb;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use think\db\Query as ThinkQuery;
 use Framework\DI\Injectable;
+use Framework\Core\App;
 
 /**
  * Class BaseRepository
@@ -34,7 +35,7 @@ abstract class BaseRepository implements RepositoryInterface
             throw new RuntimeException('Repository must define property $modelClass');
         }
         $this->isEloquent = $this->factory->isEloquent();
-		
+		#dump($this->modelClass);
 		$this->initialize();
     }
 	
@@ -48,7 +49,7 @@ abstract class BaseRepository implements RepositoryInterface
     /**
      * 判断是否配置了有效的模型类
      */
-    protected function isModelClass(): bool
+    public function isModelClass(): bool
     {
         return class_exists($this->modelClass);
     }
@@ -204,11 +205,12 @@ abstract class BaseRepository implements RepositoryInterface
 
     public function create(array $data): mixed
     {
+		
         if ($this->isModelClass()) {
             return forward_static_call([$this->modelClass, 'create'], $data);
         }
-
-        // 表名模式
+		
+        // 表名模式 $this->isEloquent laravelORM是为true
         if ($this->isEloquent) {
             $id = $this->newQuery()->insertGetId($data);
             return $this->findById($id);
@@ -216,6 +218,33 @@ abstract class BaseRepository implements RepositoryInterface
             $id = $this->newQuery()->insert($data, true);
             return $this->findById($id);
         }
+    }
+	
+	
+    /**
+     * 正确的保存方法（支持新增和更新，兼容批量赋值）
+     * @param string $modelClass 模型类名（如 Custom::class）
+     * @param array $data 待保存数据（包含主键则更新，不包含则新增）
+     * @return Model
+     */
+    public function save(array $data)
+    {
+        // 1. 获取模型主键名（兼容自定义主键，如你的雪花ID主键 id） getKeyName/getPk
+        $primaryKey = App()->make($this->modelClass)->getKeyName() ;
+		//$primaryKey = (new ($this->modelClass)())->getKeyName();
+
+        // 2. 判断是新增还是更新
+        if (!isset($data[$primaryKey]) || empty($data[$primaryKey])) {
+            // 新增：直接调用 create($data)（底层自动触发 fill($data) 批量赋值）
+            return $this->modelClass::create($data);
+        }
+
+        // 3. 更新：先查询模型，再 fill($data) 批量赋值，最后 save()
+        $model = $this->modelClass::findOrFail($data[$primaryKey]);
+        $model->fill($data); // 关键：调用 fill() 批量绑定 $fillable 中的字段
+        $model->save();
+
+        return $model;
     }
 
     public function update(int|string $id, array $data): bool
