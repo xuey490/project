@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Framework\Basic;
 
-#use Framework\Basic\Scopes\TpTenantScope;
+use Framework\Basic\Scopes\TpTenantScope;
 use Framework\Utils\Snowflake;
 use think\Model as TpModel;
 use think\model\concern\SoftDelete as TpSoftDelete;
@@ -117,6 +117,20 @@ class BaseTpORMModel extends TpModel
     /**
      * 模型事件：更新前事件
      */
+    public static function onBeforeUpdate(TpModel $model): void
+    {
+        // 1. 检查是否越权（仅针对已存在的模型对象操作）
+        self::checkTenantAccess($model);
+        
+        // 2. 自动填充更新人
+        self::setUpdatedBy($model);
+
+        // 3. 执行原有的 beforeUpdate 逻辑（处理时间戳等）
+        // 注意：静态事件中调用非静态方法需要 trick，或者将 beforeUpdate 逻辑挪到这里
+        // TP的标准做法是 $model->beforeUpdate() 是内部回调，这里是事件
+        // 如果你依赖 $model->beforeUpdate()，请确保它被调用
+    }
+	 /* 此函数用于带上下文的操作
 	public static function onBeforeUpdate(TpModel $model): void
 	{
 		// 超管可绕过
@@ -138,10 +152,18 @@ class BaseTpORMModel extends TpModel
 			throw new \Exception('Tenant access denied (update)', 403);
 		}
 	}
+	*/
 	
 	/*
 	* 模型事件：删除前校验（物理 & 软删通吃）
 	*/
+    public static function onBeforeDelete(TpModel $model): void
+    {
+        // 1. 检查是否越权
+        self::checkTenantAccess($model);
+    }
+	
+	/* 此函数用于带上下文的操作
 	public static function onBeforeDelete(TpModel $model): void
 	{
 
@@ -160,7 +182,7 @@ class BaseTpORMModel extends TpModel
 		if ($recordTenant != $currentTenant) {
 			throw new Exception('Tenant access denied (delete)', 403);
 		}
-	}	
+	}*/
 
     /**
      * 模型事件：更新后事件
@@ -191,7 +213,18 @@ class BaseTpORMModel extends TpModel
         }
     }
 	
-	public function scopeTenant($query): void
+    /**
+     * 定义名为 tenant 的作用域
+     * ThinkPHP 会自动调用 scopeTenant($query)
+     */
+    public function scopeTenant(Query $query)
+    {
+        // 实例化你的作用域类并执行逻辑
+        (new TpTenantScope())->apply($query, $this);
+    }	
+	
+	//可用，依赖上下文传递类
+	public function scopeTenant2($query): void
 	{
 		// 1. 当前上下文不启用租户隔离
 		if (!TenantContext::shouldApplyTenant()) {
@@ -210,6 +243,7 @@ class BaseTpORMModel extends TpModel
 		);
 	}
 
+	//可用不严谨
 	public function scopeTenant1($query): void
 	{
 
@@ -224,6 +258,31 @@ class BaseTpORMModel extends TpModel
 			);
 		}
 	}
+	
+/**
+     * 安全的 Join 方法，自动追加租户ID
+     * @param string $joinTable  关联表名 (如 'oa_order')
+     * @param string $alias      关联表别名 (如 'o')
+     * @param string $condition  关联条件 (如 'o.user_id = u.id')
+     * @param string $type       JOIN类型 (LEFT, INNER等)
+     */
+	 /*// 使用封装好的 scopeJoinTenant
+$list = User::alias('u')
+    ->joinTenant('oa_order', 'o', 'o.user_id = u.id') // 自动补全 tenant_id
+    ->select();*/
+    public function scopeJoinTenant($query, string $joinTable, string $alias, string $condition, string $type = 'LEFT')
+    {
+        $tenantId = function_exists('getCurrentTenantId') ? \getCurrentTenantId() : null;
+        
+        // 只有当存在租户ID时，才追加限制
+        if ($tenantId) {
+            $condition .= " AND {$alias}.tenant_id = {$tenantId}";
+        }
+        
+        // 执行原生 join
+        $query->join("{$joinTable} {$alias}", $condition, $type);
+    }
+	
     // =========================================================================
     //  核心方法
     // =========================================================================
@@ -307,6 +366,32 @@ class BaseTpORMModel extends TpModel
     // =========================================================================
     //  辅助私有方法
     // =========================================================================
+	
+    /**
+     * 【新增】安全检查：防止越权操作
+     * 场景：管理员A查询了数据，然后切换了租户身份，或者Session混乱时尝试修改数据
+     */
+    protected static function checkTenantAccess(TpModel $model): void
+    {
+        // 获取当前租户
+        $currentTenantId = function_exists('getCurrentTenantId') ? \getCurrentTenantId() : null;
+        
+        // 如果没有开启多租户或当前是超管模式，跳过
+        if (!$currentTenantId) {
+            return;
+        }
+
+        // 获取数据原本的 tenant_id
+        // getOrigin() 获取原始数据，防止被修改后的数据欺骗
+        $dataTenantId = $model->getOrigin('tenant_id');
+
+        // 如果数据本身有 tenant_id，且不等于当前租户ID，抛出异常
+        if ($dataTenantId && (string)$dataTenantId !== (string)$currentTenantId) {
+            // 这里抛出异常，前端会收到 500 错误，保护数据
+            throw new \think\exception\ValidateException('无权操作此条数据（租户不匹配）');
+        }
+    }
+	
 
     private static function setPrimaryKey(TpModel $model): void
     {
@@ -337,6 +422,7 @@ class BaseTpORMModel extends TpModel
     private static function setUpdatedBy(TpModel $model): void
     {
         $uid = function_exists('getCurrentUser') ? \getCurrentUser() : null;
+		$model->setAttr('update_time', time());
         if ($uid) {
             $model->setAttr('updated_by', $uid);
         }

@@ -251,7 +251,7 @@ class Home
 			
 		//ThinkORM Model的写法
         $user =App::make( Custom::class);
-		dump($user);
+		#dump($user->getFields());
 		
 		//$user = App::make( Custom::class)->find(4152240944932200448);//更新操作
 			#dump($user);
@@ -291,28 +291,64 @@ class Home
 		];
 		
 		#($this->userRepo)(\App\Models\User::class)->save($data);
+		
+		/*
+		// find 会自动加上 AND tenant_id = 1001
+		// 把 get() 改为 first()
+		$info = $user->where('id', '4152317470889484288')->first(); 
+
+		if ($info) {
+			// 此时 $info 是 User 模型对象，可以正常赋值
+			$info->nickname = '王五';
+			$info->save(); 
+		}
+		
+		$info = $user->find('4152317470889484288');
+		if ($info) {
+		$info->nickname = '王五11111111';
+		$info->save();
+		}		
+		*/
+
+
+		
+		
+		//上下文操作
 		//TenantContext::restore();
 		//TenantContext::setTenantId(1001);
-		#$userList = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->select()->toArray(); 
+		$userList = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->get()->toArray(); 
+		dump($userList);
+		
+		// 手动排除
+		#$list = ($this->userRepo)(\App\Models\User::class)->withoutGlobalScope(['tenant'])->select()->toArray();
+		// SQL: SELECT * FROM custom		
 		#dump($userList);
 		
+($this->userRepo)(\App\Models\User::class)->where('id', 4152317470889484288)->update(['status' => 12]);
 		
-		#$userList1 = $user->withoutGlobalScope('tenant')->select();
+		//thinkphp的多租户演示
+		#$userList1 = $user->withoutGlobalScope(['tenant'])->select();
 		#dump(array_keys($user->getFields()));
 		
 
 		/*
 		TenantContext::restore();
 		TenantContext::setTenantId(100111);	//tenant_id 不存在
+		*/
+		//执行语句：SELECT * FROM `oa_custom` WHERE  `id` = '4152255745003626496'  AND `oa_custom`.`tenant_id` = '100111' LIMIT 1
 		
-		//执行语句：SELECT * FROM `oa_custom` WHERE  `id` = '4152317653350096896'  AND `oa_custom`.`tenant_id` = '100111' LIMIT 1
-		$info = $user::where('id' ,'4152317653350096896')->find();//查询结果null
-		if($info) {
-			$info->nickname = 'hack';
-			$info->update_time = time();
-			$info->save();
-		}
+		#$info = ($this->userRepo)(\App\Models\User::class)->where('id' ,'4152317470889484288')->get();//查询结果null
+		#dump($info);
+		#if($info) {
+		#	$info->nickname = '123';
+		#	$info->update_time = time();
+		#	$info->save();
+		#}
 		
+		
+		//($this->userRepo)(\App\Models\User::class)->withoutGlobalScope(['tenant'])->where('id', 4152255745003626496)->update(['status' => 5]);
+		
+		/*
 		//执行语句：UPDATE `oa_custom`  SET `nickname` = 'KKKKKKKKK'  WHERE  `id` = '4152257913374908416'  AND `oa_custom`.`tenant_id` = '100111'
 		$user::where('id', '4152257913374908416')->update([
 			'nickname' => 'KKKKKKKKK',
@@ -325,8 +361,8 @@ class Home
 		*/
 		
 		
-		$info = $user::where('id' ,'4152317653350096896')->find();
-		$user->where('id', '4152317653350096896')->delete();
+		#$info = $user::where('id' ,'4152255745003626496')->find();
+		#$user->where('id', '4152255745003626496')->delete();
 		
 		#dump($user->getData());
 		#dump(($this->userRepo)(\App\Models\User::class));
@@ -337,18 +373,22 @@ class Home
 		//$list1 = $this->customDao->getActiveUsers() ; //$this->customDao->count(['enabled'=>1]);
 		// dump($list1);
 		 #dump($user->getTable());
+		 //---------------------------------------
+		 
 
 $currentPage = max(1, (int) $request->query->get('page', 1));
 
 #dump($page);
 $limit = 1;
 
+/*
 $list = $this->customDao->selectModel(
     ['status' => 1],
     '*',
     $currentPage,
     $limit,
 );
+*/
 
 
 
@@ -409,7 +449,7 @@ $snow = new Snowflake(2, 3);
 $id = $snow->nextId();
 
 
-		
+	/*	
     // 查询构造器
     $count = $this->db->make('config')->count();
 
@@ -424,6 +464,7 @@ $id = $snow->nextId();
     $user4 =($this->db)('App\Models\Config')->find(1);
 
 	#dump($user4);
+	*/
     
         // 日志测试
         // $logger = app('log');
