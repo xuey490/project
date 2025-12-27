@@ -92,13 +92,13 @@ class ModuleRepository extends BaseRepository
     }
 	
     /**
-     * 查询 id > 1 且 status = 1 的用户
+     * 查询 id > 10 且 status = 1 的用户
      */
     public function activeUsers()
-    {
-        return $this->newQuery()
+    {	
+		return $this->newQuery()
             ->where('id' , '>' , 1)
-            ->where(['status' =>[1]]);//where('status' , '=' , 1)
+            ->where('status' , '=' , 1) ;//->where(['status' =>[1]]);
     }
 	
 }

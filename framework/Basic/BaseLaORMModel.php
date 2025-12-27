@@ -219,20 +219,6 @@ class BaseLaORMModel extends Model
         $this->setAttribute($name, $value);
     }
 
-    /**
-     * 获取表字段列表 (使用 Schema 门面，兼容性更好)
-     */
-    public function getFields_1(): array
-    {
-		
-		$tableName = $this->getConnection()->getTablePrefix().$this->getTable();
-		#dump(Schema::getColumnListing($this->getTable()));#
-        try {
-            return Schema::getColumnListing($this->getTable());
-        } catch (\Exception $e) {
-            return [];
-        }
-    }
 
     public function getTable(): string
     {
@@ -280,9 +266,6 @@ class BaseLaORMModel extends Model
 	public function getFields(): array
 	{
 		try {
-			// 不要用 Schema::getColumnListing($this->getTable());
-			
-			// 改用：
 			return $this->getConnection()
 						->getSchemaBuilder()
 						->getColumnListing($this->getTable());

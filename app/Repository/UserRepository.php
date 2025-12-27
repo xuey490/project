@@ -78,9 +78,10 @@ class UserRepository extends BaseRepository
     public function findActiveVips(int $id = 2)
     {
 		
-        // 获取原生查询构造器，自己处理复杂逻辑
+        // 获取原生查询构造器，自己处理复杂逻辑 
         $query = $this->newQuery();
-        
+		
+
         $query->where('status', 1)
               ->where('id', '>=', $id);
 			  
@@ -94,7 +95,7 @@ class UserRepository extends BaseRepository
         }
 		
         // 现在的语法糖写法：
-        $query = ($this)(); 
+        //$query = ($this)(); 
 
         return $query->where('status', 1)->select();
 		
