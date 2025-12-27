@@ -64,7 +64,8 @@ class Module extends BaseController
         $limit  = $request->query->getInt('limit', 10);
 		
         // 调用 Repository 业务逻辑
-        $paginator = $this->moduleRepo->getList($params, $page, $limit);
+        /*
+		$paginator = $this->moduleRepo->getList($params, $page, $limit);
 
 
         // 处理分页数据的格式差异 (Think vs Laravel)
@@ -74,15 +75,18 @@ class Module extends BaseController
             'page'  => $page,
             'limit' => $limit,
         ];
-		
-		
-		
-		
+		*/
 
-		$list = $this->logRepo->SelectLogs(7);
-		$vips = $this->userRepo->findActiveVips(5);
-		$nameExists = $this->moduleRepo->nameExists($name = 'adm' , 1);
-		$activeUsers = $this->moduleRepo->activeUsers()->paginate(3)->toArray();
+		#$list = $this->logRepo->SelectLogs(7)->get();
+		
+		#$vips = $this->userRepo->findActiveVips(5);
+		#$nameExists = $this->moduleRepo->nameExists($name = 'adm' , 1);
+		
+		$activeUsers = $this->moduleRepo->activeUsers()->paginate([
+			'list_rows' => 3, // 每页条数
+			'page'      => $page, // 传入手动获取的页码
+			]);//->paginate(3, '*', 'page', $page);
+		
 		//return new Response('aa');
 		/*分页
         return json([

@@ -52,7 +52,26 @@ abstract class BaseRepository implements RepositoryInterface
     {
         return class_exists($this->modelClass);
     }
+	
+	/*
+	* 返回原生模型 等价于 newQuery()
+	* $this->getModel($this->modelClass) 或 $this->getModel()
+	* ($this->userRepo)(\App\Models\User::class)
+	*/
+    protected function getModel(): mixed
+    {	
+		if(class_exists($this->modelClass))
+		{
+			return App()->make($this->modelClass);
+		}else{
+			return ($this->factory)($modelClass ?? $this->modelClass);
+		}
+        
+    }
 
+	/*
+	* 等价于 getModel()
+	*/
     protected function newQuery(): mixed
     {
         return $this->factory->make($this->modelClass);

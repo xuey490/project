@@ -251,7 +251,7 @@ class Home
 			
 		//ThinkORM Model的写法
         $user =App::make( Custom::class);
-		#dump($user->getFields());
+		//dump($user->getFields_1());
 		
 		//$user = App::make( Custom::class)->find(4152240944932200448);//更新操作
 			#dump($user);
