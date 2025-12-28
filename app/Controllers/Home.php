@@ -256,7 +256,7 @@ class Home
 		//$user = App::make( Custom::class)->find(4152240944932200448);//更新操作
 			#dump($user);
 			//通用插入
-		/*
+		
 		$user =App::make( Custom::class);
         // 2. 给模型属性赋值（对应数据库表字段）
         $user->name = '9999';
@@ -275,7 +275,7 @@ class Home
         } else {
             // 获取错误信息
             $string =  "插入失败：" . $user->getError();
-        }*/
+        }
 		
 		
 
@@ -336,13 +336,38 @@ class Home
 		#App()->make(\Framework\Tenant\Tenant::class)->setId($tenantId);
 		
 		
-		//$this->userRepo->setTenantFilterEnabled(false);
-		//$userList = $this->userRepo->findAll(['status' => 1])->toArray(); //illuminate的做法
-		//$this->userRepo->setTenantFilterEnabled(true);
-		//dump($userList);
+		#$this->userRepo->setTenantFilterEnabled(false);
+		#$userList = $this->userRepo->findAll(['status' => 1])->toArray(); //illuminate的做法
+		#$this->userRepo->setTenantFilterEnabled(true);
+		#dump($userList);
 		#dump($id);
 
+		$userList1 = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->select()->toArray();
+		dump($userList1);
+		
+		//for thinkphp
+		/*$userList = ($this->userRepo)(\App\Models\User::class)->ignoreTenant()->where('status', 1)->select()->toArray();
+		($this->userRepo)(\App\Models\User::class)->restoreTenant();
+		$userList1 = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->select()->toArray();
+		dump($userList1);
+// 方式1：链式调用（推荐，自动保持上下文隔离）
+$allUserList = UserModel::ignoreTenant() // 开启超限模式，忽略租户隔离
+    ->where('status', 1)
+    ->select();
+UserModel::restoreTenant(); // 手动重置，避免影响后续查询
 
+// 方式2：批量操作（忽略租户隔离）
+UserModel::ignoreTenant();
+$allOrderList = OrderModel::select();
+$allGoodsList = GoodsModel::select();
+UserModel::restoreTenant(); // 操作完成后重置
+
+// 方式3：强制更新/删除其他租户数据（高管权限）
+UserModel::ignoreTenant()
+    ->where('id', 100)
+    ->update(['status' => 0]);
+UserModel::restoreTenant();		
+		*/
 		
 		
 		//上下文操作
