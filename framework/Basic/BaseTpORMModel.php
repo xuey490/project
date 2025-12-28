@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Framework\Basic;
 
 use Framework\Basic\Scopes\TpTenantScope;
+use Framework\Basic\Traits\TpBelongsToTenant;
 use Framework\Utils\Snowflake;
 use think\Model as TpModel;
 use think\model\concern\SoftDelete as TpSoftDelete;
@@ -18,6 +19,7 @@ use Framework\Tenant\TenantContext;
 class BaseTpORMModel extends TpModel
 {
     use \Framework\ORM\Trait\ModelTrait;
+    use TpBelongsToTenant;
     #use TpSoftDelete;
 
     // =========================================================================
@@ -214,14 +216,13 @@ class BaseTpORMModel extends TpModel
     }
 	
     /**
-     * 定义名为 tenant 的作用域
-     * ThinkPHP 会自动调用 scopeTenant($query)
+     * 【可选】查询结束后自动重置租户隔离标识（避免静态属性污染）
+     * 可在 select/find 等方法后调用，或通过模型事件自动重置
      */
-    public function scopeTenant(Query $query)
+    public function afterQuery(): void
     {
-        // 实例化你的作用域类并执行逻辑
-        (new TpTenantScope())->apply($query, $this);
-    }	
+        static::restoreTenant();
+    }
 	
 	//可用，依赖上下文传递类
 	public function scopeTenant2($query): void
@@ -249,7 +250,7 @@ class BaseTpORMModel extends TpModel
 
 		$tenantId = function_exists('getCurrentTenantId')
 			? getCurrentTenantId()
-			: null;
+			: 1001;
 		
 		if ($tenantId && in_array('tenant_id' , array_keys($this->getFields()) ) ) {
 			$query->where(
@@ -259,7 +260,7 @@ class BaseTpORMModel extends TpModel
 		}
 	}
 	
-	/**
+/**
      * 安全的 Join 方法，自动追加租户ID
      * @param string $joinTable  关联表名 (如 'oa_order')
      * @param string $alias      关联表别名 (如 'o')
@@ -267,7 +268,7 @@ class BaseTpORMModel extends TpModel
      * @param string $type       JOIN类型 (LEFT, INNER等)
      */
 	 /*// 使用封装好的 scopeJoinTenant
-	$list = User::alias('u')
+$list = User::alias('u')
     ->joinTenant('oa_order', 'o', 'o.user_id = u.id') // 自动补全 tenant_id
     ->select();*/
     public function scopeJoinTenant($query, string $joinTable, string $alias, string $condition, string $type = 'LEFT')
@@ -302,16 +303,18 @@ class BaseTpORMModel extends TpModel
                 $this->table = $prefix . $this->name;
             }
         }
+		
+		#static::initTpBelongsToTenant();
     }
 
     /**
-     * 初始化 (非静态)
+     * TP8 模型初始化方法（非静态，实例化时触发）
+     * 主动调用 Trait 的初始化方法，确保多租户逻辑生效
      */
     protected function init()
     {
-        parent::init();	
-
-    }
+        parent::init(); // 先调用父类 init 方法，避免丢失父类逻辑
+    }	
 
 	/**
      * 获取模型定义的字段列表
