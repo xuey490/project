@@ -249,7 +249,7 @@ class BaseTpORMModel extends TpModel
 
 		$tenantId = function_exists('getCurrentTenantId')
 			? getCurrentTenantId()
-			: 1001;
+			: null;
 		
 		if ($tenantId && in_array('tenant_id' , array_keys($this->getFields()) ) ) {
 			$query->where(
@@ -259,7 +259,7 @@ class BaseTpORMModel extends TpModel
 		}
 	}
 	
-/**
+	/**
      * 安全的 Join 方法，自动追加租户ID
      * @param string $joinTable  关联表名 (如 'oa_order')
      * @param string $alias      关联表别名 (如 'o')
@@ -267,7 +267,7 @@ class BaseTpORMModel extends TpModel
      * @param string $type       JOIN类型 (LEFT, INNER等)
      */
 	 /*// 使用封装好的 scopeJoinTenant
-$list = User::alias('u')
+	$list = User::alias('u')
     ->joinTenant('oa_order', 'o', 'o.user_id = u.id') // 自动补全 tenant_id
     ->select();*/
     public function scopeJoinTenant($query, string $joinTable, string $alias, string $condition, string $type = 'LEFT')

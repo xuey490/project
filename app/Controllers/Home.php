@@ -251,7 +251,7 @@ class Home
 			
 		//ThinkORM Model的写法
         $user =App::make( Custom::class);
-		dump($user->getPk());
+		#dump($user->getPk());
 		
 		//$user = App::make( Custom::class)->find(4152240944932200448);//更新操作
 			#dump($user);
@@ -283,8 +283,8 @@ class Home
 		
 		// 直接使用模型 create 方法，测试批量赋值
 		$data = [
-			'name' => '1111',
-			'nickname' => '111',
+			'name' => '赵六',
+			'nickname' => '赵六111',
 			'englishname' => 'aaa',
 			'email'=> 'zs@test.com',
 			'group_id'=>133,
@@ -293,7 +293,7 @@ class Home
 		#$custom = \App\Models\Custom::create($data);
 		#dd($custom); // 查看模型实例中是否包含上述字段的值，若包含则模型正常，问题在仓库
 		//($this->userRepo)(\App\Models\Custom::class)->fill($data)->save();//illuminate的做法
-		#dump($this->userRepo->save($data));//illuminate的做法
+		//dump($this->userRepo->save($data)->id);//illuminate / thinkphp 通用的做法
 		//dump($this->userRepo->create($data));//illuminate / thinkphp 通用的做法
 		
 		
@@ -330,21 +330,33 @@ class Home
 		}		
 		*/
 		//($this->userRepo)(\App\Models\User::class)->where('id', 4152317470889484288)->update(['status' => 13]);
+		$tenantId  = '1003';
+		app('request')->headers->set('X-Tenant-Id' , $tenantId);
+		$id = app('request')->headers->get('X-Tenant-Id');
+		#App()->make(\Framework\Tenant\Tenant::class)->setId($tenantId);
+		
+		
+		//$this->userRepo->setTenantFilterEnabled(false);
+		//$userList = $this->userRepo->findAll(['status' => 1])->toArray(); //illuminate的做法
+		//$this->userRepo->setTenantFilterEnabled(true);
+		//dump($userList);
+		#dump($id);
+
 
 		
 		
 		//上下文操作
 		//TenantContext::restore();
 		//TenantContext::setTenantId(1001);
-		#$userList = ($this->userRepo)(\App\Models\User::class)->dynamicHidden(['group_id'])->where('status', 1)->get()->toArray(); //illuminate的做法
-		#dump($userList);
+		//$userList = ($this->userRepo)(\App\Models\User::class)->dynamicHidden(['group_id'])->where('status', 1)->get()->toArray(); //illuminate的做法
+		//dump($userList);
 		
 		//return new Response($string);
 		
 		// 手动排除
 		#$list = ($this->userRepo)(\App\Models\User::class)->withoutGlobalScope(['tenant'])->select()->toArray();
 		// SQL: SELECT * FROM custom		
-		#dump($userList);
+		#dump($list);
 		
 
 		
