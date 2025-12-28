@@ -256,7 +256,7 @@ class Home
 		//$user = App::make( Custom::class)->find(4152240944932200448);//更新操作
 			#dump($user);
 			//通用插入
-		
+		/*
 		$user =App::make( Custom::class);
         // 2. 给模型属性赋值（对应数据库表字段）
         $user->name = '9999';
@@ -275,7 +275,7 @@ class Home
         } else {
             // 获取错误信息
             $string =  "插入失败：" . $user->getError();
-        }
+        }*/
 		
 		
 
