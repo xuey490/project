@@ -10,6 +10,6 @@ function getCurrentUser():int
 
 function getCurrentTenantId():int
 {
-	$id = 1003;
+	$id = 2;
 	return $id;
 }
