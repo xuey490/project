@@ -348,15 +348,19 @@ class Home
 		$id = app('request')->headers->get('X-Tenant-Id');
 		#App()->make(\Framework\Tenant\Tenant::class)->setId($tenantId);
 		
-		($this->userRepo)(\App\Models\User::class)->ignoreTenant();
+		//($this->userRepo)(\App\Models\User::class)->ignoreTenant();
 		#$this->userRepo->superAdminDisableTenantFilter();
-		$userList = $this->userRepo->setTenantFilterEnabled(false)->findAll(['status' => 1])->toArray(); 
+		//$userList = $this->userRepo->setTenantFilterEnabled(false)->findAll(['status' => 1])->toArray(); 
 		#$this->userRepo->setTenantFilterEnabled(true);
-		dump($userList);
+		//dump($userList);
 		#dump($id);
+		
+		
+		
+		
 
-		#$userList1 = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->select()->toArray();
-		#dump($userList1);
+		$userList1 = ($this->userRepo)('admin_log')->where('uid', 1)->get()->toArray();
+		dump($userList1);
 		
 		//for thinkphp
 		/*$userList = ($this->userRepo)(\App\Models\User::class)->ignoreTenant()->where('status', 1)->select()->toArray();
