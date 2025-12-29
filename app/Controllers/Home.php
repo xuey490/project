@@ -359,7 +359,7 @@ class Home
 		
 		
 
-		$userList1 = ($this->userRepo)('admin_log')->where('uid', 1)->get()->toArray();
+		$userList1 = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->get()->toArray();
 		dump($userList1);
 		
 		//for thinkphp

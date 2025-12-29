@@ -18,8 +18,9 @@ class LaTenantScope implements Scope
 		
         $tenantId = function_exists('getCurrentTenantId') ? \getCurrentTenantId() : null;
 
+		#dump($model->getFields());
         // 只有获取到租户ID，且当前没有请求移除租户限制时才生效
-        if ($tenantId && !isset($model->tenant_id) ) {
+        if ($tenantId && !isset($model->tenant_id) && in_array('tenant_id' , $model->getFields()) ) {
             // 使用 qualiftyColumn 防止联表字段冲突 (输出 table.tenant_id)
             $column = $model->qualifyColumn('tenant_id');
             $builder->where($column, '=', $tenantId);
