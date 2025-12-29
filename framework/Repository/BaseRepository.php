@@ -168,11 +168,11 @@ abstract class BaseRepository implements RepositoryInterface
     {
         // 再次校验模型类是否存在，避免非法调用
         if (!class_exists($this->modelClass)) {
-            throw new RuntimeException("模型类 {$this->modelClass} 不存在，请检查类名配置");
+            return ($this->factory)->make($this->modelClass);
+			//throw new RuntimeException("模型类 {$this->modelClass} 不存在，请检查类名配置");
         }
-
-        // 通过应用容器实例化模型，支持依赖注入和单例管理
-        return App()->make($this->modelClass);
+		// 通过应用容器实例化模型，支持依赖注入和单例管理
+		return App()->make($this->modelClass);
     }
 
     /**

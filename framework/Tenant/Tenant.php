@@ -67,7 +67,9 @@ class Tenant
 		$this->loadSetting();
 
         // 1. 从HTTP请求头获取（适用于前后端分离、微服务场景，优先级最高）
-        $this->loadTenantFromHeader();
+		if (is_null($this->tenantId)) {
+			$this->loadTenantFromHeader();
+		}
 
         // 2. 若请求头无租户信息，从Session获取（适用于传统会话场景）
         if (is_null($this->tenantId)) {
@@ -83,7 +85,7 @@ class Tenant
         if (is_null($this->tenantId)) {
             $this->loadTenantFromConfig();
         }
-
+		
         // 5. 加载租户扩展信息（若租户ID存在）
         if (!is_null($this->tenantId)) {
             $this->loadTenantInfo();
@@ -109,6 +111,7 @@ class Tenant
 				// 数字类型转为int，非数字保留字符串格式（支持雪花ID/字符串租户编号）
 				$this->tenantId = is_numeric($cleanTenantId) ? (int)$cleanTenantId : $cleanTenantId;
 			}
+			
 		} catch (\Exception $e) {
 			// 捕获所有异常，确保程序不崩溃，租户ID置为null
 			$this->tenantId = null;

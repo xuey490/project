@@ -45,6 +45,7 @@ use Framework\Basic\BaseController;
 use think\facade\Db;
 
 use App\Repository\UserRepository;
+use App\Repository\LogRepository;
 
 
 
@@ -82,6 +83,7 @@ class Home
 		private CookieManager $cookie, 
 		private DatabaseFactory $db,
 		private UserRepository $userRepo,
+		private LogRepository $logRep,
 		CustomDao $customDao,
 
 		#private DB $db1,
@@ -165,6 +167,17 @@ class Home
 			Response::HTTP_OK, // 状态码（200）
 			['Content-Type' => 'text/html'] // 响应头
 		);	
+	}
+	
+	public function index2(Request $request)
+	{
+		
+		dump($this->logRep->setTenantFilterEnabled(false)->findAll(['uid' => 1]));//禁止租户id
+		($this->logRep)->setTenantFilterEnabled(true);//解除多租户限制
+		
+		($this->logRep)::superAdminDisableTenantFilter();
+		dump($this->logRep->findAll(['id' =>['>' ,3]]));//在不解除之前，这也会默认禁止租户id
+		($this->logRep)::superAdminRestoreTenantFilter();
 	}
 	
 	##[Auth(required: true, roles: ['admin', 'editor'], guard: 'index')]
@@ -335,15 +348,15 @@ class Home
 		$id = app('request')->headers->get('X-Tenant-Id');
 		#App()->make(\Framework\Tenant\Tenant::class)->setId($tenantId);
 		
-		
-		#$this->userRepo->setTenantFilterEnabled(false);
-		#$userList = $this->userRepo->findAll(['status' => 1])->toArray(); //illuminate的做法
+		($this->userRepo)(\App\Models\User::class)->ignoreTenant();
+		#$this->userRepo->superAdminDisableTenantFilter();
+		$userList = $this->userRepo->setTenantFilterEnabled(false)->findAll(['status' => 1])->toArray(); 
 		#$this->userRepo->setTenantFilterEnabled(true);
-		#dump($userList);
+		dump($userList);
 		#dump($id);
 
-		$userList1 = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->select()->toArray();
-		dump($userList1);
+		#$userList1 = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->select()->toArray();
+		#dump($userList1);
 		
 		//for thinkphp
 		/*$userList = ($this->userRepo)(\App\Models\User::class)->ignoreTenant()->where('status', 1)->select()->toArray();
