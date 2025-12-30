@@ -134,6 +134,13 @@ abstract class BaseRepository implements RepositoryInterface
 			return; // 直接返回，不拼接 tenant_id 条件
 		}
 
+       // [关键修复] 如果是模型类 (isModelClass = true)，则租户筛选应由 Model 的 Global Scope 负责
+        // Repository 不应再手动添加 where，否则会出现 "WHERE tenant_id = 1 AND tenant_id = 1"
+        // 只有在“纯表名模式”下，才需要 Repository 手动干预
+        if ($this->isModelClass()) {
+            return;
+        }
+
 		// 获取租户ID（原有逻辑）
 		$tenant = App()->make(Tenant::class);
 		$tenantId = $tenant->getId();
@@ -196,8 +203,39 @@ abstract class BaseRepository implements RepositoryInterface
             // 检查：(实例开关关闭 OR 超管全局关闭)
             if (!$this->tenantFilterEnabled || self::$superAdminTempDisable) {
 				// 如果是模型，附带ignoreTenant
+				$model = $this->getModel();
 				if (class_exists($this->modelClass)) {
-					$this->getModel()->ignoreTenant();
+					#dump($this->getModel()->ignoreTenant()->where('id' , 1)->find()->toArray());
+					return $this->getModel()->ignoreTenant();
+					
+					// A. 【开启忽略】设置静态开关 = true
+					$model->ignoreTenant();
+					
+					// B. 【生成构造器】关键点！
+					// 此时 scopeTenant 运行，检测到开关为 true，生成的 Builder 里不会带 tenant_id
+					$builder = $model->db();
+					
+					// C. 【立即还原】设置静态开关 = false
+					// 因为 Builder 已经生成好了，这里关掉开关不会影响上面的 $builder
+					// 但能保护后续的其他查询请求
+					if (method_exists($model, 'restoreTenant')) {
+						$model->restoreTenant();
+					}
+
+					return $builder;
+					
+					/*
+					$model = $this->getModel();
+					// A. 开启忽略开关
+					$model::setIgnoreTenant(true);
+					
+					// B. 生成 Builder (此时 Scope 运行，检测到开关为 true，跳过 where 条件)
+					$builder = $model->db(); 
+					
+					// C. 【重要】立即还原开关，防止污染后续请求
+					$model::setIgnoreTenant(false);
+					
+					return $builder;*/
 				}
             }
 		}
@@ -216,6 +254,24 @@ abstract class BaseRepository implements RepositoryInterface
         return $this->factory->make($modelClass ?? $this->modelClass);
     }
 
+
+    /**
+     * 获取原生查询构建器（已自动处理租户条件）
+     * 性能最高，无数组解析开销
+     * @return mixed
+     */
+    public function rawQuery(): mixed
+    {
+        $query = $this->newQuery();
+        
+        // 手动应用租户条件（最小化开销）
+        if ($this->tenantFilterEnabled && !self::$superAdminTempDisable && $this->tenantId) {
+            $query->where($this->tenantField, $this->tenantId);
+        }
+        
+        return $query;
+    }
+	
     /**
      * 统一处理关联预加载（Eager Loading）
      * 兼容双ORM的 with 方法，纯表名模式下自动忽略（无关联查询能力）
@@ -1094,7 +1150,7 @@ abstract class BaseRepository implements RepositoryInterface
 	/**
 	 * 实例级：开启/关闭多租户筛选（单个仓库实例生效）
 	 * 适用于：单个业务方法中临时关闭筛选（如超管查询单个租户数据）
-	 * @param bool $enabled true=开启，false=关闭
+	 * @param bool $enabled true=开启多租户，false=关闭
 	 * @return $this
 	 */
 	public function setTenantFilterEnabled(bool $enabled): self

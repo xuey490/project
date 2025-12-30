@@ -19,18 +19,10 @@ trait TpBelongsToTenant
      * Trait 初始化（模拟 TP 的 boot 机制，自动注册作用域和事件）
      * 注意：TP 模型的 init 是静态方法，Trait 中通过静态构造函数兼容
      */
-	/* 
+	
     public static function initTpBelongsToTenant()
     {
-        // 1. 动态添加全局作用域（无需手动配置 $globalScope 属性）
-        static::addGlobalScope('tenant', function (Query $query) {
-            // 若标记忽略租户隔离，则不应用作用域
-            if (static::$ignoreTenantScope) {
-                return;
-            }
-            (new TpTenantScope())->apply($query, new static());
-        });
-
+		dump('aaa');
         // 2. 注册模型事件：新增前自动填充 tenant_id（与原有逻辑一致，整合到 Trait）
         static::event('before_insert', function (Model $model) {
             if (!isset($model->tenant_id) && !static::$ignoreTenantScope) {
@@ -41,7 +33,14 @@ trait TpBelongsToTenant
             }
         });
     }
-	*/
+
+    /**
+     * 设置是否忽略租户 (供 Repository 内部调用)
+     */
+    public static function setIgnoreTenant(bool $ignore): void
+    {
+        static::$ignoreTenantScope = $ignore;
+    }
 
     /**
      * 开启高管超限模式（忽略租户隔离）
