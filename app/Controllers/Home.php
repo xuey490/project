@@ -368,7 +368,7 @@ class Home
 		
 		#($this->userRepo)(\App\Models\User::class)->withoutTenancy();
 		#($this->userRepo)::isSuperAdminTempDisabled();
-		dump($this->userRepo->setTenantFilterEnabled(false)->findByArrayId([1,2,3]));
+		dump($this->logRep->setTenantFilterEnabled(false)->findByArrayId([1,2,3]));
 		#($this->userRepo)::superAdminDisableTenantFilter();
 		
 		

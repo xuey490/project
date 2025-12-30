@@ -195,9 +195,10 @@ abstract class BaseRepository implements RepositoryInterface
         }else{
             // 检查：(实例开关关闭 OR 超管全局关闭)
             if (!$this->tenantFilterEnabled || self::$superAdminTempDisable) {
-                // 移除由 LaBelongsToTenant Trait 注入的全局作用域
-                // 请确保命名空间正确
-                $this->getModel()->ignoreTenant();
+				// 如果是模型，附带ignoreTenant
+				if (class_exists($this->modelClass)) {
+					$this->getModel()->ignoreTenant();
+				}
             }
 		}
 
