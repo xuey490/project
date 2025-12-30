@@ -349,26 +349,34 @@ class Home
 		$id = app('request')->headers->get('X-Tenant-Id');
 		#App()->make(\Framework\Tenant\Tenant::class)->setId($tenantId);
 		
+		/*TP全局限制
 		//($this->userRepo)(\App\Models\User::class)->ignoreTenant();
-		#$this->userRepo->superAdminDisableTenantFilter();
-		//$userList = $this->userRepo->setTenantFilterEnabled(false)->findAll(['status' => 1])->toArray(); 
-		#$this->userRepo->setTenantFilterEnabled(true);
-		//dump($userList);
+		$this->userRepo->superAdminDisableTenantFilter();
+		$userList = $this->userRepo->setTenantFilterEnabled(true)->findAll(['status' => 1])->toArray(); 
+		$this->userRepo->setTenantFilterEnabled(true);
+		dump($userList);
 		#dump($id);
+		*/
 		
 		
 		
 		
 		
-
-		$userList1 = ($this->userRepo)(\App\Models\User::class)->withoutTenancy()->where('status', 1)->get()->toArray();
-		dump($userList1);
+		#$userList1 = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->get()->toArray();//默认带租户id
+		#$userList1 = ($this->userRepo)(\App\Models\User::class)->withoutTenancy()->where('status', 1)->get()->toArray();//取消带租户id限制
+		#dump($userList1);
+		
+		#($this->userRepo)(\App\Models\User::class)->withoutTenancy();
+		#($this->userRepo)::isSuperAdminTempDisabled();
+		dump($this->userRepo->setTenantFilterEnabled(false)->findByArrayId([1,2,3]));
+		#($this->userRepo)::superAdminDisableTenantFilter();
+		
 		
 		//for thinkphp
 		/*$userList = ($this->userRepo)(\App\Models\User::class)->ignoreTenant()->where('status', 1)->select()->toArray();
 		($this->userRepo)(\App\Models\User::class)->restoreTenant();
 		$userList1 = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->select()->toArray();
-		dump($userList1);
+		
 // 方式1：链式调用（推荐，自动保持上下文隔离）
 $allUserList = UserModel::ignoreTenant() // 开启超限模式，忽略租户隔离
     ->where('status', 1)

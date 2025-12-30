@@ -173,16 +173,35 @@ abstract class BaseRepository implements RepositoryInterface
 		// 通过应用容器实例化模型，支持依赖注入和单例管理
 		return App()->make($this->modelClass);
     }
-
-    /**
+	
+	/**
      * 获取查询构造器（统一模型实例转构造器，屏蔽ORM差异）
      * 等价于 newQuery()，是核心查询入口
      * @return mixed 查询构造器（EloquentBuilder 或 ThinkQuery）
      */
     protected function newQuery(): mixed
     {
-        // 先获取模型实例，再转为查询构造器，统一逻辑
-        return $this->getBuilder($this->getModel());
+        // 1. 获取基础构造器
+        $builder = $this->getBuilder($this->getModel());
+
+        // 2. [核心修复]：如果 Repository 层禁用了租户筛选，必须同步移除 Eloquent 的 Global Scope
+        if ($this->isEloquent) {
+            // 检查：(实例开关关闭 OR 超管全局关闭)
+            if (!$this->tenantFilterEnabled || self::$superAdminTempDisable) {
+                // 移除由 LaBelongsToTenant Trait 注入的全局作用域
+                // 请确保命名空间正确，对应你的 \Framework\Basic\Scopes\LaTenantScope
+                $builder->withoutGlobalScope(\Framework\Basic\Scopes\LaTenantScope::class);
+            }
+        }else{
+            // 检查：(实例开关关闭 OR 超管全局关闭)
+            if (!$this->tenantFilterEnabled || self::$superAdminTempDisable) {
+                // 移除由 LaBelongsToTenant Trait 注入的全局作用域
+                // 请确保命名空间正确
+                $this->getModel()->ignoreTenant();
+            }
+		}
+
+        return $builder;
     }
 
     /**
