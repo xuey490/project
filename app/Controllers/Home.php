@@ -303,6 +303,7 @@ class Home
 			'group_id'=>133,
 			'status'=>1,
 		];
+		#dump($this->userRepo->save($data)->id);
 		#$custom = \App\Models\Custom::create($data);
 		#dd($custom); // 查看模型实例中是否包含上述字段的值，若包含则模型正常，问题在仓库
 		//($this->userRepo)(\App\Models\Custom::class)->fill($data)->save();//illuminate的做法
@@ -358,8 +359,9 @@ class Home
 		
 		
 		
+		
 
-		$userList1 = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->select()->toArray();
+		$userList1 = ($this->userRepo)(\App\Models\User::class)->withoutTenancy()->where('status', 1)->get()->toArray();
 		dump($userList1);
 		
 		//for thinkphp
