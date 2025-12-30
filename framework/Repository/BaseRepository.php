@@ -143,7 +143,6 @@ abstract class BaseRepository implements RepositoryInterface
 			return;
 		}
 		
-
 		// 拼接租户筛选条件（仅执行一次，无重复冲突）
 		$query->where($this->tenantField, $this->tenantId);
 	}
@@ -286,25 +285,60 @@ abstract class BaseRepository implements RepositoryInterface
      * @param array $with 关联关系数组（可选）
      * @return mixed 单条记录（模型实例/数组/NULL）
      */
-    public function findById(int|string $id, array $with = []): mixed
-    {
-        // 1. 获取查询构造器并应用关联预加载
-        $query = $this->newQuery();
-        $query = $this->applyWith($query, $with);
-		
-        // 2. 模型模式：直接使用 find 方法（双ORM兼容）
-        if ($this->isModelClass()) {
-            return $query->find($id);
-        }
-		
-		$primaryKey = $this->getPrimaryKey();
-		if ($this->isEloquent) {
-			return $query->where($primaryKey, $id)->first() ?? null;
-		}else{
-			return $query->where($primaryKey, $id)->find()?? null;
-		}
-    }
+	public function findById(int|string $id, array $with = []): mixed
+	{
+		// 1. 获取查询构造器并应用关联预加载
+		$query = $this->newQuery();
+		$query = $this->applyWith($query, $with);
 
+		// 2. 模型模式：直接使用 find 方法（双ORM兼容）
+		if ($this->isModelClass()) {
+			// 两个框架模型都支持 find($id)
+			return $query->find($id); 
+		}
+
+		$primaryKey = $this->getPrimaryKey();
+		// Eloquent Builder 没有 find() 方法，只有 find($id) 是 Model 的 helper
+		if ($this->isEloquent) {
+			 return $query->where($primaryKey, $id)->first();
+		}else{
+			// 表名模式
+			return $query->where($primaryKey, $id)->find(); // TP find 返回 array|null, Eloquent first 返回 object|null
+		}
+	}
+
+    /**
+     * 根据主键ID查询批量记录
+     * 兼容模型模式和表名模式，支持关联预加载
+     * @param array $id 主键ID值
+     * @param array $with 关联关系数组（可选）
+     * @return mixed N条记录（模型实例/数组/NULL）
+     */
+	public function findByArrayId(array $id, array $with = []): mixed
+	{
+		// 1. 获取查询构造器并应用关联预加载
+		$query = $this->newQuery();
+		$query = $this->applyWith($query, $with);
+
+		$primaryKey = $this->getPrimaryKey();
+		if ($this->isModelClass()) {
+			// Eloquent Builder 没有 find() 方法，只有 find($id) 是 Model 的 helper
+			if ($this->isEloquent) {
+				 return $query->find($id);
+			}else{
+				 return $query->whereIn($primaryKey, $id)->select(); 
+			}
+			return $result;
+		}else{
+			if ($this->isEloquent) {
+				 return $query->whereIn($primaryKey, $id)->get();
+			}else{
+				 return $query->whereIn($primaryKey, $id)->select(); 
+			}
+			return $result;
+		}
+	}
+	
     /**
      * 根据条件查询单条记录
      * 支持复杂查询条件，兼容关联预加载
@@ -476,25 +510,35 @@ abstract class BaseRepository implements RepositoryInterface
         $model = $this->getModel();
         $primaryKey = $this->isEloquent ? $model->getKeyName() : $model->getPk();
 
-        // 3. 无主键：新增记录（使用模型 create 方法，支持批量赋值）
-        if (!isset($data[$primaryKey]) || empty($data[$primaryKey])) {
-            return forward_static_call([$this->modelClass, 'create'], $data);
-        }
+		// 无主键：新增记录（使用模型 create 方法，支持批量赋值）
+		if (!isset($data[$primaryKey]) || empty($data[$primaryKey])) {
+			//return forward_static_call([$this->modelClass, 'create'], $data);
+			if ($this->isEloquent) {
+				return $this->modelClass::create($data);
+			}
+			return $this->modelClass::create($data); // ThinkPHP 8 模型也支持 create
+		}
 
-        // 4. 有主键：更新记录（先查询，再赋值，最后保存）
-        $modelInstance = $this->modelClass::findOrFail($data[$primaryKey]);
+		// 更新
+		$id = $data[$primaryKey];
+		// 兼容查找逻辑
+		$instance = $this->findById($id);
+		
+		if (!$instance) {
+			throw new RuntimeException("Record with ID {$id} not found.");
+		}
 
-        // 双ORM统一批量赋值逻辑
-        if ($this->isEloquent) {
-            // Illuminate ORM：使用 fill 方法，遵循 $fillable 配置
-            $modelInstance->fill($data);
-        } else {
-            // ThinkPHP ORM：使用 data 方法，遵循 $fillable/$hidden 配置
-            $modelInstance->data($data);
-        }
+		// Illuminate ORM：使用 fill 方法，遵循 $fillable 配置
+		if ($this->isEloquent) {
+			$instance->fill($data);
+		} else {
+			// ThinkPHP 模型赋值
+			$instance->save($data); // ThinkPHP save可以直接传数据进行更新
+			return $instance;
+		}
 
-        // 保存记录并返回
-        return $modelInstance->save();
+		$instance->save();
+		return $instance;
     }
 
     /**
