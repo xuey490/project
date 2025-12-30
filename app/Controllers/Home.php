@@ -366,10 +366,24 @@ class Home
 		#$userList1 = ($this->userRepo)(\App\Models\User::class)->withoutTenancy()->where('status', 1)->get()->toArray();//取消带租户id限制
 		#dump($userList1);
 		
-		#($this->userRepo)(\App\Models\User::class)->withoutTenancy();
+		//($this->userRepo)(\App\Models\User::class)->withoutTenancy();
 		#($this->userRepo)::isSuperAdminTempDisabled();
-		dump($this->logRep->setTenantFilterEnabled(false)->findByArrayId([1,2,3]));
+		#dump($this->userRepo->setTenantFilterEnabled(false)->findByArrayId([1,2,3]));//跟下面那句配合使用
+		#($this->userRepo)(\App\Models\User::class)->restoreTenant();//跟上面那句配合使用
 		#($this->userRepo)::superAdminDisableTenantFilter();
+		
+		
+		
+		($this->userRepo)::superAdminDisableTenantFilter();
+		#dump($this->userRepo->findByArrayId([1,2,3]));
+		#($this->userRepo)::superAdminRestoreTenantFilter();
+		
+		#dump($this->userRepo->setTenantFilterEnabled(true)->findByArrayId([1,2,3]));
+		
+		dump($this->userRepo->rawQuery()->where('status', 1)->limit(5)->select());
+		
+		//语法糖用法db查询
+		#dump(($this->logRep)());
 		
 		
 		//for thinkphp

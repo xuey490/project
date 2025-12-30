@@ -61,6 +61,34 @@ class BaseTpORMModel extends TpModel
     protected $pkGenerateType = 'auto'; // auto=自增，snowflake=雪花ID
     
     /**
+     * 构造函数
+     * 兼容处理表前缀逻辑
+     */
+    public function __construct(array $data = [])
+    {
+        parent::__construct($data);
+        
+        if (empty($this->name) && empty($this->table)) {
+            $prefix = (string) $this->getConfig('prefix');
+            $this->name = $this->getName();
+            if ($prefix) {
+                $this->table = $prefix . $this->name;
+            }
+        }
+		
+		#static::initTpBelongsToTenant();
+    }
+
+    /**
+     * TP8 模型初始化方法（非静态，实例化时触发）
+     * 主动调用 Trait 的初始化方法，确保多租户逻辑生效
+     */
+    protected function init()
+    {
+        parent::init(); // 先调用父类 init 方法，避免丢失父类逻辑
+    }	
+	
+    /**
      * 新增前钩子：主键生成+自动时间戳（修改：适配自定义时间字段）
      */
     protected function beforeInsert(TpModel $model): void
@@ -288,33 +316,7 @@ $list = User::alias('u')
     //  核心方法
     // =========================================================================
 
-    /**
-     * 构造函数
-     * 兼容处理表前缀逻辑
-     */
-    public function __construct(array $data = [])
-    {
-        parent::__construct($data);
-        
-        if (empty($this->name) && empty($this->table)) {
-            $prefix = (string) $this->getConfig('prefix');
-            $this->name = $this->getName();
-            if ($prefix) {
-                $this->table = $prefix . $this->name;
-            }
-        }
-		
-		#static::initTpBelongsToTenant();
-    }
 
-    /**
-     * TP8 模型初始化方法（非静态，实例化时触发）
-     * 主动调用 Trait 的初始化方法，确保多租户逻辑生效
-     */
-    protected function init()
-    {
-        parent::init(); // 先调用父类 init 方法，避免丢失父类逻辑
-    }	
 
 	/**
      * 获取模型定义的字段列表
