@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Traits;
+namespace Framework\Basic\Traits;
 
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Cache;
