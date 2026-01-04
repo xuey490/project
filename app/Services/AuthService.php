@@ -1,10 +1,10 @@
 <?php
 declare(strict_types=1);
 
-namespace YourName\Admin\Service;
+namespace App\Service;
 
-use YourName\Admin\Model\Admin;
-use YourName\Admin\Model\Asset;
+use App\Models\Admin;
+use App\Models\Asset;
 
 class AuthService
 {
