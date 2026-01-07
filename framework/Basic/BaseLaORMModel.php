@@ -40,8 +40,11 @@ class BaseLaORMModel extends Model
      */
     public $incrementing = false;
 
-    // 时间戳自动管理（默认true，自动维护created_at/updated_at）
+    // 时间戳自动转换（默认true，自动维护created_at/updated_at）
     public $timestamps = true;
+	
+	// 关闭框架自动维护的时间戳（因为字段是 int 类型，需手动赋值）
+	//public $timestamps = false;
 	
     /**
      * 主键类型
@@ -52,9 +55,6 @@ class BaseLaORMModel extends Model
     const UPDATED_AT = 'updated_at';
     const DELETED_AT = 'deleted_at';
 
-    // 软删除字段（默认deleted_at，可自定义）
-    #protected $dates = ['deleted_at'];
-	
     /**
      * 模型日期字段的存储格式 (时间戳).
      *
@@ -62,15 +62,27 @@ class BaseLaORMModel extends Model
      */
     protected $dateFormat = 'U';
 
+
+    // 关键修复1：明确指定日期字段，让Eloquent识别
+    protected $dates = [
+        'created_at',
+        'updated_at',
+        'deleted_at',
+        // 可添加其他需要转换的日期字段，如 create_time/update_time
+        'create_time',
+        'update_time',
+        'delete_time'
+    ];
+	
     /**
      * 自动转换日期格式
      * 让 created_at 和 updated_at 拿出来时自动变成 Carbon 对象，
      * 配合 serializeDate 可以控制输出格式
      */
     protected $casts = [
-        'created_at' => 'timestamp',
-        'updated_at' => 'timestamp',
-        'deleted_at' => 'timestamp',
+        #'created_at' => 'timestamp',
+        #'updated_at' => 'timestamp',
+        #'deleted_at' => 'timestamp',
         'id'         => 'string', // 前端JS精度丢失问题，建议序列化时转string		
     ];
 
@@ -111,6 +123,7 @@ class BaseLaORMModel extends Model
             self::onAfterDelete($model);
         });
     }
+	
 
 
 	protected static function boot()
@@ -123,12 +136,25 @@ class BaseLaORMModel extends Model
 			if (empty($model->{$model->getKeyName()})) {
 				$model->{$model->getKeyName()} = self::generateSnowflakeID();
 			}
+			
+            // 修复：手动赋值正确的时间戳（核心解决1970问题）
+            if (empty($model->created_at)) {
+                $model->created_at = Carbon::now()->timestamp; // 存入当前时间的Unix时间戳（整数）
+            }
+            if (empty($model->updated_at)) {
+                $model->updated_at = $model->created_at;
+            }
+			
 			// 2. 自动填充创建人（使用优化后的 fillAuditColumn 方法）
 			$model->fillAuditColumn('created_by');
+
+		
+		
 		});
 
 		// 注册更新事件
 		static::updating(function ($model) {
+			$model->updated_at = Carbon::now()->timestamp;
 			$model->fillAuditColumn('updated_by');
 		});
 
@@ -179,13 +205,25 @@ class BaseLaORMModel extends Model
 		return in_array($column, self::$tableColumns[$table]);
 	}
 
+
     /**
-     * 准备日期序列化格式 (API返回JSON时会自动调用)
+     * 写入数据时：自动将 Carbon 实例转为 int 时间戳
+     * 读取数据时：自动将 int 时间戳转为 Carbon 实例
+     */
+    public function getDateFormat()
+    {
+        return 'U';
+    }
+
+    /**
+     * 关键修复3：确保serializeDate方法正确覆盖，且返回格式化字符串
      */
     protected function serializeDate(\DateTimeInterface $date)
     {
-        return $date->setTimezone(config('app.time_zone', 'PRC'))->format('Y-m-d H:i:s');
+        // 强制转换为Carbon并格式化
+        return Carbon::parse($date)->format('Y-m-d H:i:s');
     }
+
 
 	/**
 	 * 兼容 TP: 动态隐藏字段（语义优化，避免与原生 $hidden 冲突）
@@ -243,27 +281,6 @@ class BaseLaORMModel extends Model
         return $self->getTable();
     }
 
-    /**
-     * 获取模型的字段列表 兼容性不高
-     *
-     * @return array
-     */
-    public function getFields_2(): array
-    {
-        try {
-            $tableName     = $this->getTable();
-            $connection    = $this->getConnection();	//or DB::connection();
-            $prefix        = $connection->getTablePrefix();
-            $fullTableName = $prefix . $tableName;
-			//$fields        = DB::select("SHOW COLUMNS FROM `{$fullTableName}`");
-            $fields        = $connection->select("SHOW COLUMNS FROM `{$fullTableName}`");
-            return array_map(function ($column) {
-                return $column->Field;
-            }, $fields);
-        } catch (\Exception $e) {
-            return [];
-        }
-    }
 
 	/**
 	 * 获取模型对应表的字段列表（复用静态缓存，性能最优）
@@ -486,25 +503,7 @@ class BaseLaORMModel extends Model
 
 		return in_array($fieldType, $targetTypes);
 	}
-	
-	/**
-	 * 获取表的主键字段（基于 Schema） 获取表的主键字段（独立方法，供关联使用）
-	 *
-	 * @return array 主键字段列表（复合主键返回多个，单主键返回单个元素数组）
-	 */
-	public function getPrimaryKeys1(): array
-	{
-		$fieldDetails = $this->getFieldDetails();
-		$primaryKeys = [];
 
-		foreach ($fieldDetails as $fieldName => $details) {
-			if ($details['primary']) {
-				$primaryKeys[] = $fieldName;
-			}
-		}
-
-		return $primaryKeys;
-	}
 	/**
 	 * 获取表的主键字段（独立方法，供关联使用）
 	 */

@@ -277,7 +277,7 @@ class Home
         $user->nickname = '王111';
         $user->email = 'test11@example.com';
         $user->group_id = 101;
-        //$user->create_time = date('Y-m-d H:i:s'); // 若开启自动时间戳，可省略
+        #$user->created_at = time(); // 若开启自动时间戳，可省略
         
         // 3. 调用save()方法插入数据
         $result = $user->save();
@@ -288,10 +288,10 @@ class Home
         } else {
             // 获取错误信息
             $string =  "插入失败：" . $user->getError();
-        }*/
+        }
+		*/
 		
 		
-
 		
 		
 		// 直接使用模型 create 方法，测试批量赋值
@@ -302,6 +302,7 @@ class Home
 			'email'=> 'zs@test.com',
 			'group_id'=>133,
 			'status'=>1,
+			'mobile'=>'13512435678',
 		];
 		#dump($this->userRepo->save($data)->id);
 		#$custom = \App\Models\Custom::create($data);
@@ -362,9 +363,9 @@ class Home
 		
 		
 		
-		#$userList1 = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->get()->toArray();//默认带租户id
+		$userList1 = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->get()->toArray();//默认带租户id
 		#$userList1 = ($this->userRepo)(\App\Models\User::class)->withoutTenancy()->where('status', 1)->get()->toArray();//取消带租户id限制
-		#dump($userList1);
+		dump($userList1);
 		
 		//($this->userRepo)(\App\Models\User::class)->withoutTenancy();
 		#($this->userRepo)::isSuperAdminTempDisabled();
@@ -380,7 +381,7 @@ class Home
 		
 		#dump($this->userRepo->setTenantFilterEnabled(true)->findByArrayId([1,2,3]));
 		
-		dump($this->userRepo->rawQuery()->where('status', 1)->limit(5)->select());
+		//dump($this->userRepo->rawQuery()->where('status', 1)->limit(5)->select());
 		
 		//语法糖用法db查询
 		#dump(($this->logRep)());
