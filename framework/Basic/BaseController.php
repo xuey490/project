@@ -17,6 +17,7 @@ declare(strict_types=1);
 namespace Framework\Basic;
 
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Framework\Core\App;
 use Framework\Basic\Traits\CrudActionTrait;
 use Framework\Basic\Traits\CrudFilterTrait;
 use Framework\Basic\Traits\CrudFormatterTrait;
@@ -65,7 +66,7 @@ abstract class BaseController
         // 3. 【自动初始化 Service】
         // 只有子类定义了 serviceClass 父类自动帮你实例化，没定义就算了，说明这个控制器不需要通用CRUD
         if (! empty($this->serviceClass)) {
-            $this->service = app()->make($this->serviceClass);
+            $this->service = App()->make($this->serviceClass);
         }
 
         // 4. 钩子
