@@ -32,20 +32,7 @@ class User extends \Framework\Utils\BaseModel
     protected $createTime = 'created_at';  // 映射到数据库 created_at
     protected $updateTime = 'updated_at';  // 映射到数据库 updated_at
 
-    // 4. 字段类型定义（强制转换，适配int）
-	/*
-    protected $type = [
-        'status'     => 'integer',
-        'vip_level'  => 'integer',
-        'group_id'   => 'integer',
-        'balance'    => 'float',
-        'created_at' => 'integer', // 匹配数据库 int(11)
-        'updated_at' => 'integer', // 匹配数据库 int(11)
-        'tenant_id'  => 'integer',
-        'created_by' => 'integer',
-    ];
-	*/
-	
+
     /**
      * 允许批量赋值的字段白名单
      * 需包含所有要通过 create/fill/save(批量) 赋值的字段
