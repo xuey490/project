@@ -45,6 +45,8 @@ abstract class BaseController
 
     // 子类只需要定义这个属性
     protected string $serviceClass = '';
+	
+	protected string $daoClass = ''; // 新增	
 
     protected ?object $validator = null;
 	
@@ -65,10 +67,30 @@ abstract class BaseController
 
         // 3. 【自动初始化 Service】
         // 只有子类定义了 serviceClass 父类自动帮你实例化，没定义就算了，说明这个控制器不需要通用CRUD
-        if (! empty($this->serviceClass)) {
+        // 场景1：定义了具体的业务 Service (如 ProductService)
+        if (!empty($this->serviceClass)) {
             $this->service = App()->make($this->serviceClass);
+        } 
+        // 场景2：只定义了 DAO，没有定义 Service -> 使用通用 Service 包装 DAO
+        elseif (!empty($this->daoClass)) {
+            // 实例化通用服务
+            $genericService = App()->make(\Framework\Basic\GenericService::class);
+            
+            // 实例化 DAO
+            $dao = App()->make($this->daoClass);
+            
+            // 手动注入 DAO 到通用服务中 (需要在 BaseService 提供一个 setDao 方法或者通过反射/属性赋值)
+            // 假设 BaseService 继承的 Injectable 或本身有 setDao
+            if (method_exists($genericService, 'setDao')) {
+                $genericService->setDao($dao);
+            } else {
+                 // 简单粗暴的属性注入（如果是 protected 需要想办法，或者把 BaseService::$dao 改为 public/setter）
+                 // 或者利用框架的容器去绑定
+            }
+            
+            $this->service = $genericService;
         }
-
+		
         // 4. 钩子
         $this->initialize();
     }

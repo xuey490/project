@@ -7,12 +7,17 @@ use Framework\Basic\BaseController;
 use App\Services\UsersService;
 use Symfony\Component\HttpFoundation\Request;
 
+
 /**
  * 用户控制器
  * 无需编写基础 CURD 方法，直接继承 BaseController 的 CrudActionTrait
  */
 class Users extends BaseController
 {
+
+    // 直接定义 daoClass
+    #protected string $daoClass = \App\Dao\UserDao::class;
+	
     /**
      * 指定 Service 类名，BaseController 自动初始化
      * @var string
@@ -26,6 +31,7 @@ class Users extends BaseController
     protected function initialize(): void
     {
         parent::initialize();
+	
         // 示例：绑定验证器（需自行实现 Validator 类）
         // $this->validator = app(UserValidator::class);
     }
@@ -39,8 +45,11 @@ class Users extends BaseController
     public function tenantUserList(Request $request)
     {
         try {
-            $tenantId = $request->get('tenant_id');
-            $where = $this->buildWhere($request); // 复用 CrudFilterTrait 的条件构建方法
+            $tenantId = intval($request->query->get('tenant_id'));
+			$where['tenant_id'] = $tenantId;
+            //$where = $this->selectInput($request); // 复用 CrudFilterTrait 的条件构建方法
+			
+			
             $list = $this->service->getUserListByTenant($tenantId, $where);
             return $this->formatNormal($list, count($list));
         } catch (\Throwable $e) {
