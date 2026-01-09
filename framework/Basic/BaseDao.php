@@ -18,6 +18,7 @@ namespace Framework\Basic;
 
 use Framework\DI\Injectable;
 use Framework\ORM\Adapter\ORMAdapterFactory;
+use Framework\Basic\Traits\TenantFilterTrait; // 引入租户Trait
 use RuntimeException;
 use Throwable;
 
@@ -55,6 +56,7 @@ abstract class BaseDao
 {
     // 引入注入能力
     use Injectable;
+    use TenantFilterTrait; // 集成租户过滤Trait
 
     /** @var mixed ORM Adapter，如 LaravelORMFactory 或 ThinkphpORMFactory */
     protected mixed $instance = null;
@@ -83,6 +85,56 @@ abstract class BaseDao
         //dump("created model: " . get_class($this->instance));
         $this->initialize();
     }
+
+    // --- 修复：重写核心方法，直接调用适配器实例，而非 parent::__call ---
+    public function selectList(array $where, string $field = '*', int $page = 0, int $limit = 0, string $order = '', array $with = [], bool $search = false)
+    {
+        // 1. 自动添加租户条件
+        $where = $this->autoAddTenantCondition($where);
+        // 2. 直接调用 ORM 适配器实例的方法（核心修复：去掉 parent，用 $this->instance）
+        return $this->instance->selectList($where, $field, $page, $limit, $order, $with, $search);
+    }
+
+    public function getCount(array $where)
+    {
+        // 1. 自动添加租户条件
+        $where = $this->autoAddTenantCondition($where);
+        // 2. 直接调用适配器实例方法
+        return $this->instance->getCount($where);
+    }
+
+    public function getOne(array $where, ?string $field = '*', array $with = [])
+    {
+        $where = $this->autoAddTenantCondition($where);
+        return $this->instance->getOne($where, $field, $with);
+    }
+
+    public function get($id, ?array $field = [], ?array $with = [], string $order = '')
+    {
+        // 主键查询时，先拼接租户条件再查询
+        $where = [$this->getPk() => $id];
+        $where = $this->autoAddTenantCondition($where);
+        return $this->getOne($where, $field, $with);
+    }
+
+    public function delete(array|int|string $id, ?string $key = null)
+    {
+        if (is_int($id) || is_string($id)) {
+            $id = [$this->getPk() => $id];
+        }
+        $id = $this->autoAddTenantCondition($id);
+        return $this->instance->delete($id, $key);
+    }
+
+    public function update(string|int|array $id, array $data, ?string $key = null)
+    {
+        if (is_int($id) || is_string($id)) {
+            $id = [$this->getPk() => $id];
+        }
+        $id = $this->autoAddTenantCondition($id);
+        return $this->instance->update($id, $data, $key);
+    }
+
 
     /**
      * 获取底层 ORM 适配器实例.

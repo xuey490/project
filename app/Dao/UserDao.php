@@ -12,6 +12,9 @@ use App\Models\Users;
  */
 class UserDao extends BaseDao
 {
+    // 自定义租户字段（可选，默认 tenant_id）
+    protected string $tenantField = 'tenant_id';
+	
     /**
      * 绑定模型类
      * @return string
@@ -32,6 +35,8 @@ class UserDao extends BaseDao
     public function getListByTenantId(int $tenantId, array $where = []): array
     {
         $where['tenant_id'] = $tenantId;
-        return $this->selectList($where, '*', 1, 20, 'id desc');
+        return $this->selectList($where, '*', 1, 20, 'id desc')->toArray();
     }
+	
+
 }

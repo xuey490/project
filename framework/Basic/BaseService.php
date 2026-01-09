@@ -23,6 +23,8 @@ use Framework\Basic\BaseDao;
 use Framework\DI\Injectable;
 
 /**
+ * 泛型 BaseService，支持子类指定具体 DAO 类型
+ * @template T of BaseDao
  * @method getModel()
  */
 abstract class BaseService
@@ -32,8 +34,10 @@ abstract class BaseService
 
     // 引入注入能力
     use Injectable;	
+	
     /**
-     * 模型注入
+     * 模型注入：使用泛型类型
+     * @var ?T
      */
     protected ?BaseDao $dao;
 
@@ -96,6 +100,10 @@ abstract class BaseService
         });
     }
 
+    public function setDao(BaseDao $dao): void
+    {
+        $this->dao = $dao;
+    }
 
     /** 代理 DAO 调用
      * @param $name

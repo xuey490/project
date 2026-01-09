@@ -64,7 +64,7 @@ class Module extends BaseController
         $limit  = $request->query->getInt('limit', 10);
 		
         // 调用 Repository 业务逻辑
-        /*
+
 		$paginator = $this->moduleRepo->getList($params, $page, $limit);
 
 
@@ -75,7 +75,7 @@ class Module extends BaseController
             'page'  => $page,
             'limit' => $limit,
         ];
-		*/
+
 
 		#$list = $this->logRepo->SelectLogs(7)->get();
 		
@@ -102,8 +102,8 @@ class Module extends BaseController
         ]);	
 		*/
 		
-		dump($activeUsers);
-		return new Response('aa');
+		#dump($activeUsers);
+		
 
         return new JsonResponse([
             'code' => Response::HTTP_OK, // 200
