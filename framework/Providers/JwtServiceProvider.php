@@ -17,7 +17,7 @@ declare(strict_types=1);
 namespace Framework\Providers;
 
 use Framework\Container\ServiceProviderInterface;
-use Framework\Security\AuthGuard;
+#use Framework\Security\AuthGuard;
 use Framework\Utils\JwtFactory;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigurator;
@@ -35,7 +35,8 @@ final class JwtServiceProvider implements ServiceProviderInterface
         $services->set('jwt', JwtFactory::class)
             ->autowire()
             ->public();
-
+		
+		/*
         $services->set(AuthGuard::class)
             ->args([
                 service('jwt'),
@@ -49,6 +50,7 @@ final class JwtServiceProvider implements ServiceProviderInterface
             ])
             ->autowire()
             ->public();
+		*/
     }
 
     public function boot(ContainerInterface $container): void
