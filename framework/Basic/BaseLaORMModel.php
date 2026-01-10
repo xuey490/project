@@ -98,33 +98,6 @@ class BaseLaORMModel extends Model
 
     // 【优化】静态内存缓存表字段，避免重复查询数据库
     private static array $tableColumns = [];
-	
-    protected static function boot1()
-    {
-        parent::boot();
-
-        // 注册创建事件
-        static::creating(function ($model) {
-            // 1. 生成雪花 ID
-            if (empty($model->{$model->getKeyName()})) {
-                $model->{$model->getKeyName()} = self::generateSnowflakeID();
-            }
-            // 2. 自动填充创建人
-            self::setCreatedBy($model);
-        });
-
-        // 注册更新事件
-        static::updating(function ($model) {
-            self::setUpdatedBy($model);
-        });
-
-        // 注册删除事件
-        static::deleted(function ($model) {
-            self::onAfterDelete($model);
-        });
-    }
-	
-
 
 	protected static function boot()
 	{
@@ -148,8 +121,6 @@ class BaseLaORMModel extends Model
 			// 2. 自动填充创建人（使用优化后的 fillAuditColumn 方法）
 			$model->fillAuditColumn('created_by');
 
-		
-		
 		});
 
 		// 注册更新事件
