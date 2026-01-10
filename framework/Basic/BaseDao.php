@@ -56,6 +56,7 @@ abstract class BaseDao
 {
     // 引入注入能力
     use Injectable;
+	
     use TenantFilterTrait; // 集成租户过滤Trait
 
     /** @var mixed ORM Adapter，如 LaravelORMFactory 或 ThinkphpORMFactory */
@@ -81,7 +82,6 @@ abstract class BaseDao
 
         // 3. 创建适配器
         $this->instance = ORMAdapterFactory::createAdapter($mode, $modelClass);
-        //dump($this->instance);
         //dump("created model: " . get_class($this->instance));
         $this->initialize();
     }

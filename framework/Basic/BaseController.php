@@ -47,9 +47,11 @@ abstract class BaseController
     protected string $serviceClass = '';
 	
 	protected string $daoClass = ''; // 新增	
+	
+	protected string $validatorClass ='';
 
     protected ?object $validator = null;
-	
+
 	protected ContainerInterface $container;
 
     // 构造函数不接受参数，完全由内部解决
@@ -90,6 +92,10 @@ abstract class BaseController
             
             $this->service = $genericService;
         }
+		
+        if (!empty($this->validatorClass)) {
+            $this->validator = App()->make($this->validatorClass);
+        } 
 		
         // 4. 钩子
         $this->initialize();

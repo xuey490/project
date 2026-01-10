@@ -103,7 +103,7 @@ trait TenantFilterTrait
         }
 
         if (!$hasTenantCondition) {
-            $where[$this->tenantField] = $tenantId;
+            $where[static::getModel()->getTable().'.'.$this->tenantField] = $tenantId;
         }
 
         // 4. 重置状态，确保单次忽略只生效一次
