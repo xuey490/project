@@ -1,5 +1,19 @@
 <?php
 
+declare(strict_types=1);
+
+/**
+ * This file is part of FssPHP Framework.
+ *
+ * @link     https://github.com/xuey490/project
+ * @license  https://github.com/xuey490/project/blob/main/LICENSE
+ *
+ * @Filename: %filename%
+ * @Date: 2026-1-10
+ * @Developer: xuey863toy
+ * @Email: xuey863toy@gmail.com
+ */
+
 namespace Framework\Basic\Traits;
 
 use Illuminate\Support\Facades\Schema;
