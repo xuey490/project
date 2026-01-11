@@ -26,6 +26,9 @@ class Custom extends \Framework\Utils\BaseModel
 	
 	protected $name = 'custom'; 
 	
+    // 3. 覆盖基类的时间字段名（核心） 这里定义后会直接覆盖掉BaseTpORMModel基类
+    protected $createTime = 'created_at';  // 映射到数据库 created_at
+    protected $updateTime = 'updated_at';  // 映射到数据库 updated_at
 	
     /**
      * 允许批量赋值的字段白名单
