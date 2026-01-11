@@ -58,6 +58,8 @@ use Framework\Tenant\TenantContext;	//启用租户隔离
 
 
 
+
+
 ##[Auth(roles: ['admin'])]
 ##[Prefix('/secures', middleware: [AuthMiddleware::class])]
 ##[Route(prefix: '/vvv2/admins', group: 'aaaa', middleware: [\App\Middlewares\AuthMiddleware::class])]
@@ -183,6 +185,7 @@ class Home
 	##[Auth(required: true, roles: ['admin', 'editor'], guard: 'index')]
     public function index1(Request $request)
     {
+		TenantContext::setTenantId(2);
 		//dump($this->customDao->getActiveUsers());
 		#$rawRouteMiddleware = $request->attributes->get('_middleware', []);
 		#dump($rawRouteMiddleware);		
@@ -266,7 +269,8 @@ class Home
         //$user1 =App::make( Custom::class);
 		
 		$user = App::make( Custom::class)->find(4152260622576254976);//更新操作
-			#dump($user);
+			dump($user->toArray());
+		#$user->restoreTenant();
 			//通用插入
 		/*
 		$user =App::make( Custom::class);
@@ -277,7 +281,7 @@ class Home
         $user->email = 'test11@example.com';
         $user->group_id = 101;
         #$user->created_at = time(); // 若开启自动时间戳，可省略
-        
+        $user->setPkGenerateType('snowflake'); // 强行临时切换为雪花ID
         // 3. 调用save()方法插入数据
         $result = $user->save();
         if ($result) {
@@ -295,12 +299,12 @@ class Home
 		
 		// 直接使用模型 create 方法，测试批量赋值
 		$data = [
-			'name' => '赵六11111',
-			'nickname' => '赵六111',
+			'name' => '姜子牙11111',
+			'nickname' => 'mike111',
 			'englishname' => 'aaa',
 			'email'=> 'zs@test.com',
 			'group_id'=>133,
-			'status'=>1,
+			'status'=>2,
 			'mobile'=>'13512435678',
 		];
 		
@@ -327,18 +331,21 @@ class Home
 		// find 会自动加上 AND tenant_id = 1001
 		// 把 get() 改为 first()
 		*/
-		
-		$info = $user->where('id', '4152326302868971520')->find(); 
+		/*
+		$info = $user->where('id', '4152242357674180608')->first(); 
 
 		if ($info) {
 			// 此时 $info 是 User 模型对象，可以正常赋值
-			$info->nickname = 'yyyyyyyy';
-			$info->status 	= 	11;
+			
+			$info->nickname = 'yyyyyyyy1111';
+			$info->status 	= 	13;
 			$info->save(); 
 		}
 
-		$user = App::make( Custom::class)->find(4152326302868971520);//更新操作
+		$user = App::make( Custom::class)->where('id' , '4152242357674180608')->get();//更新操作
 			dump($user->toArray());
+		*/
+		
 		
 		/*
 		$info = $user->find('4152326302868971520');
@@ -363,12 +370,26 @@ class Home
 		*/
 		
 		
+
 		
-		
-		
-		$userList1 = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->select()->toArray();//默认带租户id
+		#TenantContext::setTenantId(1);
+		$userList1 = ($this->userRepo)(\App\Models\User::class)->where('id','>', 1)->select()->toArray();//默认带租户id
 		#$userList1 = ($this->userRepo)(\App\Models\User::class)->withoutTenancy()->where('status', 1)->get()->toArray();//取消带租户id限制
-		#dump($userList1);
+		dump($userList1);
+		
+/*最安全（推荐）
+$user = Custom::withIgnoreTenant(function () {
+    return Custom::find(4152260622576254976);
+});
+对齐你最初 TP8 风格
+$user = Custom::ignoreTenant()->find(4152260622576254976);
+对齐你原来的 withoutTenancy()
+$user = Custom::withoutTenancy()->find(4152260622576254976);
+
+*/
+
+
+		
 		
 		//($this->userRepo)(\App\Models\User::class)->withoutTenancy();
 		#($this->userRepo)::isSuperAdminTempDisabled();
@@ -390,7 +411,27 @@ class Home
 		#dump(($this->logRep)());
 		
 		
-		//for thinkphp
+		//for thinkphp 开启超限模式，忽略租户隔离
+/*
+// 方式1：链式调用 (推荐)
+$users = User::ignoreTenant()->select(); // 查询所有租户的数据
+User::restoreTenant(); // 手动恢复（或者依赖下一次请求自动重置）
+
+// 方式2：闭包模式 (最安全，自动恢复)
+$result = User::withIgnoreTenant(function ($query) {
+    return User::where('status', 1)->select();
+});
+// 执行完闭包后，$ignoreTenantScope 自动变回 false
+
+// 方式3：传统模式
+User::$ignoreTenantScope = true;
+$users = User::select();
+User::$ignoreTenantScope = false;
+*/	
+		
+		
+		
+		
 		/*$userList = ($this->userRepo)(\App\Models\User::class)->ignoreTenant()->where('status', 1)->select()->toArray();
 		($this->userRepo)(\App\Models\User::class)->restoreTenant();
 		$userList1 = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->select()->toArray();

@@ -9,7 +9,7 @@ declare(strict_types=1);
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
  * @Filename: %filename%
- * @Date: 2025-11-24
+ * @Date: 2026-1-11
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
  */
@@ -19,140 +19,176 @@ namespace Framework\Basic;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes as LaSoftDeletes;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Schema;
 use Framework\Utils\Snowflake;
-use Framework\Basic\Traits\LaBelongsToTenant; // 引入多租户Trait
-use Illuminate\Support\Facades\DB;
-use RuntimeException;
+use Framework\Basic\Traits\LaBelongsToTenant;
+use Framework\Basic\Casts\TimestampCast;
 
 class BaseLaORMModel extends Model
 {
-    // 如果你的所有业务表都需要多租户，可以直接在这里引入。
-    // 如果系统表不需要，建议在具体的业务 Model 里引入这个 Trait。
-    use LaBelongsToTenant; 
-	
-	//use LaSoftDeletes;
+    use LaBelongsToTenant;
 
-    /**
-     * 指明模型的ID是否自动递增 (雪花算法不是自增).
-     *
-     * @var bool
-     */
+    // ================= 基础配置 =================
+
     public $incrementing = false;
-
-    // 时间戳自动转换（默认true，自动维护created_at/updated_at）
-    public $timestamps = true;
-	
-	// 关闭框架自动维护的时间戳（因为字段是 int 类型，需手动赋值）
-	//public $timestamps = false;
-	
-    /**
-     * 主键类型
-     */
-    protected $keyType = 'int'; // 雪花ID通常是bigint，PHP端作为int处理
+    public $timestamps  = true;
+    protected $keyType  = 'int';
 
     const CREATED_AT = 'created_at';
     const UPDATED_AT = 'updated_at';
     const DELETED_AT = 'deleted_at';
 
     /**
-     * 模型日期字段的存储格式 (时间戳).
-     *
-     * @var string
+     * 数据库存储统一使用 Unix 时间戳
      */
     protected $dateFormat = 'U';
 
-
-    // 关键修复1：明确指定日期字段，让Eloquent识别
+    /**
+     * 基础日期字段（父类统一定义）
+     */
     protected $dates = [
         'created_at',
         'updated_at',
         'deleted_at',
-        // 可添加其他需要转换的日期字段，如 create_time/update_time
         'create_time',
         'update_time',
-        'delete_time'
-    ];
-	
-    /**
-     * 自动转换日期格式
-     * 让 created_at 和 updated_at 拿出来时自动变成 Carbon 对象，
-     * 配合 serializeDate 可以控制输出格式
-     */
-    protected $casts = [
-        #'created_at' => 'timestamp',
-        #'updated_at' => 'timestamp',
-        #'deleted_at' => 'timestamp',
-        'id'         => 'string', // 前端JS精度丢失问题，建议序列化时转string		
+        'delete_time',
     ];
 
     /**
-     * 动态隐藏字段
+     * 前端精度保护
      */
-    protected array $dynamicHidden = [];
+    protected $casts = [
+        'id' => 'string',
+    ];
 
     /**
      * 雪花算法实例
      */
     private static ?Snowflake $snowflake = null;
 
-    // 【优化】静态内存缓存表字段，避免重复查询数据库
+    /**
+     * 主键生成策略
+     */
+    protected string $pkGenerateType = 'snowflake';
+
+    /**
+     * 表字段缓存
+     */
     private static array $tableColumns = [];
 
-	protected static function boot()
-	{
-		parent::boot();
+    // ================= 初始化 =================
 
-		// 注册创建事件
-		static::creating(function ($model) {
-			// 1. 生成雪花 ID
-			if (empty($model->{$model->getKeyName()})) {
-				$model->{$model->getKeyName()} = self::generateSnowflakeID();
-			}
-			
-            // 修复：手动赋值正确的时间戳（核心解决1970问题）
-            if (empty($model->created_at)) {
-                $model->created_at = Carbon::now()->timestamp; // 存入当前时间的Unix时间戳（整数）
+    protected function initializeBaseLaORMModel(): void
+    {
+        /**
+         * 自动为所有日期字段注册 TimestampCast
+         * 不侵入 setAttribute / getAttribute
+         */
+        foreach ($this->getDates() as $field) {
+            $this->casts[$field] = TimestampCast::class;
+        }
+    }
+
+    // ================= Model Boot =================
+
+    protected static function boot()
+    {
+        parent::boot();
+
+        // 创建
+        static::creating(function ($model) {
+            // 1. 雪花ID
+            if ($model->pkGenerateType === 'snowflake') {
+                if (empty($model->{$model->getKeyName()})) {
+                    $model->{$model->getKeyName()} = self::generateSnowflakeID();
+                }
             }
-            if (empty($model->updated_at)) {
-                $model->updated_at = $model->created_at;
+
+            $now = Carbon::now()->timestamp;
+
+            // 2. 自动时间字段
+            foreach (['created_at', 'create_time'] as $f) {
+                if (empty($model->{$f})) {
+                    $model->{$f} = $now;
+                }
             }
-			
-			// 2. 自动填充创建人（使用优化后的 fillAuditColumn 方法）
-			$model->fillAuditColumn('created_by');
 
-		});
+            foreach (['updated_at', 'update_time'] as $f) {
+                if (empty($model->{$f})) {
+                    $model->{$f} = $now;
+                }
+            }
 
-		// 注册更新事件
-		static::updating(function ($model) {
-			$model->updated_at = Carbon::now()->timestamp;
-			$model->fillAuditColumn('updated_by');
-		});
+            // 3. 创建人
+            $model->fillAuditColumn('created_by');
+        });
 
-		// 注册删除事件
-		static::deleted(function ($model) {
-			self::onAfterDelete($model);
-		});
-	}
+        // 更新
+        static::updating(function ($model) {
+            $now = Carbon::now()->timestamp;
+            $model->updated_at  = $now;
+            $model->update_time = $now;
 
+            $model->fillAuditColumn('updated_by');
+        });
+
+        // 删除（软删时间同步）
+        static::deleting(function ($model) {
+            if ($model::isSoftDeleteEnabled()) {
+                $now = Carbon::now()->timestamp;
+                $model->deleted_at  = $now;
+                $model->delete_time = $now;
+            }
+        });
+
+        static::deleted(function ($model) {
+            self::onAfterDelete($model);
+        });
+    }
+
+    // ================= 日期体系（核心优化） =================
+
+    /**
+     * 子类可扩展日期字段（推荐方式）
+     */
+    protected function extraDates(): array
+    {
+        return [];
+    }
+
+    /**
+     * 统一日期字段入口
+     */
+    public function getDates(): array
+    {
+        return array_values(array_unique(array_merge(
+            parent::getDates(),
+            $this->dates ?? [],
+            $this->extraDates()
+        )));
+    }
+
+    /**
+     * 统一序列化格式
+     */
+    protected function serializeDate(\DateTimeInterface $date)
+    {
+        return Carbon::instance($date)->format('Y-m-d H:i:s');
+    }
+
+    // ================= 审计字段 =================
     /**
      * 【性能优化核心】填充审计字段
      * 避免使用 SHOW COLUMNS，改用 Schema 缓存 或 静态变量
      */
     protected function fillAuditColumn(string $column): void
     {
-		// 更安全的函数存在性检查
-		$uid = (function_exists('getCurrentUser') && is_callable('getCurrentUser')) 
-			? \getCurrentUser() 
-			: null;
-		if (!$uid) return;
+        $uid = (function_exists('getCurrentUser') && is_callable('getCurrentUser'))
+            ? \getCurrentUser()
+            : null;
 
-        // 方案A：如果使用了 Schema 缓存 (Laravel默认支持)
-        // if (Schema::hasColumn($this->getTable(), $column)) {
-        //     $this->setAttribute($column, $uid);
-        // }
+        if (!$uid) return;
 
-        // 方案B：内存级缓存 (当前请求内有效，性能最高)
         if ($this->hasColumnCached($column)) {
             $this->setAttribute($column, $uid);
         }
@@ -161,41 +197,21 @@ class BaseLaORMModel extends Model
     /**
      * 检查字段是否存在
      */
-	protected function hasColumnCached(string $column): bool
-	{
-		$table = $this->getTable();
-		
-		if (!isset(self::$tableColumns[$table])) {
-			// 修改点：通过当前模型的连接对象获取 SchemaBuilder
-			// 这样不依赖全局容器，非常稳定
-			self::$tableColumns[$table] = $this->getConnection()
-											   ->getSchemaBuilder()
-											   ->getColumnListing($table);
-		}
-
-		return in_array($column, self::$tableColumns[$table]);
-	}
-
-
-    /**
-     * 写入数据时：自动将 Carbon 实例转为 int 时间戳
-     * 读取数据时：自动将 int 时间戳转为 Carbon 实例
-     */
-    public function getDateFormat()
+    protected function hasColumnCached(string $column): bool
     {
-        return 'U';
+        $table = $this->getTable();
+
+        if (!isset(self::$tableColumns[$table])) {
+            self::$tableColumns[$table] = $this->getConnection()
+                ->getSchemaBuilder()
+                ->getColumnListing($table);
+        }
+
+        return in_array($column, self::$tableColumns[$table], true);
     }
 
-    /**
-     * 关键修复3：确保serializeDate方法正确覆盖，且返回格式化字符串
-     */
-    protected function serializeDate(\DateTimeInterface $date)
-    {
-        // 强制转换为Carbon并格式化
-        return Carbon::parse($date)->format('Y-m-d H:i:s');
-    }
-
-
+    // ================= 动态字段控制 =================
+	
 	/**
 	 * 兼容 TP: 动态隐藏字段（语义优化，避免与原生 $hidden 冲突）
 	 */
@@ -214,23 +230,25 @@ class BaseLaORMModel extends Model
 		return $this;
 	}
 
-    /**
-     * 兼容 TP: 获取数据
-     */
+    // ================= TP 风格兼容 =================
+
     public function getData(string $field): mixed
     {
-        return $this->getAttribute($field);
+        $value = $this->getAttribute($field);
+
+        if ($value instanceof Carbon) {
+            return $value->format('Y-m-d H:i:s');
+        }
+
+        return $value;
     }
 
-    /**
-     * 兼容 TP: 设置数据
-     */
     public function set(string $name, mixed $value): void
     {
         $this->setAttribute($name, $value);
     }
 
-
+    // ================= 表信息 =================
     public function getTable(): string
     {
         if (!empty($this->table)) {
@@ -252,7 +270,6 @@ class BaseLaORMModel extends Model
         return $self->getTable();
     }
 
-
 	/**
 	 * 获取模型对应表的字段列表（复用静态缓存，性能最优）
 	 *
@@ -264,16 +281,13 @@ class BaseLaORMModel extends Model
 			$table = $this->getTable();
 			// 复用已缓存的字段列表，避免重复调用 Schema
 			if (!isset(self::$tableColumns[$table])) {
-				self::$tableColumns[$table] = $this->getConnection()
-												   ->getSchemaBuilder()
-												   ->getColumnListing($table);
+				self::$tableColumns[$table] = $this->getConnection()->getSchemaBuilder()->getColumnListing($table);
 			}
 			return self::$tableColumns[$table];
 		} catch (\Exception $e) {
 			return [];
 		}
 	}
-
 
     /**
      * 获取主键名称
@@ -282,15 +296,7 @@ class BaseLaORMModel extends Model
     {
         return $this->getKeyName();
     }
-
-    /**
-     * 是否开启软删
-     */
-    public static function isSoftDeleteEnabled(): bool
-    {
-        return in_array(LaSoftDeletes::class, class_uses(static::class));
-    }
-
+	
     /**
      * 自动设置创建人
      */
@@ -321,29 +327,27 @@ class BaseLaORMModel extends Model
     }
 
     /**
-     * 处理删除后的逻辑 (回收站)
+     * 是否开启软删
      */
+    public static function isSoftDeleteEnabled(): bool
+    {
+        return in_array(LaSoftDeletes::class, class_uses(static::class));
+    }
+
+    // ================= 删除后处理 =================
+
     public static function onAfterDelete(Model $model)
     {
-        // 如果开启了软删除，Eloquent 会自动处理 deleted_at，
-        // 这里通常用于处理“真删除”时的归档，或者同步到额外的回收站表
         if ($model::isSoftDeleteEnabled()) {
             return;
         }
 
         try {
-            // 这里建议使用 Facade 或依赖注入，不要直接 new Service
-            // 假设 SysRecycleBinService 已经绑定
-            /*
-            $service = app(\app\services\system\SystemRecycleBinService::class);
-            $config = $service->getTableConfig($model->getTable());
-            if ($config['enabled']) {
-                // 保存逻辑...
-            }
-            */
+            // 回收站逻辑预留
         } catch (\Exception $e) {
-            // 记录日志，不要抛出异常打断删除流程，除非业务必须
-            \Illuminate\Support\Facades\Log::error("Recycle bin error: " . $e->getMessage());
+            \Illuminate\Support\Facades\Log::error(
+                "Recycle bin error: " . $e->getMessage()
+            );
         }
     }
 
@@ -503,7 +507,4 @@ class BaseLaORMModel extends Model
 			return [];
 		}
 	}
-	
-	
-	
 }
