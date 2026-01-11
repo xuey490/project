@@ -376,7 +376,7 @@ class BaseTpORMModel extends TpModel
 	 */
 	protected static function normalizeDateFields(\think\Model $model): void
 	{
-		foreach ($this->getDates() as $field) {
+		foreach ($model->getDates() as $field) {
 
 			// 如果模型里根本没有这个字段，跳过
 			if (!$model->hasData($field)) {
