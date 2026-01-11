@@ -185,7 +185,7 @@ class Home
 	##[Auth(required: true, roles: ['admin', 'editor'], guard: 'index')]
     public function index1(Request $request)
     {
-		TenantContext::setTenantId(2);
+		#TenantContext::setTenantId(2);
 		//dump($this->customDao->getActiveUsers());
 		#$rawRouteMiddleware = $request->attributes->get('_middleware', []);
 		#dump($rawRouteMiddleware);		
@@ -308,7 +308,7 @@ class Home
 			'mobile'=>'13512435678',
 		];
 		
-		#dump($this->userRepo->save($data)->id);
+		dump($this->userRepo->save($data)->id);
 		#$custom = \App\Models\Custom::create($data);
 		#dd($custom); // 查看模型实例中是否包含上述字段的值，若包含则模型正常，问题在仓库
 		//($this->userRepo)(\App\Models\Custom::class)->fill($data)->save();//illuminate的做法
