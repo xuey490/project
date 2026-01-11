@@ -32,7 +32,10 @@ class User extends \Framework\Utils\BaseModel
     protected $createTime = 'created_at';  // 映射到数据库 created_at
     protected $updateTime = 'updated_at';  // 映射到数据库 updated_at
 
-	protected string $pkGenerateType = 'snowflake';//修改为自增
+	protected string $pkGenerateType = 'snowflake';//auto修改为自增
+	
+    // 2. 配置主键类型为 bigint（适配数据库）
+    protected string $pkType = 'string'; // string，改为 integer 适配自增 bigint	pkGenerateType='auto'
 	
     /**
      * 允许批量赋值的字段白名单
@@ -46,7 +49,10 @@ class User extends \Framework\Utils\BaseModel
         'englishname',   // 你的批量赋值数据中的字段
         'email',         // 你的批量赋值数据中的字段
         'group_id',      // 你的批量赋值数据中的字段
-        'status'         // 你的批量赋值数据中的字段
+        'status',         // 你的批量赋值数据中的字段
+		'created_at',
+		'updated_at',
+		'create_time',
         // 可根据业务需求补充其他字段（如 created_by、updated_by 等）
     ];	
 

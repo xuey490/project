@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Framework\Basic\Traits;
@@ -6,83 +7,115 @@ namespace Framework\Basic\Traits;
 use Framework\Basic\Scopes\TpTenantScope;
 use think\db\Query;
 use think\Model;
+use Framework\Tenant\TenantContext;
+use Closure;
 
 trait TpBelongsToTenant
 {
-    /**
-     * 标识是否忽略租户隔离（高管超限使用）
-     * @var bool
-     */
-    protected static bool $ignoreTenantScope = false;
 
     /**
-     * Trait 初始化（模拟 TP 的 boot 机制，自动注册作用域和事件）
-     * 注意：TP 模型的 init 是静态方法，Trait 中通过静态构造函数兼容
+     * Trait 初始化方法
+     * 注意：在 TP8 中，我们通常不需要手动调用 event 绑定
+     * 框架会自动扫描 onBeforeInsert 等静态方法
+     * 此方法保留仅用于兼容旧代码或手动调用
      */
+    public static function initTpBelongsToTenant(): void
+    {
+        // 留空或仅用于调试，主要逻辑移至 onBeforeInsert
+        // TP8 会自动识别 onBeforeInsert 静态方法
+    }
+
+    // =========================================================================
+    //  链式调用：开启/关闭 租户隔离
+    // =========================================================================
 	
-    public static function initTpBelongsToTenant()
-    {
-		dump('aaa');
-        // 2. 注册模型事件：新增前自动填充 tenant_id（与原有逻辑一致，整合到 Trait）
-        static::event('before_insert', function (Model $model) {
-            if (!isset($model->tenant_id) && !static::$ignoreTenantScope) {
-                $tenantId = function_exists('getCurrentTenantId') ? \getCurrentTenantId() : null;
-                if ($tenantId) {
-                    $model->setAttr('tenant_id', $tenantId);
-                }
-            }
-        });
-    }
-
     /**
-     * 设置是否忽略租户 (供 Repository 内部调用)
-     */
-    public static function setIgnoreTenant(bool $ignore): void
-    {
-        static::$ignoreTenantScope = $ignore;
-    }
-
-    /**
-     * 开启高管超限模式（忽略租户隔离）
+     * 临时忽略租户隔离，链式调用
+     *
+     * 用法：
+     *   User::ignoreTenant()->find(123);
+     *
      * @return static
      */
-    public static function ignoreTenant(): static
+    public function ignoreTenant(): static
     {
-        static::$ignoreTenantScope = true;
-        return new static();
+        TenantContext::ignore();
+        return $this;
+    }	
+
+    /**
+     * 恢复租户隔离（一般用于链式操作后）
+     * @return static
+     */
+    public function restoreTenant(): static
+    {
+        TenantContext::restore();
+        return $this;
     }
 
     /**
-     * 关闭高管超限模式（恢复租户隔离）
-     * （静态属性共享，使用后建议手动关闭，或通过查询结束自动重置）
+     * 临时超管访问闭包执行
+     *
+     * 用法：
+     *   User::withIgnoreTenant(function () {
+     *       return User::all();
+     *   });
+     *
+     * @param Closure $closure
+     * @return mixed
      */
-    public static function restoreTenant(): void
+    public static function withIgnoreTenant(Closure $closure): mixed
     {
-        static::$ignoreTenantScope = false;
+        TenantContext::ignore();
+        try {
+            return $closure();
+        } finally {
+            TenantContext::restore();
+        }
     }
 
+    // =========================================================================
+    //  模型事件：自动填充 tenant_id
+    // =========================================================================
+
     /**
-     * 【兼容原有逻辑】租户作用域（可选，保留向下兼容）
-	 * ThinkPHP 会自动调用 scopeTenant($query)
+     * ThinkPHP 8 模型事件：新增前
+     * 统一使用这个标准事件，避免使用 init + event 的旧模式
      */
-    public function scopeTenant(Query $query)
+    public static function onBeforeInsert(Model $model): void
     {
-        if (static::$ignoreTenantScope) {
+        // 如果已经设置了 tenant_id 或者开启了忽略模式，跳过
+        if (isset($model->tenant_id) || !TenantContext::shouldApplyTenant()) {
             return;
         }
+
+        $tenantId = TenantContext::getTenantId();
+        if ($tenantId) {
+            $model->setAttr('tenant_id', $tenantId);
+        }
+    }
+
+    // 如果需要更新时也检查（通常不需要，租户ID不应被修改），可以开启
+    // public static function onBeforeUpdate(Model $model): void { ... }
+
+
+    /**
+     * 全局作用域或本地作用域钩子
+     * 会被基类的全局作用域调用，或者手动调用
+     */
+    public function scopeTenant(Query $query): void
+    {
+        // 如果开启了忽略模式，则不加 tenant_id 条件
+        if (!TenantContext::shouldApplyTenant()) {
+			// 超管或无租户，跳过条件
+            return;
+        }
+
+        // 委托给具体的 Scope 类处理（保持逻辑分离）
+        // 确保 TpTenantScope 存在且 apply 方法正确
         (new TpTenantScope())->apply($query, $this);
     }
 
-    /**
-     * 模型事件：写入前自动追加 tenant_id
-     */
-    public static function onBeforeInsert(Model $model):void
-    {
-        if (!isset($model->tenant_id)) {
-            $tenantId = \getCurrentTenantId();
-            if ($tenantId) {
-                $model->setAttr('tenant_id', $tenantId);
-            }
-        }
-    }
+
+
 }

@@ -71,4 +71,27 @@ final class TenantContext
     {
         return self::$ignoreTenant;
     }
+	
+    // ---------------- 新增：作用域安全执行 ----------------
+
+    public static function withIgnore(callable $fn)
+    {
+        $prev = self::$ignoreTenant;
+
+        self::$ignoreTenant = true;
+
+        try {
+            return $fn();
+        } finally {
+            self::$ignoreTenant = $prev;
+        }
+    }
+	
 }
+/*
+TenantContext::setTenantId(1001);   // 当前登录用户的租户
+TenantContext::ignore();           // 超管模式
+TenantContext::restore();          // 恢复隔离
+TenantContext::shouldApplyTenant();// ORM 判断是否加租户条件
+
+*/

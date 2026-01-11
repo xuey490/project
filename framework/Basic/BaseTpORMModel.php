@@ -52,7 +52,7 @@ class BaseTpORMModel extends TpModel
      * 日期字段列表 (子类可覆盖)
      * @var string[]
      */
-    protected array $dateFields = [
+    protected $dates = [
         'create_time',
         'update_time',
         'delete_time',
@@ -139,7 +139,7 @@ class BaseTpORMModel extends TpModel
     
 
     /**
-     * 模型事件：新增前
+     * 模型事件：新增前 https://doc.thinkphp.cn/@think-orm/v4_0/model_event.html
      */
     public static function onBeforeInsert(TpModel $model): void
     {
@@ -222,6 +222,25 @@ class BaseTpORMModel extends TpModel
 	}
 
     /**
+     * 子类可扩展日期字段（推荐方式）
+     */
+    protected function extraDates(): array
+    {
+        return [];
+    }
+
+    /**
+     * 统一日期字段入口
+     */
+    public function getDates(): array
+    {
+        return array_values(array_unique(array_merge(
+            $this->dates ?? [],
+            $this->extraDates()
+        )));
+    }
+
+    /**
      * 获取字段列表 (安全处理)
      * @param string|null $field
      * @return array|mixed
@@ -298,9 +317,6 @@ class BaseTpORMModel extends TpModel
     }
 
 
-    // =========================================================================
-    //  日期格式化处理 (优化版)
-    // =========================================================================
 
     /**
      * 格式化日期字段 (时间戳 -> 字符串)
@@ -308,7 +324,7 @@ class BaseTpORMModel extends TpModel
      */
     private function formatDateFields(): void
     {
-        foreach ($this->dateFields as $field) {
+        foreach ($this->getDates() as $field) {
             $value = $this->getData($field);
             if ($value > 0) {
                 // 直接设置内部数据，避免触发获取器循环
@@ -323,7 +339,7 @@ class BaseTpORMModel extends TpModel
 	 */
 	protected function formatDateFields1(): void
 	{
-		foreach ($this->dateFields as $field) {
+		foreach ($this->getDates() as $field) {
 
 			// 原始值（int）
 			$raw = $this->getData($field);
@@ -360,7 +376,7 @@ class BaseTpORMModel extends TpModel
 	 */
 	protected static function normalizeDateFields(\think\Model $model): void
 	{
-		foreach ($model->dateFields as $field) {
+		foreach ($this->getDates() as $field) {
 
 			// 如果模型里根本没有这个字段，跳过
 			if (!$model->hasData($field)) {
@@ -389,10 +405,6 @@ class BaseTpORMModel extends TpModel
 	}
 	
 
-    // =========================================================================
-    //  辅助方法 & 多租户安全
-    // =========================================================================
-
     /**
      * 获取当前租户ID (封装函数依赖)
      * @return string|null
@@ -401,9 +413,9 @@ class BaseTpORMModel extends TpModel
     {
         // 这里可以优先检查 TenantContext，其次检查辅助函数
         if (class_exists(TenantContext::class)) {
-            return TenantContext::getTenantId();
+            return (string)TenantContext::getTenantId();
         }
-        return function_exists('getCurrentTenantId') ? getCurrentTenantId() : null;
+        
     }
 
     /**
@@ -475,7 +487,7 @@ class BaseTpORMModel extends TpModel
     private static function setTenantId(TpModel $model): void
     {
         if (!isset($model->tenant_id)) {
-            $tenantId = function_exists('getCurrentTenantId') ? \getCurrentTenantId() : null;
+            $tenantId = self::getCurrentTenantId();
             if ($tenantId) {
                 $model->setAttr('tenant_id', $tenantId);
             }
@@ -492,7 +504,6 @@ class BaseTpORMModel extends TpModel
 
     private static function setUpdatedBy(TpModel $model): void
     {
-		#dump($model);
         $uid = function_exists('getCurrentUser') ? \getCurrentUser() : null;
 		$model->setAttr($model->updateTime, time());
         if ($uid) {
