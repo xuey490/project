@@ -263,8 +263,7 @@ class Home
         #dump($users);	
 			
 		//ThinkORM Model的写法
-        $user =App::make( Custom::class);
-		#dump($user->getPk());
+        //$user1 =App::make( Custom::class);
 		
 		$user = App::make( Custom::class)->find(4152260622576254976);//更新操作
 			#dump($user);
