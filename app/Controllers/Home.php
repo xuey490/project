@@ -263,10 +263,11 @@ class Home
         #dump($users);	
 			
 		//ThinkORM Model的写法
-        $user =App::make( Custom::class);
-		#dump($user->getPk());
+        $user1 =App::make( Custom::class);
 		
-		//$user = App::make( Custom::class)->find(4152240944932200448);//更新操作
+		
+		$user = \App\Models\Custom::where('id' ,4152260622576254976)->find();//更新操作
+		dump($user->getData());
 			#dump($user);
 			//通用插入
 		/*
@@ -363,9 +364,9 @@ class Home
 		
 		
 		
-		$userList1 = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->get()->toArray();//默认带租户id
+		#$userList1 = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->get()->toArray();//默认带租户id
 		#$userList1 = ($this->userRepo)(\App\Models\User::class)->withoutTenancy()->where('status', 1)->get()->toArray();//取消带租户id限制
-		dump($userList1);
+		#dump($userList1);
 		
 		//($this->userRepo)(\App\Models\User::class)->withoutTenancy();
 		#($this->userRepo)::isSuperAdminTempDisabled();
