@@ -2,72 +2,107 @@
 
 declare(strict_types=1);
 
+/**
+ * This file is part of FssPHP Framework.
+ *
+ * @link     https://github.com/xuey490/project
+ * @license  https://github.com/xuey490/project/blob/main/LICENSE
+ *
+ * @Filename: %filename%
+ * @Date: 2025-11-24
+ * @Developer: xuey863toy
+ * @Email: xuey863toy@gmail.com
+ */
+
 namespace Framework\Basic;
 
-use Framework\Basic\Scopes\TpTenantScope;
 use Framework\Basic\Traits\TpBelongsToTenant;
 use Framework\Utils\Snowflake;
 use think\Model as TpModel;
 use think\model\concern\SoftDelete as TpSoftDelete;
 use think\facade\Config;
-use think\db\Query;
 use Framework\Tenant\TenantContext;
 
 /**
- * ThinkPHP 模型基类封装 (适配 TP6.0 / TP8.0)
+ * ThinkPHP 8 模型基类封装
+ * 特性: 雪花ID, 多租户隔离, 自动时间戳(int), 日期格式化, 软删除
  */
 class BaseTpORMModel extends TpModel
 {
     use \Framework\ORM\Trait\ModelTrait;
     use TpBelongsToTenant;
-    #use TpSoftDelete;
+    //use TpSoftDelete;
 
     // =========================================================================
-    //  基础配置（修改：让子类可覆盖）
+    //  核心配置
     // =========================================================================
 
-    // 自动写入时间戳字段（改为 int 类型，适配数据库 int(11)）
-    protected $autoWriteTimestamp = 'int'; 
-    // 默认时间字段（子类可覆盖）
-    protected $createTime = 'create_time'; 
-    protected $updateTime = 'update_time'; 
-    protected $deleteTime = 'delete_time'; 
+    // 时间戳自动写入 (int类型)
+    protected $autoWriteTimestamp = true;
     
-    // 软删除字段默认值
-    protected $defaultSoftDelete = null;
+    // 时间字段定义
+    protected $createTime = 'create_time';
+    protected $updateTime = 'update_time';
+    protected $deleteTime = 'delete_time';
 
-    // 设置主键类型 (雪花ID需设为 string 避免 JS 精度丢失)
-    protected $pkType = 'string'; 
+    // 软删除字段默认值 (int类型)
+    protected $defaultSoftDelete = 0;
 
     /**
-     * 注册全局作用域 (实现 SaaS 多租户隔离)
+     * 日期字段列表 (子类可覆盖)
+     * @var string[]
      */
-    #protected $globalScope = [TpTenantScope::class];
-	protected $globalScope = ['tenant'];
+    protected array $dateFields = [
+        'create_time',
+        'update_time',
+        'delete_time',
+		'created_at',
+		'updated_at',
+		'deleted_at',		
+    ];
 
-    // 只读字段（修改：用变量引用，支持子类覆盖）
+    /**
+     * 日期输出格式
+     */
+    public const DATE_OUTPUT_FORMAT = 'Y-m-d H:i:s';
+	
+    // 主键类型
+    protected string $pkType = 'string';
+
+    // 全局作用域 (多租户)
+    protected array $globalScope = ['tenant'];
+
+    // 只读字段
     protected $readonly = ['created_by', 'tenant_id'];
 
     /**
      * 雪花算法单例
+     * @var Snowflake|null
      */
     private static ?Snowflake $snowflake = null;
 
-    // =========================================================================
-    //  模型事件 (ThinkPHP 6/8 标准静态方法)
-    // =========================================================================
-
     // 主键策略配置（核心：支持雪花ID）
-    protected $pkGenerateType = 'auto'; // auto=自增，snowflake=雪花ID
-    
+    protected string $pkGenerateType = 'snowflake'; // auto=自增，snowflake=雪花ID
+	
+    /**
+     * 模型初始化
+     * 注意：TP8 中 init() 是静态方法，用于注册事件
+     * @return void
+     */
+    protected function init()
+    {
+		parent::init(); // 先调用父类 init 方法，避免丢失父类逻辑
+    }
+
     /**
      * 构造函数
-     * 兼容处理表前缀逻辑
+     * @param array $data
      */
     public function __construct(array $data = [])
     {
         parent::__construct($data);
-        
+
+        // 兼容表前缀
         if (empty($this->name) && empty($this->table)) {
             $prefix = (string) $this->getConfig('prefix');
             $this->name = $this->getName();
@@ -75,52 +110,8 @@ class BaseTpORMModel extends TpModel
                 $this->table = $prefix . $this->name;
             }
         }
-		
-		#static::initTpBelongsToTenant();
     }
-
-    /**
-     * TP8 模型初始化方法（非静态，实例化时触发）
-     * 主动调用 Trait 的初始化方法，确保多租户逻辑生效
-     */
-    protected function init()
-    {
-        parent::init(); // 先调用父类 init 方法，避免丢失父类逻辑
-    }	
 	
-    /**
-     * 新增前钩子：主键生成+自动时间戳（修改：适配自定义时间字段）
-     */
-    protected function beforeInsert(TpModel $model): void
-    {
-        // 雪花ID生成逻辑
-        if ($this->pkGenerateType === 'snowflake' && empty($model->{$model->getPk()})) {
-            $model->{$model->getPk()} = (string) self::generateSnowflakeID();
-        }
-        
-        // 关键修复：直接读取模型的 $createTime/$updateTime 属性（字段名）
-        $createTimeField = $this->createTime; // 直接获取子类配置的字段名，如果子类未定义直接获取父类（如 created_at）
-		
-        $updateTimeField = $this->updateTime; // 直接获取子类配置的字段名，如果子类未定义直接获取父类（如 updated_at）
-        
-        // 自动填充int类型时间戳
-        if (empty($model->$createTimeField)) {
-            $model->setAttr($createTimeField, time()); // 用 setAttr 安全赋值
-        }
-        if (empty($model->$updateTimeField)) {
-            $model->setAttr($updateTimeField, time()); // 用 setAttr 安全赋值
-        }
-    }
-    
-    /**
-     * 更新前钩子：自动填充更新时间（修改：适配自定义时间字段）
-     */
-    protected function beforeUpdate(): void
-    {
-        $updateTimeField = $this->getUpdateTime(); // 获取子类配置的更新时间字段名
-        $this->$updateTimeField = time(); // 赋值 int 时间戳
-    }
-    
     // 支持手动切换主键策略
     public function setPkGenerateType(string $type): void
     {
@@ -128,22 +119,46 @@ class BaseTpORMModel extends TpModel
     }
 
     /**
+     * 新增前钩子：主键生成+自动时间戳（修改：适配自定义时间字段）
+     */
+    protected static function beforeInsert(TpModel $model): void
+    {
+        
+        // 关键修复：直接读取模型的 $createTime/$updateTime 属性（字段名）
+        $createTimeField = $model->createTime; // 直接获取子类配置的字段名，如果子类未定义直接获取父类（如 created_at）
+        $updateTimeField = $model->updateTime; // 直接获取子类配置的字段名，如果子类未定义直接获取父类（如 updated_at）
+
+        // 自动填充int类型时间戳
+        if (!empty($model->createTime)) {
+            $model->setAttr($createTimeField, time()); // 用 setAttr 安全赋值
+        }
+        if (!empty($model->updateTime)) {
+            $model->setAttr($updateTimeField, time()); // 用 setAttr 安全赋值
+        }
+    }
+    
+
+    /**
      * 模型事件：新增前
      */
     public static function onBeforeInsert(TpModel $model): void
     {
-		$static = new static;
-		
+		#$static = new static;
         try {
-			$static->beforeInsert($model); // 恢复调用（之前被注释了）
-			self::setPrimaryKey($model);
+			self::beforeInsert($model); // 恢复调用（之前被注释了）
+			if ($model->pkGenerateType === 'snowflake'){
+				self::setPrimaryKey($model);
+			}
 			self::setTenantId($model);
+			
 			self::setCreatedBy($model);
+			
+			self::normalizeDateFields($model);
+			
         } catch (\Exception $e) {
             throw new \BadMethodCallException($e->getMessage());
         }
     }
-	
     /**
      * 模型事件：更新前事件
      */
@@ -154,35 +169,9 @@ class BaseTpORMModel extends TpModel
         
         // 2. 自动填充更新人
         self::setUpdatedBy($model);
-
-        // 3. 执行原有的 beforeUpdate 逻辑（处理时间戳等）
-        // 注意：静态事件中调用非静态方法需要 trick，或者将 beforeUpdate 逻辑挪到这里
-        // TP的标准做法是 $model->beforeUpdate() 是内部回调，这里是事件
-        // 如果你依赖 $model->beforeUpdate()，请确保它被调用
-    }
-	 /* 此函数用于带上下文的操作
-	public static function onBeforeUpdate(TpModel $model): void
-	{
-		// 超管可绕过
-		if (!TenantContext::shouldApplyTenant()) {
-			return;
-		}
-
-		// 没有 tenant_id 字段，不参与租户校验
-		if (!array_key_exists('tenant_id', $model->getData())) {
-			return;
-		}
-	
-		$currentTenant = TenantContext::getTenantId();
 		
-		$recordTenant  = $model->getData()['tenant_id'] ?? null;
-
-		// 🚫 尝试更新不属于当前租户的数据
-		if ($recordTenant != $currentTenant) {
-			throw new \Exception('Tenant access denied (update)', 403);
-		}
-	}
-	*/
+		self::normalizeDateFields($model);
+    }
 	
 	/*
 	* 模型事件：删除前校验（物理 & 软删通吃）
@@ -192,37 +181,14 @@ class BaseTpORMModel extends TpModel
         // 1. 检查是否越权
         self::checkTenantAccess($model);
     }
-	
-	/* 此函数用于带上下文的操作
-	public static function onBeforeDelete(TpModel $model): void
-	{
-
-		if (!TenantContext::shouldApplyTenant()) {
-			return;
-		}
-
-		if (!array_key_exists('tenant_id', $model->getData())) {
-			return;
-		}
-
-		$currentTenant = TenantContext::getTenantId();
-		
-		$recordTenant  = $model->getData()['tenant_id'] ?? null;
-		
-		if ($recordTenant != $currentTenant) {
-			throw new Exception('Tenant access denied (delete)', 403);
-		}
-	}*/
 
     /**
      * 模型事件：更新后事件
      */
     public static function onAfterUpdate(TpModel $model): void
     {
-        self::setUpdatedBy($model);
+        
     }
-
-
 
     /**
      * 模型事件：删除后
@@ -243,52 +209,63 @@ class BaseTpORMModel extends TpModel
         }
     }
 	
+	/**
+	 * 模型事件:查询后
+	 */
+	public static function onAfterRead(\think\Model $model): void
+	{
+		// 只处理模型实例
+		if (!($model instanceof self)) {
+			return;
+		}
+		$model->formatDateFields();
+	}
+
     /**
-     * 【可选】查询结束后自动重置租户隔离标识（避免静态属性污染）
-     * 可在 select/find 等方法后调用，或通过模型事件自动重置
+     * 获取字段列表 (安全处理)
+     * @param string|null $field
+     * @return array|mixed
      */
-    public function afterQuery(): void
+    public function getFields(?string $field = null): mixed
     {
-        static::restoreTenant();
+        $res = parent::getFields($field);
+        return $field ? $res : ($res ?: []);
     }
-	
-	//可用，依赖上下文传递类
-	public function scopeTenant2($query): void
-	{
-		// 1. 当前上下文不启用租户隔离
-		if (!TenantContext::shouldApplyTenant()) {
-			return;
-		}
 
-		// 2. 当前模型没有 tenant_id 字段
-		if (!in_array('tenant_id', array_keys($this->getFields()))) {
-			return;
-		}
+    /**
+     * 判断是否开启软删除
+     * @return bool
+     */
+    public function isSoftDeleteEnabled(): bool
+    {
+        return method_exists($this, 'delete');
+    }
 
-		// 3. 正常加租户条件
-		$query->where(
-			$this->getTable() . '.tenant_id',
-			TenantContext::getTenantId()
-		);
-	}
+    /**
+     * 强制物理删除
+     * @param mixed $id
+     * @return bool
+     */
+    public static function forceDeleteById($id): bool
+    {
+        return self::withTrashed()->where((new static)->getPk(), $id)->delete(true);
+    }
 
-	//可用不严谨
-	public function scopeTenant1($query): void
-	{
+    /**
+     * 恢复软删除
+     * @param mixed $id
+     * @return bool
+     */
+    public static function restoreById($id): bool
+    {
+        $model = self::onlyTrashed()->find($id);
+        return $model ? $model->restore() : false;
+    }
 
-		$tenantId = function_exists('getCurrentTenantId')
-			? getCurrentTenantId()
-			: 1001;
-		
-		if ($tenantId && in_array('tenant_id' , array_keys($this->getFields()) ) ) {
-			$query->where(
-				$this->getTable() . '.tenant_id',
-				$tenantId
-			);
-		}
-	}
-	
-/**
+    // =========================================================================
+    //  辅助方法
+    // =========================================================================
+		/**
      * 安全的 Join 方法，自动追加租户ID
      * @param string $joinTable  关联表名 (如 'oa_order')
      * @param string $alias      关联表别名 (如 'o')
@@ -296,7 +273,7 @@ class BaseTpORMModel extends TpModel
      * @param string $type       JOIN类型 (LEFT, INNER等)
      */
 	 /*// 使用封装好的 scopeJoinTenant
-$list = User::alias('u')
+	$list = User::alias('u')
     ->joinTenant('oa_order', 'o', 'o.user_id = u.id') // 自动补全 tenant_id
     ->select();*/
     public function scopeJoinTenant($query, string $joinTable, string $alias, string $condition, string $type = 'LEFT')
@@ -311,55 +288,6 @@ $list = User::alias('u')
         // 执行原生 join
         $query->join("{$joinTable} {$alias}", $condition, $type);
     }
-	
-    // =========================================================================
-    //  核心方法
-    // =========================================================================
-
-
-
-	/**
-     * 获取模型定义的字段列表
-     */
-    public function getFields(?string $field = null):mixed
-    {
-        $res = parent::getFields($field);
-        
-        if ($field) {
-            return $res;
-        }
-        
-        return $res ?: [];
-    }
-
-    /**
-     * 判断是否开启软删
-     */
-    public function isSoftDeleteEnabled(): bool
-    {
-        return in_array(TpSoftDelete::class, class_uses(static::class));
-    }
-
-    /**
-     * 强制物理删除
-     */
-    public static function forceDeleteById($id): bool
-    {
-        return self::withTrashed()->where((new static)->getPk(), $id)->delete(true);
-    }
-
-    
-    /**
-     * 恢复软删除数据
-     */
-    public static function restoreById($id): bool
-    {
-        $model = self::onlyTrashed()->find($id);
-        if ($model) {
-            return $model->restore();
-        }
-        return false;
-    }
 
     /**
      * 获取完整表名
@@ -369,40 +297,177 @@ $list = User::alias('u')
         return (new static)->getTable();
     }
 
+
+    // =========================================================================
+    //  日期格式化处理 (优化版)
+    // =========================================================================
+
+    /**
+     * 格式化日期字段 (时间戳 -> 字符串)
+     * @return void
+     */
+    private function formatDateFields(): void
+    {
+        foreach ($this->dateFields as $field) {
+            $value = $this->getData($field);
+            if ($value > 0) {
+                // 直接设置内部数据，避免触发获取器循环
+                #$this->$field = date(self::DATE_OUTPUT_FORMAT, (int)$value);
+				$this->setAttr($field, date(self::DATE_OUTPUT_FORMAT, (int)$value));
+            }
+        }
+    }
+	
+	/**
+	 * 格式化日期字段 姊妹篇（不破坏原始 data）
+	 */
+	protected function formatDateFields1(): void
+	{
+		foreach ($this->dateFields as $field) {
+
+			// 原始值（int）
+			$raw = $this->getData($field);
+
+			if (!$raw || !is_numeric($raw)) {
+				continue;
+			}
+
+			// 放到 append 中作为展示字段
+			$this->append([$field . '_text']);
+
+			// 动态设置虚拟字段值
+			$this->setAttr($field . '_text', date(self::DATE_OUTPUT_FORMAT, (int)$raw));
+		}
+	}
+	
+    /**
+     * 通用方法：将日期字符串/时间戳转为 int 时间戳
+     * @param mixed $value 输入值
+     * @return int
+     */
+    private function convertToTimestamp($value)
+    {
+        if (is_numeric($value)) {
+            return (int)$value;
+        } else {
+            $timestamp = strtotime($value);
+            return $timestamp !== false ? (int)$timestamp : 0;
+        }
+    }
+	
+	/**
+	 * 将所有日期字段统一转为 int 时间戳
+	 */
+	protected static function normalizeDateFields(\think\Model $model): void
+	{
+		foreach ($model->dateFields as $field) {
+
+			// 如果模型里根本没有这个字段，跳过
+			if (!$model->hasData($field)) {
+				continue;
+			}
+
+			$value = $model->getData($field);
+
+			// 已经是 int，直接跳过
+			if (is_int($value) || ctype_digit((string)$value)) {
+				continue;
+			}
+
+			// 空值处理
+			if ($value === null || $value === '') {
+				continue;
+			}
+
+			// 尝试解析字符串日期
+			$timestamp = strtotime((string)$value);
+
+			if ($timestamp !== false) {
+				$model->setAttr($field, $timestamp);
+			}
+		}
+	}
+	
+
+    // =========================================================================
+    //  辅助方法 & 多租户安全
+    // =========================================================================
+
+    /**
+     * 获取当前租户ID (封装函数依赖)
+     * @return string|null
+     */
+    protected static function getCurrentTenantId(): ?string
+    {
+        // 这里可以优先检查 TenantContext，其次检查辅助函数
+        if (class_exists(TenantContext::class)) {
+            return TenantContext::getTenantId();
+        }
+        return function_exists('getCurrentTenantId') ? getCurrentTenantId() : null;
+    }
+
+    /**
+     * 获取当前用户ID
+     * @return mixed
+     */
+    protected static function getCurrentUser()
+    {
+        return function_exists('getCurrentUser') ? getCurrentUser() : null;
+    }
+
+    /**
+     * 数据安全检查 (防止越权)
+     * 在更新和删除前触发
+     * @param TpModel $model
+     * @return void
+     * @throws \think\exception\ValidateException
+     */
+    protected static function checkTenantAccess(TpModel $model): void
+    {
+        $currentTenantId = self::getCurrentTenantId();
+        if (!$currentTenantId) {
+            return; // 无租户上下文，跳过
+        }
+
+        // 获取数据原始的 tenant_id
+        $dataTenantId = $model->getOrigin('tenant_id');
+
+        if ($dataTenantId && (string)$dataTenantId !== (string)$currentTenantId) {
+            throw new \think\exception\ValidateException('无权操作此条数据（租户不匹配）');
+        }
+    }
+
+    // =========================================================================
+    //  雪花ID生成
+    // =========================================================================
+
+    /**
+     * 生成雪花ID
+     * @return int
+     */
+    protected static function generateSnowflakeID(): int
+    {
+        if (self::$snowflake === null) {
+            $workerId =1;
+            $datacenterId = 1;
+            self::$snowflake = new Snowflake($workerId, $datacenterId);
+        }
+        return self::$snowflake->nextId();
+    }
+	
+	
     // =========================================================================
     //  辅助私有方法
     // =========================================================================
 	
-    /**
-     * 【新增】安全检查：防止越权操作
-     * 场景：管理员A查询了数据，然后切换了租户身份，或者Session混乱时尝试修改数据
-     */
-    protected static function checkTenantAccess(TpModel $model): void
-    {
-        // 获取当前租户
-        $currentTenantId = function_exists('getCurrentTenantId') ? \getCurrentTenantId() : null;
-        
-        // 如果没有开启多租户或当前是超管模式，跳过
-        if (!$currentTenantId) {
-            return;
-        }
 
-        // 获取数据原本的 tenant_id
-        // getOrigin() 获取原始数据，防止被修改后的数据欺骗
-        $dataTenantId = $model->getOrigin('tenant_id');
-
-        // 如果数据本身有 tenant_id，且不等于当前租户ID，抛出异常
-        if ($dataTenantId && (string)$dataTenantId !== (string)$currentTenantId) {
-            // 这里抛出异常，前端会收到 500 错误，保护数据
-            throw new \think\exception\ValidateException('无权操作此条数据（租户不匹配）');
-        }
-    }
-	
-
+    // =========================================================================
+    //  2. 修复 setPrimaryKey 方法（仅雪花ID模式生效）
+    // =========================================================================
     private static function setPrimaryKey(TpModel $model): void
-    {
+    {       
         $pk = $model->getPk();
-        if (is_string($pk) && empty($model->{$pk})) {
+        if ( is_string($pk) && empty($model->{$pk})) {
             $model->{$pk} = (string) self::generateSnowflakeID();
         }
     }
@@ -427,20 +492,13 @@ $list = User::alias('u')
 
     private static function setUpdatedBy(TpModel $model): void
     {
+		#dump($model);
         $uid = function_exists('getCurrentUser') ? \getCurrentUser() : null;
-		$model->setAttr('update_time', time());
+		$model->setAttr($model->updateTime, time());
         if ($uid) {
             $model->setAttr('updated_by', $uid);
         }
     }
-
-    protected static function generateSnowflakeID(): int
-    {
-        if (self::$snowflake === null) {
-            $workerId =1;
-            $datacenterId = 1;
-            self::$snowflake = new Snowflake($workerId, $datacenterId);
-        }
-        return self::$snowflake->nextId();
-    }
+	
+	
 }

@@ -32,7 +32,8 @@ class User extends \Framework\Utils\BaseModel
     protected $createTime = 'created_at';  // 映射到数据库 created_at
     protected $updateTime = 'updated_at';  // 映射到数据库 updated_at
 
-
+	protected string $pkGenerateType = 'snowflake';//修改为自增
+	
     /**
      * 允许批量赋值的字段白名单
      * 需包含所有要通过 create/fill/save(批量) 赋值的字段

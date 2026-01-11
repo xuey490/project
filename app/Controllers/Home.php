@@ -266,7 +266,7 @@ class Home
         $user =App::make( Custom::class);
 		#dump($user->getPk());
 		
-		//$user = App::make( Custom::class)->find(4152240944932200448);//更新操作
+		$user = App::make( Custom::class)->find(4152260622576254976);//更新操作
 			#dump($user);
 			//通用插入
 		/*
@@ -296,7 +296,7 @@ class Home
 		
 		// 直接使用模型 create 方法，测试批量赋值
 		$data = [
-			'name' => '赵六',
+			'name' => '赵六11111',
 			'nickname' => '赵六111',
 			'englishname' => 'aaa',
 			'email'=> 'zs@test.com',
@@ -304,6 +304,7 @@ class Home
 			'status'=>1,
 			'mobile'=>'13512435678',
 		];
+		
 		#dump($this->userRepo->save($data)->id);
 		#$custom = \App\Models\Custom::create($data);
 		#dd($custom); // 查看模型实例中是否包含上述字段的值，若包含则模型正常，问题在仓库
@@ -327,24 +328,27 @@ class Home
 		// find 会自动加上 AND tenant_id = 1001
 		// 把 get() 改为 first()
 		*/
-		/*
-		$info = $user->where('id', '4152317470889484288')->first(); 
+		
+		$info = $user->where('id', '4152326302868971520')->find(); 
 
 		if ($info) {
 			// 此时 $info 是 User 模型对象，可以正常赋值
-			$info->nickname = '8888';
-			$info->status 	= 	1;
+			$info->nickname = 'yyyyyyyy';
+			$info->status 	= 	11;
 			$info->save(); 
 		}
-		*/
+
+		$user = App::make( Custom::class)->find(4152326302868971520);//更新操作
+			dump($user->toArray());
+		
 		/*
-		$info = $user->find('4152317470889484288');
+		$info = $user->find('4152326302868971520');
 		if ($info) {
 		$info->nickname = '王五11111111';
 		$info->save();
 		}		
 		*/
-		//($this->userRepo)(\App\Models\User::class)->where('id', 4152317470889484288)->update(['status' => 13]);
+		//($this->userRepo)(\App\Models\User::class)->where('id', 4152326302868971520)->update(['status' => 13]);
 		$tenantId  = '1003';
 		app('request')->headers->set('X-Tenant-Id' , $tenantId);
 		$id = app('request')->headers->get('X-Tenant-Id');
@@ -363,9 +367,9 @@ class Home
 		
 		
 		
-		$userList1 = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->get()->toArray();//默认带租户id
+		$userList1 = ($this->userRepo)(\App\Models\User::class)->where('status', 1)->select()->toArray();//默认带租户id
 		#$userList1 = ($this->userRepo)(\App\Models\User::class)->withoutTenancy()->where('status', 1)->get()->toArray();//取消带租户id限制
-		dump($userList1);
+		#dump($userList1);
 		
 		//($this->userRepo)(\App\Models\User::class)->withoutTenancy();
 		#($this->userRepo)::isSuperAdminTempDisabled();
