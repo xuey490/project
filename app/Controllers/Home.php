@@ -194,7 +194,7 @@ class Home
 	##[Auth(required: true, roles: ['admin', 'editor'], guard: 'index')]
     public function index1(Request $request)
     {
-		TenantContext::setTenantId(2);
+		#TenantContext::setTenantId(2);
 		//dump($this->customDao->getActiveUsers());
 		#$rawRouteMiddleware = $request->attributes->get('_middleware', []);
 		#dump($rawRouteMiddleware);		
