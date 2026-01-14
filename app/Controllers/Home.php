@@ -54,9 +54,9 @@ use App\Validate\NewUser as UserValidate; // 引入你的验证器类
 
 
 use App\Services\UserService;
-use Framework\Tenant\TenantContext;	//启用租户隔离
+use Framework\Tenant\TenantContext;	//启用租户隔离#
 
-
+use App\Common\LogService;
 
 
 
@@ -74,9 +74,15 @@ class Home
     #[Autowire]
     private UserService $UserService;	
 
+    #[Autowire]
+    protected LogService $logger;
 	
 	private CustomDao $customDao;
-	
+
+
+    // 甚至可以在 private 属性上使用
+    #[Inject(id: 'config')] // 假设 config 服务已存在
+    protected object $config; 
 	
     public function __construct(
         private CsrfTokenManager $csrf,
@@ -164,6 +170,9 @@ class Home
 	
 	public function index():Response
 	{
+		#dump($this->config->get('app'));
+		
+		#$this->logger->info('hello World!');
 		return new Response(
 			'<html><body><h1>Hello, World!</h1></body></html>',
 			Response::HTTP_OK, // 状态码（200）
@@ -308,7 +317,7 @@ class Home
 			'mobile'=>'13512435678',
 		];
 		
-		dump($this->userRepo->save($data)->id);
+		//dump($this->userRepo->save($data)->id);
 		#$custom = \App\Models\Custom::create($data);
 		#dd($custom); // 查看模型实例中是否包含上述字段的值，若包含则模型正常，问题在仓库
 		//($this->userRepo)(\App\Models\Custom::class)->fill($data)->save();//illuminate的做法

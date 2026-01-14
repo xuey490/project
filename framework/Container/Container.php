@@ -16,6 +16,8 @@ declare(strict_types=1);
 
 namespace Framework\Container;
 
+use Framework\Container\Compiler\AttributeInjectionPass; // 引入 Pass
+use Framework\DI\AttributeInjector; // 引入注入器
 use ReflectionClass;
 use ReflectionException;
 use ReflectionNamedType;
@@ -45,7 +47,7 @@ class Container implements SymfonyContainerInterface
      * @param  array             $parameters 全局参数
      * @throws RuntimeException
      */
-    public static function init(array $parameters = []): void
+    public static function init1(array $parameters = []): void
     {
         if (self::$container !== null) {
             return;
@@ -117,6 +119,89 @@ class Container implements SymfonyContainerInterface
     }
 
     /**
+     * 初始化容器.
+     *
+     * @param  array             $parameters 全局参数
+     * @throws RuntimeException
+     */
+    public static function init(array $parameters = []): void
+    {
+        if (self::$container !== null) {
+            return;
+        }
+
+        // 加载 .env 文件
+        $envFile = BASE_PATH . '/.env';
+        if (file_exists($envFile)) {
+            (new Dotenv())->load($envFile);
+        }
+
+        $env    = env('APP_ENV') ?: 'local';
+        $isProd = $env === 'prod';
+
+        $projectRoot = BASE_PATH;
+        $configDir   = $projectRoot . '/config';
+
+        if (! is_dir($configDir)) {
+            throw new RuntimeException("配置目录不存在: {$configDir}");
+        }
+
+        $servicesFile = $configDir . '/services.php';
+        if (! file_exists($servicesFile)) {
+            throw new RuntimeException("服务配置文件不存在: {$servicesFile}");
+        }
+
+        // 创建 Provider 管理器
+        $providersManager = new ContainerProviders();
+
+        $containerBuilder = new ContainerBuilder();
+        $containerBuilder->setParameter('kernel.project_dir', $projectRoot);
+        $containerBuilder->setParameter('kernel.debug', (bool) getenv('APP_DEBUG'));
+        $containerBuilder->setParameter('kernel.environment', $env);
+
+        if (! empty($parameters)) {
+            $containerBuilder->setParameter('config', $parameters);
+        }
+
+        // =========================================================
+        // 🔥 [新增] 注册 AttributeInjectionPass
+        // 必须在 compile() 之前添加，用于处理 services.php 中注册的服务
+        // =========================================================
+        $containerBuilder->addCompilerPass(new AttributeInjectionPass());
+
+        $loader = new PhpFileLoader($containerBuilder, new FileLocator($configDir));
+        $loader->load('services.php');
+
+        $containerBuilder->compile();
+
+        // 在容器编译后真正执行所有 Provider 的 boot()
+        $providersManager->bootProviders($containerBuilder);
+
+        if ($isProd) {
+            $cacheDir = dirname(self::CACHE_FILE);
+            if (! is_dir($cacheDir) && ! mkdir($cacheDir, 0777, true) && ! is_dir($cacheDir)) {
+                throw new RuntimeException(sprintf('Directory "%s" was not created', $cacheDir));
+            }
+
+            $dumper       = new PhpDumper($containerBuilder);
+            $cacheContent = $dumper->dump(['class' => 'ProjectServiceContainer']);
+            file_put_contents(self::CACHE_FILE, $cacheContent);
+
+            $loadedContainer = require self::CACHE_FILE;
+            self::$container = $loadedContainer instanceof SymfonyContainerInterface
+                ? $loadedContainer
+                : $containerBuilder;
+        } else {
+            self::$container = $containerBuilder;
+        }
+
+        // ✅ 编译完成后再执行 bootProviders
+        if (isset(self::$providers)) {
+            self::$providers->bootProviders(self::$container);
+        }
+    }
+	
+    /**
      * 内部助手：获取 ContainerBuilder，如果当前不是 Builder 则抛出异常
      * 用于解决 IDE 警告和运行时逻辑错误
      */
@@ -145,6 +230,86 @@ class Container implements SymfonyContainerInterface
      * @param array  $parameters 构造函数参数 ['paramName' => value]
      */
     public function make(string $abstract, array $parameters = []): object
+    {
+        // 1. 如果没有参数且容器里有该服务，直接返回（单例/服务）
+        // 这里获取到的对象，如果是在 services.php 注册过的，
+        // 那么在 init() 阶段的 AttributeInjectionPass 已经配置了自动注入，
+        // 所以直接返回即可，不需要手动再调 inject。
+        if (empty($parameters) && self::$container->has($abstract)) {
+            return self::$container->get($abstract);
+        }
+
+        // 2. 使用反射动态创建实例 (针对未注册的控制器、瞬态对象等)
+        try {
+            $reflector = new ReflectionClass($abstract);
+
+            if (! $reflector->isInstantiable()) {
+                throw new RuntimeException("Class [{$abstract}] is not instantiable.");
+            }
+
+            $constructor = $reflector->getConstructor();
+            $instance = null;
+
+            if (is_null($constructor)) {
+                $instance = new $abstract();
+            } else {
+                $dependencies = [];
+                foreach ($constructor->getParameters() as $parameter) {
+                    $name = $parameter->getName();
+
+                    // 优先使用传入的参数
+                    if (array_key_exists($name, $parameters)) {
+                        $dependencies[] = $parameters[$name];
+                        continue;
+                    }
+
+                    // 尝试从容器获取依赖
+                    $type = $parameter->getType();
+                    
+                    if ($type instanceof ReflectionNamedType && ! $type->isBuiltin()) {
+                        $dependencyClassName = $type->getName();
+
+                        if (self::$container->has($dependencyClassName)) {
+                            $dependencies[] = self::$container->get($dependencyClassName);
+                            continue;
+                        }
+
+                        if (class_exists($dependencyClassName)) {
+                            // 递归构建
+                            $dependencies[] = $this->make($dependencyClassName);
+                            continue;
+                        }
+                    }
+
+                    if ($parameter->isDefaultValueAvailable()) {
+                        $dependencies[] = $parameter->getDefaultValue();
+                    } else {
+                        throw new RuntimeException("Unable to resolve dependency [{$parameter->name}] in class {$abstract}");
+                    }
+                }
+                $instance = $reflector->newInstanceArgs($dependencies);
+            }
+            
+            // =========================================================
+            // 🔥 [新增] 手动触发属性注入#
+            // 针对 make() 创建的对象（通常未在 services.php 注册），
+            // 必须在这里手动调用注入器。
+            // =========================================================
+            AttributeInjector::inject($instance);
+
+            return $instance;
+
+        } catch (ReflectionException $e) {
+            throw new RuntimeException('Container make failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * 1. 简单的 make 实现，用于模拟 Laravel/Webman 的构建行为.
+     * @param string $abstract   类名
+     * @param array  $parameters 构造函数参数 ['paramName' => value]
+     */
+    public function make1(string $abstract, array $parameters = []): object
     {
         // 1. 如果没有参数且容器里有该服务，直接返回（单例/服务）
         // 只有当参数为空时才尝试 get，因为如果传了参数，说明用户想要一个新的带参实例

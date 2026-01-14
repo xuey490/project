@@ -413,7 +413,7 @@ class BaseTpORMModel extends TpModel
     {
         // 这里可以优先检查 TenantContext，其次检查辅助函数
         if (class_exists(TenantContext::class)) {
-            return (string)TenantContext::getTenantId();
+            return (string)TenantContext::getTenantId()?? null;
         }
         
     }

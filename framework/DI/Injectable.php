@@ -28,7 +28,7 @@ trait Injectable
 {
     /**
      * 反射元数据缓存，避免重复反射同一个类
-     * 格式: [ ClassName => [ [property_name, attribute_instance, type_name], ... ] ]
+     * 格式: [ ClassName => [ [property_name, attribute_instance, type_name], ...  ] ]
      */
     protected static array $injectionMetaCache = [];
 
