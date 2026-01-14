@@ -82,7 +82,7 @@ class Home
 
     // 甚至可以在 private 属性上使用
     #[Inject(id: 'config')] // 假设 config 服务已存在
-    protected object $config; 
+    private object $config; 
 	
     public function __construct(
         private CsrfTokenManager $csrf,
