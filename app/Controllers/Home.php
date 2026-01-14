@@ -317,11 +317,7 @@ class Home
 			'mobile'=>'13512435678',
 		];
 		
-<<<<<<< Updated upstream
-		#dump($this->userRepo->save($data)->id);
-=======
 		//dump($this->userRepo->save($data)->id);
->>>>>>> Stashed changes
 		#$custom = \App\Models\Custom::create($data);
 		#dd($custom); // 查看模型实例中是否包含上述字段的值，若包含则模型正常，问题在仓库
 		//($this->userRepo)(\App\Models\Custom::class)->fill($data)->save();//illuminate的做法
