@@ -54,7 +54,7 @@ use App\Validate\NewUser as UserValidate; // 引入你的验证器类
 
 
 use App\Services\UserService;
-use Framework\Tenant\TenantContext;	//启用租户隔离
+use Framework\Tenant\TenantContext;	//启用租户隔离#
 
 use App\Common\LogService;
 

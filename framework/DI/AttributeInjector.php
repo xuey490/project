@@ -22,7 +22,7 @@ class AttributeInjector
 {
     /**
      * 反射元数据缓存，避免重复反射同一个类
-     * 结构: [ ClassName => [ [property_name, attribute_instance, type_name, reflection_property], ... ] ]
+     * 结构: [ ClassName => [ [property_name, attribute_instance, type_name, reflection_property], .... ] ]
      */
     protected static array $metadataCache = [];
 

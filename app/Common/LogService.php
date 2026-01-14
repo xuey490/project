@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-// App/Services/LogService.php
+// App/Common/LogService.php#
 namespace App\Common;
 
 class LogService {

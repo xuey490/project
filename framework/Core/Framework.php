@@ -387,7 +387,7 @@ final class Framework
 
         // 从容器获取控制器实例（支持依赖注入）
         //$controller = $this->container->get($controllerClass);
-        // 它会尝试从容器获取，如果获取不到，会自动 new 并执行我们注入逻辑
+        // 它会尝试从容器获取，如果获取不到，会自动 new 并执行我们注入逻辑#
         $controller = \Framework\Core\App::make($controllerClass);
 		
         // 处理路径参数和查询参数的类型转换
