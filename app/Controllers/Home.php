@@ -57,7 +57,7 @@ use App\Services\UserService;
 use Framework\Tenant\TenantContext;	//启用租户隔离#
 
 use App\Common\LogService;
-
+use Framework\Container\Container;
 
 
 ##[Auth(roles: ['admin'])]
@@ -170,11 +170,12 @@ class Home
 	
 	public function index():Response
 	{
-		dump($this->config->get('app'));
+		#dump($this->config->get('app'));
 		
-		dump($this->UserService);
+		#dump($this->UserService);
 		
 		$this->logger->info('hello World!');
+
 		return new Response(
 			'<html><body><h1>Hello, World!</h1></body></html>',
 			Response::HTTP_OK, // Code（200）

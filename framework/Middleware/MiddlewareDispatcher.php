@@ -38,7 +38,7 @@ class MiddlewareDispatcher
         ContextInitMiddleware::class,
         MethodOverrideMiddleware::class,
         CorsMiddleware::class,
-        CsrfTokenGenerateMiddleware::class,
+        #CsrfTokenGenerateMiddleware::class,
 		RateLimitMiddleware::class,
         #CircuitBreakerMiddleware::class, //熔断中间件，正式环境使用，开发环境直接溢出错误堆栈
         IpBlockMiddleware::class,
@@ -65,7 +65,8 @@ class MiddlewareDispatcher
         // 1. 获取路由中间件
         // 此时 $request->attributes 已经由 UrlMatcher 填充完毕
         $rawRouteMiddleware = $request->attributes->get('_middleware', []);
-		//$currentRouteName = $request->attributes->get('_route' , null); 
+		$currentRouteName = $request->attributes->get('_route' , null); 
+		//dump($currentRouteName);
 		
 		$routeInfo = $request->attributes->get('_route');
         $currentRouteName = is_string($routeInfo) ? $routeInfo : (is_array($routeInfo) ? json_encode($routeInfo) : 'unknown_route');
