@@ -71,10 +71,10 @@ class Home
 {
 	
     // 注解注入服务
-    #[Autowire]
+    #[Inject]
     private UserService $UserService;	
 
-    #[Autowire]
+    #[Inject]
     protected LogService $logger;
 	
 	private CustomDao $customDao;
@@ -170,13 +170,15 @@ class Home
 	
 	public function index():Response
 	{
-		#dump($this->config->get('app'));
+		dump($this->config->get('app'));
 		
-		#$this->logger->info('hello World!');
+		dump($this->UserService);
+		
+		$this->logger->info('hello World!');
 		return new Response(
 			'<html><body><h1>Hello, World!</h1></body></html>',
-			Response::HTTP_OK, // 状态码（200）
-			['Content-Type' => 'text/html'] // 响应头
+			Response::HTTP_OK, // Code（200）
+			['Content-Type' => 'text/html']
 		);	
 	}
 	
@@ -194,7 +196,7 @@ class Home
 	##[Auth(required: true, roles: ['admin', 'editor'], guard: 'index')]
     public function index1(Request $request)
     {
-		#TenantContext::setTenantId(2);
+		TenantContext::setTenantId(2);
 		//dump($this->customDao->getActiveUsers());
 		#$rawRouteMiddleware = $request->attributes->get('_middleware', []);
 		#dump($rawRouteMiddleware);		
