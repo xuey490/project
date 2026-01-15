@@ -150,7 +150,7 @@ class Router
     {
         // 1. 进行反射扫描
         $scannedData = $this->scanForMiddlewareAndAttributes($controller, $method);
-
+		
         // 2. 构造标准的 attributes
         $attributes = array_merge($params, [
             '_controller' => $controller . '::' . $method,

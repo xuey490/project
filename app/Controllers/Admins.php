@@ -44,9 +44,11 @@ use Framework\Attributes\Route;
  */
 
 
-#[Route(prefix: '/vvv1/admins', group: 'apssi', middleware: [\App\Middlewares\AuthMiddleware::class, \App\Middlewares\LogMiddleware::class])]
+##[Route(prefix: '/vvv1/admins', group: 'apssi', middleware: [\App\Middlewares\AuthMiddleware::class, \App\Middlewares\LogMiddleware::class])]
 ##[Auth(required: true, roles: ['admins'])] // 如开启，则整个页面需要认证，哪怕方法类没有进行设置
 ##[Menu(title: '系统管理', icon: 'cog', order: 100)]
+##[Middlewares([\App\Middlewares\AuthMiddleware::class])]
+#[Route(prefix: '/vvv1/admins', group: 'Admins')]
 class Admins  extends BaseController
 {
 	
@@ -73,12 +75,13 @@ class Admins  extends BaseController
      * DocBlock 说明示例（可选）：
      * @menu 列表页
      */
-	#[Route(path: '/',  auth: true, roles: ['admin'], methods: ['GET'], name: 'demoaa1.index')] //注解路由的auth roles
+	##[Route(path: '/',  auth: true, roles: ['admin'], methods: ['GET'], name: 'demo.index')] //注解路由的auth roles
+	#[Route(path: '/',  methods: ['GET'], name: 'demo.index')] //注解路由的auth roles
     /**
      * 旧 DocBlock 
      * 旧式的写法，role admin,super 用,隔开，不能用其他符号
-     * @auth true
-     * @role Super
+     * #auth true	@
+     * #role Super  @
      * @menu 内容管理
      */
 	
@@ -96,7 +99,7 @@ class Admins  extends BaseController
     // 场景1：普通数据接口，缓存 1 分钟 
 	// 需要验证：没有中间件的时候加上auth: true,  
     #[Cache(ttl: 60)]
-	#[Route(path: '/caches', auth: true, roles: ['admin1'], methods: ['GET'], name: 'demoaa1.caches')] //注解路由的auth roles
+	#[Route(path: '/caches', auth: true, roles: ['admin1'], methods: ['GET'], name: 'demo.caches')] //注解路由的auth roles
     public function getHotList(): JsonResponse
     {
 		
@@ -158,7 +161,7 @@ class Admins  extends BaseController
         ]), 200, ['Content-Type' => 'application/json']);
     }
 
-	##[Auth()]
+	#[Auth(required: true)]
     ##[UserAction(type: 'register')] // ✅ 注册成功后，自动写入 user_logs 表
 	#[Middlewares([\App\Middlewares\AuthMiddleware::class])]
     public function register(Request $request): JsonResponse
