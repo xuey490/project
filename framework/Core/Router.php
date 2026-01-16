@@ -341,7 +341,7 @@ class Router
      */
     private function buildControllerClassName(array $segments): string
     {
-        // 过滤路径段中的危险字符（如 ..、/、\ 等），仅保留字母数字和下划线
+        // 过滤路径段中的危险字符（如 ..、/、\ 等），仅保留字母数字和下划线 $segment = preg_replace('/[^a-zA-Z0-9_]/', '', $segment);
         $segments = array_map(function ($segment) {
             return preg_replace('/[^a-zA-Z0-9_]/', '', $segment);
         }, $segments);
@@ -368,8 +368,13 @@ class Router
         $lastSegment = array_pop($namespaceSegments);
         $lastSegment .= 'Controller';
         $namespaceSegments[] = $lastSegment;
-
-        return $this->controllerNamespace . '\\' . implode('\\', $namespaceSegments);
+		
+		$className = $this->controllerNamespace . '\\' . ucwords(implode('\\', $segments));
+		if (!class_exists($className)) {
+			return '';
+		}
+		return $className;
+        #return $this->controllerNamespace . '\\' . implode('\\', $namespaceSegments);
     }
 
     /**
