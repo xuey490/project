@@ -100,99 +100,6 @@ final class Framework
     }
 
     /**
-     * FPM入口：完整调度流程.
-     */
-    public function run(): void
-    {
-        $request  = Request::createFromGlobals();
-        $response = $this->dispatch($request);
-        $response->send();
-    }
-
-    /*
-     * 由workerman调度
-     * 传入的是symfony 的request
-     */
-    public function handleRequest(Request $request): Response
-    {
-        return $this->dispatch($request);
-    }
-
-    /**
-     * 获取容器（对外提供接口）.
-     */
-    public function getContainer(): ContainerInterface
-    {
-        return $this->container;
-    }
-
-    /**
-     * 核心统一调度入口（FPM/Workerman/Swoole 都走这里）.
-     */
-    private function dispatch(Request $request): Response
-    {
-        $start         = microtime(true);
-        $this->request = $request;
-
-        $response = new Response('', Response::HTTP_INTERNAL_SERVER_ERROR);
-
-        try {
-            $route = $this->router->match($this->request);
-
-            if ($route === null || $route === false) {
-                $response = $this->handleNotFound();
-                $this->logRequestAndResponse($this->request, $response, $start);
-                return $response;
-            }
-
-            if ($this->isEasterEggRoute($route)) {
-                $response = $this->handleEasterEgg($route);
-                $this->logRequestAndResponse($this->request, $response, $start);
-                return $response;
-            }
-
-            $this->request->attributes->set('_route', $route);
-
-            $response = $this->middlewareDispatcher->dispatch(
-                $this->request,
-                fn (Request $req): Response => $this->callController($route)
-            );
-
-            if (! $response instanceof Response) {
-                $response = $this->normalizeResponse($response);
-            }
-
-            $this->logRequestAndResponse($this->request, $response, $start);
-            return $response;
-        } catch (Throwable $e) {
-            return $this->handleException($e);
-        } finally {
-            // Workerman 下必须释放
-            $this->request = null;
-        }
-    }
-
-    /**
-     * 记录简单错误到 storage/logs/error.log（用于在容器日志不可用时回退）.
-     */
-    private function logError(string $message): void
-    {
-        $logDir = BASE_PATH . '/storage/logs';
-
-        if (! is_dir($logDir)) {
-            // 使用常量权限
-            if (! mkdir($logDir, self::DIR_PERMISSION, true) && ! is_dir($logDir)) {
-                return; // 无法创建日志目录，放弃记录
-            }
-        }
-
-        $file = $logDir . '/error.log';
-        $time = date('Y-m-d H:i:s');
-
-        file_put_contents($file, "[{$time}] {$message}\n", FILE_APPEND);
-    }
-
-    /**
      * 初始化 BASE_PATH.
      */
     private function initializeBasePath(): void
@@ -286,6 +193,100 @@ final class Framework
             self::CONTROLLER_NAMESPACE
         );
     }
+
+    /**
+     * FPM入口：完整调度流程.
+     */
+    public function run(): void
+    {
+        $request  = Request::createFromGlobals();
+        $response = $this->dispatch($request);
+        $response->send();
+    }
+
+    /*
+     * 由workerman调度
+     * 传入的是symfony 的request
+     */
+    public function handleRequest(Request $request): Response
+    {
+        return $this->dispatch($request);
+    }
+
+    /**
+     * 获取容器（对外提供接口）.
+     */
+    public function getContainer(): ContainerInterface
+    {
+        return $this->container;
+    }
+
+    /**
+     * 核心统一调度入口（FPM/Workerman/Swoole 都走这里）.
+     */
+    private function dispatch(Request $request): Response
+    {
+        $start         = microtime(true);
+        $this->request = $request;
+
+        $response = new Response('', Response::HTTP_INTERNAL_SERVER_ERROR);
+
+        try {
+            $route = $this->router->match($this->request);
+			
+            if ($this->isEasterEggRoute($route)) {
+                $response = $this->handleEasterEgg($route);
+                $this->logRequestAndResponse($this->request, $response, $start);
+                return $response;
+            }
+			
+            if ($route === null || $route === false) {
+                $response = $this->handleNotFound();
+                $this->logRequestAndResponse($this->request, $response, $start);
+                return $response;
+            }
+
+            $this->request->attributes->set('_route', $route);
+
+            $response = $this->middlewareDispatcher->dispatch(
+                $this->request,
+                fn (Request $req): Response => $this->callController($route)
+            );
+
+            if (! $response instanceof Response) {
+                $response = $this->normalizeResponse($response);
+            }
+
+            $this->logRequestAndResponse($this->request, $response, $start);
+            return $response;
+        } catch (Throwable $e) {
+            return $this->handleException($e);
+        } finally {
+            // Workerman 下必须释放
+            $this->request = null;
+        }
+    }
+
+    /**
+     * 记录简单错误到 storage/logs/error.log（用于在容器日志不可用时回退）.
+     */
+    private function logError(string $message): void
+    {
+        $logDir = BASE_PATH . '/storage/logs';
+
+        if (! is_dir($logDir)) {
+            // 使用常量权限
+            if (! mkdir($logDir, self::DIR_PERMISSION, true) && ! is_dir($logDir)) {
+                return; // 无法创建日志目录，放弃记录
+            }
+        }
+
+        $file = $logDir . '/error.log';
+        $time = date('Y-m-d H:i:s');
+
+        file_put_contents($file, "[{$time}] {$message}\n", FILE_APPEND);
+    }
+
 
     /**
      * 加载所有路由（手动+注解，支持环境区分的缓存）.
@@ -570,7 +571,7 @@ final class Framework
      */
     private function isEasterEggRoute(array $route): bool
     {
-        if (! isset($route['controller'], $route['method'])) {
+        if (!isset($route['controller'], $route['method'])) {
             return false;
         }
 
