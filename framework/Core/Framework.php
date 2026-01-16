@@ -233,6 +233,13 @@ final class Framework
 
         try {
             $route = $this->router->match($this->request);
+
+			
+            if ($route === null || $route === false) {
+                $response = $this->handleNotFound();
+                $this->logRequestAndResponse($this->request, $response, $start);
+                return $response;
+            }
 			
             if ($this->isEasterEggRoute($route)) {
                 $response = $this->handleEasterEgg($route);
@@ -240,12 +247,6 @@ final class Framework
                 return $response;
             }
 			
-            if ($route === null || $route === false) {
-                $response = $this->handleNotFound();
-                $this->logRequestAndResponse($this->request, $response, $start);
-                return $response;
-            }
-
             $this->request->attributes->set('_route', $route);
 
             $response = $this->middlewareDispatcher->dispatch(
