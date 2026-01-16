@@ -190,6 +190,7 @@ final class Framework
         $this->router = new Router(
             $allRoutes,
             $this->container,
+			#$this->logger,
             self::CONTROLLER_NAMESPACE
         );
     }
@@ -233,14 +234,14 @@ final class Framework
 
         try {
             $route = $this->router->match($this->request);
-
+			
 			
             if ($route === null || $route === false) {
                 $response = $this->handleNotFound();
                 $this->logRequestAndResponse($this->request, $response, $start);
                 return $response;
             }
-			
+
             if ($this->isEasterEggRoute($route)) {
                 $response = $this->handleEasterEgg($route);
                 $this->logRequestAndResponse($this->request, $response, $start);
