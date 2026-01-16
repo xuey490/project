@@ -198,6 +198,14 @@ class Home
     public function index1(Request $request)
     {
 		TenantContext::setTenantId(2);
+		
+        // session测试
+        $session = app('session');
+        // 设置一个 session 属性
+        $session->set('user_id', 'tom_11');
+        // 获取一个 session 属性
+        $userId = $session->get('user_id');
+		
 		//dump($this->customDao->getActiveUsers());
 		#$rawRouteMiddleware = $request->attributes->get('_middleware', []);
 		#dump($rawRouteMiddleware);		
@@ -385,7 +393,7 @@ class Home
 
 		
 		#TenantContext::setTenantId(1);
-		$userList1 = ($this->userRepo)(\App\Models\User::class)->where('id','>', 1)->select()->toArray();//默认带租户id
+		$userList1 = ($this->userRepo)(\App\Models\User::class)->where('id','>', 1)->get()->toArray();//默认带租户id
 		#$userList1 = ($this->userRepo)(\App\Models\User::class)->withoutTenancy()->where('status', 1)->get()->toArray();//取消带租户id限制
 		dump($userList1);
 		
@@ -682,11 +690,11 @@ $id = $snow->nextId();
 
 
         // session测试
-        $session = app('session');
+        #$session = app('session');
         // 设置一个 session 属性
-        $session->set('user_id', 'tom_11');
+        #$session->set('user_id', 'tom_11');
         // 获取一个 session 属性
-        $userId = $session->get('user_id');
+        #$userId = $session->get('user_id');
         
 		
 		#dump(app('session')->all());
@@ -721,7 +729,7 @@ $id = $snow->nextId();
 		if(!$result){
 		#echo $validate->getError();
 		}
-        return new Response("<h1>Welcome to My Framework!__{$userId}</h1>");
+        return new Response("<h1>Welcome to My Framework!</h1>");
     }
 
 
