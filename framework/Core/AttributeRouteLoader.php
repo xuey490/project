@@ -693,12 +693,11 @@ class AttributeRouteLoader
 
 		// 仅校验命名空间归属，类存在性交给 get_reflection_class 处理
 		if (strpos($class_name, $this->controller_namespace) !== 0) {
-			return '';
+			throw new InvalidArgumentException("Invalid class name: {$class_name}");
 		}
 
 		return $class_name;
 	}
-	
 
 	/**
 	 * 获取反射类并缓存结果，避免重复反射
