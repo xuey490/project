@@ -58,7 +58,7 @@ use Framework\Tenant\TenantContext;	//启用租户隔离#
 
 use App\Common\LogService;
 use Framework\Container\Container;
-
+use Framework\Attributes\Action;
 
 ##[Auth(roles: ['admin'])]
 ##[Prefix('/secures', middleware: [AuthMiddleware::class])]
@@ -167,6 +167,7 @@ class Home
 		return $response;
 		
 	}
+	
 	
 	public function index():Response
 	{
