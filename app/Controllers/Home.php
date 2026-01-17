@@ -180,7 +180,7 @@ class Home
 		return new Response(
 			'<html><body><h1>Hello, World!</h1></body></html>',
 			Response::HTTP_OK, // Code（200）
-			['Content-Type' => 'text/html']
+			['Content-Type' => 'text/html; charset=UTF-8']
 		);	
 	}
 	
