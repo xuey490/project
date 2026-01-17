@@ -7,6 +7,6 @@ namespace App\Common;
 
 class LogService {
     public function info(string $msg) {
-        echo "[LOG]: $msg <br>";
+        dump( "[LOG]: $msg <br>");
     }
 }
