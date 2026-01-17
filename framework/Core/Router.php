@@ -81,7 +81,7 @@ class Router
      */
     public function setCache(CacheInterface $cache): self
     {
-        $this->cache =app('cache');// $cache;
+        $this->cache = $cache;
         return $this;
     }
 
