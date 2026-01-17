@@ -44,11 +44,11 @@ use Framework\Attributes\Route;
  */
 
 
-##[Route(prefix: '/vvv1/admins', group: 'apssi', middleware: [\App\Middlewares\AuthMiddleware::class, \App\Middlewares\LogMiddleware::class])]
+#[Route(prefix: '/vvv1/admins', group: 'apssi', middleware: [\App\Middlewares\AuthMiddleware::class, \App\Middlewares\LogMiddleware::class])]
 ##[Auth(required: true, roles: ['admins'])] // 如开启，则整个页面需要认证，哪怕方法类没有进行设置
 ##[Menu(title: '系统管理', icon: 'cog', order: 100)]
 ##[Middlewares([\App\Middlewares\AuthMiddleware::class])]
-#[Route(prefix: '/vvv1/admins', group: 'Admins')]
+##[Route(prefix: '/vvv1/admins', group: 'Admins')]
 class Admins  extends BaseController
 {
 	
@@ -99,7 +99,7 @@ class Admins  extends BaseController
     // 场景1：普通数据接口，缓存 1 分钟 
 	// 需要验证：没有中间件的时候加上auth: true,  
     #[Cache(ttl: 60)]
-	#[Route(path: '/caches', auth: true, roles: ['admin1'], methods: ['GET'], name: 'demo.caches')] //注解路由的auth roles
+	#[Route(path: '/caches', auth: true, roles: ['admin'], methods: ['GET'], name: 'demo.caches')] //注解路由的auth roles
     public function getHotList(): JsonResponse
     {
 		

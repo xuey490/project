@@ -2,201 +2,254 @@
 
 declare(strict_types=1);
 
-/**
- * This file is part of FssPHP Framework.
- *
- * @link     https://github.com/xuey490/project
- * @license  https://github.com/xuey490/project/blob/main/LICENSE
- *
- * @Filename: %filename%
- * @Date: 2025-11-24
- * @Developer: xuey863toy
- * @Email: xuey863toy@gmail.com
- */
-
 namespace Framework\Core;
 
+use Framework\Attributes\Action;
+use Framework\Attributes\Auth;
+use Framework\Attributes\Role;
 use Framework\Attributes\MiddlewareProviderInterface;
-use Framework\Middleware\MiddlewareDispatcher;
 use Psr\Container\ContainerInterface;
+use Psr\SimpleCache\CacheInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Exception\MethodNotAllowedException;
 use Symfony\Component\Routing\Exception\ResourceNotFoundException;
 use Symfony\Component\Routing\Matcher\UrlMatcher;
 use Symfony\Component\Routing\RequestContext;
 use Symfony\Component\Routing\RouteCollection;
+use ReflectionClass;
+use ReflectionMethod;
+use Throwable;
 
 /**
- * 路由核心处理类
- * 负责匹配请求路径到对应的控制器和方法，支持手动路由、注解路由和自动路由
+ * Router (Enhanced Version)
+ *
+ * 功能特性：
+ * - 混合路由：支持 Symfony 定义路由 + 自动推断路由
+ * - 路由命中缓存：基于 PSR-16 缓存 URL 匹配结果，跳过解析过程
+ * - 元数据编译：支持 Attribute 扫描结果的导出与预加载，生产环境零反射
+ * - 安全策略：黑白名单机制、强制显式 Action 声明
+ * - 统一元数据：手动路由与自动路由均支持 Auth/Role/Middleware 注解扫描
  */
 class Router
 {
-    // 常量定义 - 替代魔法值
     private const AUTO_ROUTE_PREFIX = 'auto_route_';
     private const DEFAULT_CONTROLLER_NAMESPACE = 'App\Controllers';
-    private const ALLOWED_ATTRIBUTES = [
-        'Framework\Attributes\Auth',
-        'Framework\Attributes\Role',
-        'Framework\Attributes\Middleware'
-    ];
+    private const CACHE_KEY_PREFIX = 'route_match_v1_';
+    private const CACHE_TTL = 3600; // 缓存 1 小时
+
+    // 定义参数处理常量
     private const PARAM_SINGLE_KEY = 'id';
     private const PARAM_MULTI_PREFIX = 'param';
-    
-    // 缓存属性
-    private array $reflectionCache = [];      // 反射结果缓存
-    private array $classMethodCache = [];     // 类方法有效性缓存
-    
-    // 核心属性
-    private RouteCollection $allRoutes;
-    private string $controllerNamespace;
-    private ContainerInterface $container;
 
-    /**
-     * 构造函数
-     *
-     * @param RouteCollection $allRoutes 路由集合
-     * @param ContainerInterface $container 容器实例
-     * @param string $controllerNamespace 控制器命名空间
-     */
+    // 核心依赖
+    private RouteCollection $routes;
+    private ContainerInterface $container;
+    private ?CacheInterface $cache = null; // PSR-16 缓存实例
+    private string $controllerNamespace;
+
+    // 编译后的元数据缓存 (Controller::Method => Metadata Array)
+    // 生产环境可通过 loadMetadata 注入，避免运行时反射
+    private array $compiledMetadata = [];
+
+    // 运行时方法存在性缓存 (防止重复反射检查)
+    private array $methodExistenceCache = [];
+
+    // --- 安全策略配置 ---
+
+    // 是否强制要求控制器方法必须包含 #[Action] 属性才能被自动路由匹配
+    private bool $requireExplicitAction = false;
+
+    // 允许自动路由的控制器命名空间前缀白名单 (为空代表不限制)
+    private array $whitelist = [];
+
+    // 禁止自动路由的控制器命名空间前缀黑名单
+    private array $blacklist = [];
+
     public function __construct(
-        RouteCollection $allRoutes,
+        RouteCollection $routes,
         ContainerInterface $container,
         string $controllerNamespace = self::DEFAULT_CONTROLLER_NAMESPACE
     ) {
-        $this->allRoutes           = $allRoutes;
-        $this->container           = $container;
-        // 标准化命名空间，确保末尾无反斜杠
+        $this->routes = $routes;
+        $this->container = $container;
         $this->controllerNamespace = rtrim($controllerNamespace, '\\');
     }
 
     /**
-     * 匹配请求到对应的路由信息
+     * 设置缓存实例 (PSR-16)
+     * 建议注入 Redis 或 ArrayCache
+     */
+    public function setCache(CacheInterface $cache): self
+    {
+        $this->cache =app('cache');// $cache;
+        return $this;
+    }
+
+    /**
+     * 设置安全策略
      *
-     * @param Request $request 请求对象
-     * @return array|null 路由信息数组 [controller, method, params, middleware] 或 null
+     * @param bool $requireExplicitAction 是否开启显式 Action 模式
+     * @param array $whitelist 允许的命名空间前缀，例如 ['App\Controllers\Api']
+     * @param array $blacklist 禁止的命名空间前缀，例如 ['App\Controllers\Internal']
+     */
+    public function setSecurityPolicy(
+        bool $requireExplicitAction = false,
+        array $whitelist = [],
+        array $blacklist = []
+    ): self {
+        $this->requireExplicitAction = $requireExplicitAction;
+        $this->whitelist = $whitelist;
+        $this->blacklist = $blacklist;
+        return $this;
+    }
+
+    /**
+     * 加载预编译的元数据
+     * 生产环境应在引导阶段调用此方法，传入由 dumpMetadata 生成的数组
+     */
+    public function loadMetadata(array $metadata): void
+    {
+        $this->compiledMetadata = $metadata;
+    }
+
+    /**
+     * 获取当前收集到的所有元数据
+     * 用于构建脚本导出并缓存到文件
+     */
+    public function dumpMetadata(): array
+    {
+        return $this->compiledMetadata;
+    }
+
+    /**
+     * 执行路由匹配
      */
     public function match(Request $request): ?array
     {
+        // 1. URL 预处理 (去除 .html 后缀等)
         $this->preprocessRequest($request);
-        $path    = $request->getPathInfo();
-        $context = new RequestContext();
-        $context->fromRequest($request);
 
-        // 🔥 检查 版本彩蛋
+        // 2. 检查路由命中缓存 (Route Hit Cache)
+        // 如果命中缓存，直接恢复环境并返回，跳过后续所有逻辑
+		//dump($this->cache);
+        $cacheKey = $this->getCacheKey($request);
+        if ($this->cache && $cachedResult = $this->cache->get($cacheKey)) {
+            return $this->restoreFromCache($request, $cachedResult);
+        }
+
+        // 3. 彩蛋逻辑 (保持原版)
         if (EasterEgg::isTriggeredVersion($request)) {
             return EasterEgg::getRouteMarker();
         }
-
-        // 🔥 检查 团队彩蛋（团队名单）
         if (EasterEgg::isTriggeredTeam($request)) {
             return EasterEgg::getTeamRouteMarker();
         }
 
-        // 1. 尝试匹配手动/注解路由
-        $routeInfo = $this->matchManualAndAnnotationRoutes($path, $context, $request);
-        if ($routeInfo) {
-            return $routeInfo;
+        // 准备路由上下文
+        $context = (new RequestContext())->fromRequest($request);
+        $path = $request->getPathInfo();
+        $matchedRoute = null;
+
+        // 4. 尝试匹配定义路由 (Symfony Routes)
+        if ($route = $this->matchDefinedRoutes($path, $context, $request)) {
+            $matchedRoute = $route;
         }
 
-        // 2. 尝试自动解析路由 (Fallback)
-        $autoRoute = $this->matchAutoRoute($path, $request);
-        if ($autoRoute) {
-            return $autoRoute;
+        // 5. 如果未匹配，尝试自动路由 (Auto Route)
+        if (!$matchedRoute) {
+            $matchedRoute = $this->matchAutoRoute($path, $request);
+        }
+
+        // 6. 如果匹配成功，写入缓存并返回
+        if ($matchedRoute) {
+            $this->saveToCache($cacheKey, $matchedRoute);
+            return $matchedRoute;
         }
 
         return null;
     }
 
     /**
-     * 匹配手动配置和注解定义的路由
-     *
-     * @param string $path 请求路径
-     * @param RequestContext $context 请求上下文
-     * @param Request $request 请求对象
-     * @return array|null 路由信息数组或 null
+     * 匹配 Symfony 定义的静态路由
      */
-    private function matchManualAndAnnotationRoutes(string $path, RequestContext $context, Request $request): ?array
-    {
+    private function matchDefinedRoutes(
+        string $path,
+        RequestContext $context,
+        Request $request
+    ): ?array {
         try {
-            $matcher = new UrlMatcher($this->allRoutes, $context);
-            $parameters = $matcher->match($path);
+            $matcher = new UrlMatcher($this->routes, $context);
+            $params = $matcher->match($path);
 
-            $request->attributes->add($parameters);
-
-            if (!isset($parameters['_controller'])) {
+            if (!isset($params['_controller'])) {
                 return null;
             }
 
-            if (str_contains($parameters['_controller'], '::')) {
-                [$controllerClass, $actionMethod] = explode('::', $parameters['_controller'], 2);
-            } else {
-                $controllerClass = $parameters['_controller'];
-                $actionMethod = '__invoke';
-            }
+            // 解析控制器和方法
+            [$controller, $method] = str_contains($params['_controller'], '::')
+                ? explode('::', $params['_controller'], 2)
+                : [$params['_controller'], '__invoke'];
 
-            // 验证控制器方法有效性
-            if (!$this->isControllerMethodValid($controllerClass, $actionMethod)) {
+            // 验证控制器方法是否存在
+            if (!$this->isControllerMethodValid($controller, $method)) {
                 return null;
             }
 
-            return [
-                'controller' => $controllerClass,
-                'method'     => $actionMethod,
-                'params'     => $parameters,
-                'middleware' => $parameters['_middleware'] ?? [],
-            ];
-        } catch (MethodNotAllowedException | ResourceNotFoundException $e) {
-            $this->logException($e, "Route matching failed for path: {$path}");
+            // 获取元数据 (Attributes) 并合并到请求参数
+            return $this->finalizeRoute(
+                $request,
+                $controller,
+                $method,
+                $params,
+                $params['_route'] ?? 'defined_route'
+            );
+
+        } catch (MethodNotAllowedException|ResourceNotFoundException $e) {
             return null;
         }
     }
 
     /**
-     * 匹配自动路由（基于路径自动解析控制器和方法）
-     *
-     * @param string $path 请求路径
-     * @param Request $request 请求对象
-     * @return array|null 路由信息数组或 null
+     * 匹配自动推断路由 /Controller/Action/Params
      */
     private function matchAutoRoute(string $path, Request $request): ?array
     {
-        $path = rtrim($path, '/');
-        $pathSegments  = array_values(array_filter(explode('/', $path)));
-        $requestMethod = $request->getMethod();
+        $segments = array_values(array_filter(explode('/', trim($path, '/'))));
+        $method = $request->getMethod();
 
-        // 根路径 -> Home::index
-        if (empty($pathSegments)) {
-            $homeController = "{$this->controllerNamespace}\\Home";
-            if ($this->isControllerMethodValid($homeController, 'index')) {
-                return $this->finalizeAutoRoute($request, $homeController, 'index', []);
-            }
-            // 兼容旧命名 HomeController
-            $homeControllerOld = "{$this->controllerNamespace}\\HomeController";
-            if ($this->isControllerMethodValid($homeControllerOld, 'index')) {
-                 return $this->finalizeAutoRoute($request, $homeControllerOld, 'index', []);
-            }
-            return null;
+        // 根路径尝试 Home 控制器
+        if (empty($segments)) {
+            return $this->tryHomeController($request);
         }
 
-        // 多级控制器匹配
-        for ($controllerSegmentLength = count($pathSegments); $controllerSegmentLength >= 1; --$controllerSegmentLength) {
-            $controllerSegments = array_slice($pathSegments, 0, $controllerSegmentLength);
-            $controllerClass    = $this->buildControllerClassName($controllerSegments);
-
-            if (!class_exists($controllerClass)) {
+        // 倒序匹配，支持多级命名空间
+        // 例如 /Admin/User/List -> 尝试 Admin\User\ListController, Admin\User\List, Admin\UserController::list
+        for ($i = count($segments); $i >= 1; --$i) {
+            // 构建潜在的控制器类名
+            $controller = $this->buildControllerClass(array_slice($segments, 0, $i));
+            
+            // 如果类不存在，或者被安全策略拦截，则跳过
+            if (!$controller || !$this->isControllerAllowed($controller)) {
                 continue;
             }
 
-            $actionAndParamSegments = array_slice($pathSegments, $controllerSegmentLength);
-            $routeInfo              = $this->matchActionAndParams($controllerClass, $actionAndParamSegments, $requestMethod);
+            // 匹配方法和剩余参数
+            $route = $this->matchActionAndParams(
+                $controller,
+                array_slice($segments, $i),
+                $method
+            );
 
-            if ($routeInfo) {
-                return $this->finalizeAutoRoute(
+            if ($route) {
+                // 自动生成路由名称
+                $routeName = self::AUTO_ROUTE_PREFIX . md5($controller . $route['method']);
+                
+                return $this->finalizeRoute(
                     $request,
-                    $controllerClass,
-                    $routeInfo['method'],
-                    $routeInfo['params']
+                    $controller,
+                    $route['method'],
+                    $route['params'],
+                    $routeName
                 );
             }
         }
@@ -205,431 +258,376 @@ class Router
     }
 
     /**
-     * 完成自动路由的最终处理（反射扫描注解、构造路由属性）
-     *
-     * @param Request $request 请求对象
-     * @param string $controller 控制器类名
-     * @param string $method 方法名
-     * @param array $params 参数数组
-     * @return array 标准化的路由信息数组
+     * 最终化路由：提取 Attribute，注入 Request，构建返回数组
      */
-    private function finalizeAutoRoute(Request $request, string $controller, string $method, array $params): array
-    {
-        // 1. 进行反射扫描（带缓存）
-        $scannedData = $this->scanForMiddlewareAndAttributes($controller, $method);
+    private function finalizeRoute(
+        Request $request,
+        string $controller,
+        string $method,
+        array $params,
+        string $routeName
+    ): array {
+        // 核心：获取元数据 (优先查 compiledMetadata，否则反射扫描)
+        $meta = $this->getMetadata($controller, $method);
 
-        // 2. 仅透传安全的注解实例
-        $safeAttributes = [];
-        foreach ($scannedData['attributesMap'] as $attrName => $attrInst) {
-            if (in_array($attrName, self::ALLOWED_ATTRIBUTES)) {
-                $safeAttributes[$attrName] = $attrInst;
-            }
-        }
+        // 合并中间件：Defined路由参数中的中间件 + Attribute中间件
+        $mergedMiddleware = array_unique(
+            array_merge($params['_middleware'] ?? [], $meta['middleware'])
+        );
 
-        // 3. 构造标准的 attributes
-        $attributes = array_merge($params, [
-            '_controller' => $controller . '::' . $method,
-            '_route'      => self::AUTO_ROUTE_PREFIX . md5($controller . $method),
-            '_middleware' => $scannedData['middleware'],
-            '_auth'       => $scannedData['auth'],
-            '_roles'      => $scannedData['roles'],
-            '_attributes' => $safeAttributes, // 仅透传安全的注解
-        ]);
+        // 构造注入到 Request 的属性
+        $attributes = $params + [
+            '_controller' => "{$controller}::{$method}",
+            '_route'      => $routeName,
+            '_middleware' => array_values($mergedMiddleware),
+            '_auth'       => $meta['auth'],   // 注入 Auth 数据
+            '_roles'      => $meta['roles'],  // 注入 Roles 数组
+            '_attributes' => $meta['attributes_instances'], // 原始 Attribute 实例
+        ];
 
         $request->attributes->add($attributes);
 
+        // 返回结果数组 (部分数据用于缓存)
         return [
             'controller' => $controller,
             'method'     => $method,
             'params'     => $params,
-            'middleware' => $scannedData['middleware'],
+            'middleware' => array_values($mergedMiddleware),
+            // 将计算好的扁平化 Attribute 数据附带在结果中，便于缓存恢复
+            '__meta_flat' => [
+                '_auth'  => $meta['auth'],
+                '_roles' => $meta['roles'],
+                // 注意：attributes_instances 包含对象，序列化可能较重，
+                // 如果缓存驱动不支持对象序列化，这里需要剔除或特殊处理。
+                // 假设 PSR-16 驱动支持 serialize。
+            ]
         ];
     }
 
     /**
-     * 反射扫描控制器和方法上的注解，提取中间件、权限等信息（带缓存）
-     *
-     * @param string $controller 控制器完整类名
-     * @param string $method 方法名
-     * @return array {
-     *     @var array $middleware 中间件列表
-     *     @var array $attributesMap 安全的注解实例映射
-     *     @var bool|null $auth 是否需要认证
-     *     @var array $roles 所需角色列表
-     * }
+     * 安全策略检查：控制器是否允许访问
      */
-    private function scanForMiddlewareAndAttributes(string $controller, string $method): array
+    private function isControllerAllowed(string $controller): bool
     {
-        // 生成缓存键
-        $cacheKey = md5($controller . '::' . $method);
-        if (isset($this->reflectionCache[$cacheKey])) {
-            return $this->reflectionCache[$cacheKey];
+        // 1. 黑名单检查 (优先)
+        foreach ($this->blacklist as $blocked) {
+            if (str_starts_with($controller, $blocked)) {
+                return false;
+            }
         }
 
+        // 2. 白名单检查 (如果有配置)
+        if (!empty($this->whitelist)) {
+            foreach ($this->whitelist as $allowed) {
+                if (str_starts_with($controller, $allowed)) {
+                    return true;
+                }
+            }
+            // 配置了白名单但未匹配中
+            return false;
+        }
+
+        // 默认允许
+        return true;
+    }
+
+    /**
+     * 获取元数据：从预编译数组读取 或 实时扫描
+     */
+    private function getMetadata(string $controller, string $method): array
+    {
+        $key = "{$controller}::{$method}";
+
+        if (isset($this->compiledMetadata[$key])) {
+            return $this->compiledMetadata[$key];
+        }
+
+        // 实时扫描并写入内存缓存 (以便 dumpMetadata 可以获取)
+        return $this->compiledMetadata[$key] = $this->scanAttributes($controller, $method);
+    }
+
+    /**
+     * 扫描 Attributes (Reflection)
+     */
+    private function scanAttributes(string $controller, string $method): array
+    {
         $middleware = [];
-        $attributesMap = [];
         $auth = null;
         $roles = [];
+        $attributeInstances = []; // 存储原始 Attribute 实例 (Role, Auth 对象)
 
         try {
-            $refClass = new \ReflectionClass($controller);
-            $refMethod = $refClass->getMethod($method);
+            $rc = new ReflectionClass($controller);
+            $rm = $rc->getMethod($method);
 
-            // 合并类级和方法级的 Attributes
-            $allAttributes = array_merge($refClass->getAttributes(), $refMethod->getAttributes());
+            // 合并类级别和方法级别的 Attributes
+            $attributes = array_merge($rc->getAttributes(), $rm->getAttributes());
 
-            foreach ($allAttributes as $attr) {
-                // 排除路由注解 (自动路由模式下不需要处理它们)
-                if (in_array($attr->getName(), [
-                    'Framework\Attributes\Route',
-                    'Framework\Attributes\Routes\Prefix',
-                    'Framework\Attributes\Routes\BaseMapping'
-                ])) {
-                    continue;
-                }
-
+            foreach ($attributes as $attr) {
                 try {
-                    $inst = $attr->newInstance();
-                    $attributesMap[$attr->getName()] = $inst;
+                    $instance = $attr->newInstance();
 
-                    // 1. 提取中间件 (检查接口)
-                    if ($inst instanceof MiddlewareProviderInterface) {
-                        $provided = $inst->getMiddleware();
-                        $candidates = is_array($provided) ? $provided : [$provided];
-                        foreach ($candidates as $mid) {
-                            if (is_string($mid) && !empty($mid)) {
-                                $middleware[] = $mid;
+                    // 收集 Middleware
+                    if ($instance instanceof MiddlewareProviderInterface) {
+                        foreach ((array) $instance->getMiddleware() as $m) {
+                            if (is_string($m) && $m !== '') {
+                                $middleware[] = $m;
                             }
                         }
                     }
 
-                    // 2. 兼容 Auth/Roles 数据提取
-                    if ($inst instanceof \Framework\Attributes\Auth) {
-                        $auth = $inst->required ?? true;
-                    }
-                    if ($inst instanceof \Framework\Attributes\Role) {
-                        $roles = array_merge($roles, $inst->roles ?? []);
+                    // 收集 Auth
+                    if ($instance instanceof Auth) {
+                        $auth = $instance->required; // 假设 Auth 有 required 属性
+                        $attributeInstances[Auth::class] = $instance;
                     }
 
-                } catch (\Throwable $e) {
-                    $this->logException($e, "Annotation instantiation failed for {$attr->getName()}");
+                    // 收集 Role
+                    if ($instance instanceof Role) {
+                        $roles = array_merge($roles, $instance->roles); // 假设 Role 有 roles 数组
+                        $attributeInstances[Role::class] = $instance;
+                    }
+
+                } catch (Throwable $e) {
+                    // 忽略无法实例化的 Attribute
                     continue;
                 }
             }
-        } catch (\ReflectionException $e) {
-            $this->logException($e, "Reflection failed for {$controller}::{$method}");
+        } catch (Throwable $e) {
+            $this->logException($e, "Attribute scan failed for {$controller}::{$method}");
         }
 
-        $result = [
-            'middleware'    => array_values(array_unique($middleware)),
-            'attributesMap' => $attributesMap,
-            'auth'          => $auth,
-            'roles'         => array_values(array_unique($roles)),
+        return [
+            'middleware'           => array_values(array_unique($middleware)),
+            'auth'                 => $auth,
+            'roles'                => array_values(array_unique($roles)),
+            'attributes_instances' => $attributeInstances,
         ];
+    }
+
+    /**
+     * 从缓存恢复请求状态
+     */
+    private function restoreFromCache(Request $request, array $cachedRoute): array
+    {
+        // 恢复基本的 Request Attributes
+        $attributes = $cachedRoute['params'] ?? [];
+        $attributes['_controller'] = $cachedRoute['controller'] . '::' . $cachedRoute['method'];
+        $attributes['_middleware'] = $cachedRoute['middleware'] ?? [];
+
+        // 恢复元数据 (Auth, Roles 等)
+        if (isset($cachedRoute['__meta_flat'])) {
+            $attributes = array_merge($attributes, $cachedRoute['__meta_flat']);
+        }
+
+        // 注意：如果需要 _attributes (对象实例)，需要确保 saveToCache 时序列化了它们
+        // 这里为了性能和安全性，建议业务代码直接从 _auth / _roles 读取简单类型数据，
+        // 而不是依赖对象实例。如果必须依赖对象，cache 必须支持对象序列化。
+
+        $request->attributes->add($attributes);
+        return $cachedRoute;
+    }
+
+    /**
+     * 写入缓存
+     */
+    private function saveToCache(string $key, array $route): void
+    {
+        if (!$this->cache) {
+            return;
+        }
+
+        // 我们直接存储 route 数组，包含 __meta_flat
+        // 确保没有不可序列化的资源 (Resources)
+        $this->cache->set($key, $route, self::CACHE_TTL);
+    }
+
+    private function getCacheKey(Request $request): string
+    {
+        // Key 必须包含 Method 和 Path
+        return self::CACHE_KEY_PREFIX . md5($request->getMethod() . $request->getPathInfo());
+    }
+
+    private function buildControllerClass(array $segments): ?string
+    {
+        $segments = array_map(
+            fn($s) => preg_replace('/[^a-zA-Z0-9_]/', '', $s),
+            $segments
+        );
+
+        if (!$segments) {
+            return null;
+        }
+
+        $segments = array_map('ucfirst', $segments);
         
-        // 存入缓存
-        $this->reflectionCache[$cacheKey] = $result;
-        return $result;
-    }
-	
-    /**
-     * 构建控制器完整类名（支持多级命名空间，过滤危险字符）
-     * 例：[api, v2, user] → App\Controllers\Api\V2\UserController
-     *
-     * @param array $segments 路径段数组
-     * @return string 控制器完整类名
-     */
-    private function buildControllerClassName(array $segments): string
-    {
-        // 过滤路径段中的危险字符（如 ..、/、\ 等），仅保留字母数字和下划线 $segment = preg_replace('/[^a-zA-Z0-9_]/', '', $segment);
-        $segments = array_map(function ($segment) {
-            return preg_replace('/[^a-zA-Z0-9_]/', '', $segment);
-        }, $segments);
-        $segments = array_filter($segments); // 移除空段
-
-        if (empty($segments)) {
-            // 先尝试 Home，再尝试 HomeController
-            $homeClass = "{$this->controllerNamespace}\\Home";
-            if (class_exists($homeClass)) {
-                return $homeClass;
-            }
-            return "{$this->controllerNamespace}\\HomeController";
+        // 尝试1: 完整命名空间类 (App\Controllers\Admin\User)
+        $base = $this->controllerNamespace . '\\' . implode('\\', $segments);
+        if (class_exists($base)) {
+            return $base;
         }
 
-        // 尝试不加后缀的类名
-        $namespaceSegments      = array_map('ucfirst', $segments);
-        $classNameWithoutSuffix = $this->controllerNamespace . '\\' . implode('\\', $namespaceSegments);
+        // 尝试2: 带有 Controller 后缀 (App\Controllers\Admin\UserController)
+        $segments[count($segments) - 1] .= 'Controller';
+        $fallback = $this->controllerNamespace . '\\' . implode('\\', $segments);
 
-        if (class_exists($classNameWithoutSuffix)) {
-            return $classNameWithoutSuffix;
-        }
-
-        // 回退：加 Controller 后缀（兼容旧命名）
-        $lastSegment = array_pop($namespaceSegments);
-        $lastSegment .= 'Controller';
-        $namespaceSegments[] = $lastSegment;
-		
-		$className = $this->controllerNamespace . '\\' . ucwords(implode('\\', $segments));
-		if (!class_exists($className)) {
-			return '';
-		}
-		return $className;
-        #return $this->controllerNamespace . '\\' . implode('\\', $namespaceSegments);
+        return class_exists($fallback) ? $fallback : null;
     }
 
-    /**
-     * 匹配动作名和参数（自动路由核心）
-     *
-     * @param string $controllerClass 控制器类名
-     * @param array $segments 路径段
-     * @param string $requestMethod 请求方法
-     * @return array|null [method, params] 或 null
-     */
-    private function matchActionAndParams(string $controllerClass, array $segments, string $requestMethod): ?array
-    {
-        // 获取控制器的有效公共方法（排除魔术方法和构造方法）
-        if (!$this->getValidControllerMethods($controllerClass)) {
-            return null;
-        }
-        $availableMethods = $this->getValidControllerMethods($controllerClass);
-        $paramSegments    = [];
+    private function matchActionAndParams(
+        string $controller,
+        array $segments,
+        string $httpMethod
+    ): ?array {
+        // 获取有效方法列表 (已应用 Action 过滤策略)
+        $methods = $this->getValidControllerMethods($controller);
 
-        // 1. 无动作段：使用RESTful默认动作（如GET → index/show，POST → store）
-        if (empty($segments)) {
-            $defaultAction = $this->getRestDefaultAction($requestMethod);
-            if (in_array($defaultAction, $availableMethods)) {
-                return [
-                    'method' => $defaultAction,
-                    'params' => [],
-                ];
-            }
-            return null;
+        // 如果没有 URL 片段，尝试 RESTful 默认动作 (index, store...)
+        if (!$segments) {
+            $action = $this->getRestAction($httpMethod);
+            return in_array($action, $methods, true)
+                ? ['method' => $action, 'params' => []]
+                : null;
         }
 
-        // 2. 有动作段：从短到长尝试匹配动作名（支持多段动作名）
-        for ($actionSegmentLength = 1; $actionSegmentLength <= count($segments); ++$actionSegmentLength) {
-            $actionSegments = array_slice($segments, 0, $actionSegmentLength);
-            $paramSegments  = array_slice($segments, $actionSegmentLength);
+        // 尝试匹配 Action 和参数
+        // 贪婪匹配：优先匹配更长的 Action 名称
+        // 例如 /User/Get/Info -> 优先匹配 getInfo(), 参数无
+        // 其次匹配 get(), 参数 Info
+        for ($i = count($segments); $i >= 1; --$i) {
+             // 修正逻辑：原版是从 1 递增，这里建议倒序或正序根据业务习惯
+             // 这里采用标准逻辑：尝试把 segments[0...i] 组合成方法名
+             $actionName = $this->buildActionName(array_slice($segments, 0, $i));
+             
+             if (in_array($actionName, $methods, true)) {
+                 return [
+                     'method' => $actionName,
+                     'params' => $this->extractParams(array_slice($segments, $i)),
+                 ];
+             }
+        }
 
-            // 构建动作名（多段转为驼峰式，如 [show, profile] → showProfile）
-            $actionMethod = $this->buildActionName($actionSegments);
-
-            // 动作不存在，跳过当前长度
-            if (!in_array($actionMethod, $availableMethods)) {
-                continue;
-            }
-
-            // 3. 提取参数（单参数默认映射id，多参数映射param1/param2...）
-            $params = $this->extractParamsFromSegments($paramSegments);
-
+        // 最后尝试：RESTful 默认动作，剩余全部作为参数
+        $fallback = $this->getRestAction($httpMethod);
+        if (in_array($fallback, $methods, true)) {
             return [
-                'method' => $actionMethod,
-                'params' => $params,
-            ];
-        }
-
-        // 4. 无匹配动作：尝试REST默认动作（如 /user/1 → GET → show(id=1)）
-        $defaultAction = $this->getRestDefaultAction($requestMethod);
-        if (in_array($defaultAction, $availableMethods)) {
-            $params = $this->extractParamsFromSegments($segments);
-            return [
-                'method' => $defaultAction,
-                'params' => $params,
+                'method' => $fallback,
+                'params' => $this->extractParams($segments)
             ];
         }
 
         return null;
     }
 
-
-	/**
-	 * 获取控制器的有效公共方法（排除魔术方法和构造方法）
-	 *
-	 * @param string $controllerClass 控制器类名
-	 * @return array|null 有效方法名数组或 null
-	 */
-	private function getValidControllerMethods(string $controllerClass): ?array
-	{
-		$cacheKey = md5("valid_methods_{$controllerClass}");
-		if (isset($this->classMethodCache[$cacheKey])) {
-			return $this->classMethodCache[$cacheKey];
-		}
-
-		if (!class_exists($controllerClass)) {
-			$this->classMethodCache[$cacheKey] = null;
-			return null;
-		}
-
-		$refClass = new \ReflectionClass($controllerClass);
-		$methods = array_filter(
-			$refClass->getMethods(\ReflectionMethod::IS_PUBLIC),
-			function (\ReflectionMethod $method) {
-				$methodName = $method->getName();
-				// 排除魔术方法（以 __ 开头）和构造方法
-				return !(str_starts_with($methodName, '__') && $methodName !== '__construct') 
-					   && $methodName !== '__construct';
-			}
-		);
-
-		$methodNames = array_map(fn(\ReflectionMethod $m) => $m->getName(), $methods);
-		$this->classMethodCache[$cacheKey] = $methodNames;
-
-		return $methodNames;
-	}
-
     /**
-     * 构建动作名（多段转为驼峰式）
-     *
-     * @param array $segments 路径段数组
-     * @return string 驼峰式动作名
+     * 获取控制器中有效的 public 方法列表
+     * 应用 requireExplicitAction 策略
      */
+    private function getValidControllerMethods(string $class): array
+    {
+        if (isset($this->methodExistenceCache[$class])) {
+            return $this->methodExistenceCache[$class];
+        }
+
+        try {
+            $rc = new ReflectionClass($class);
+            $validMethods = [];
+
+            foreach ($rc->getMethods(ReflectionMethod::IS_PUBLIC) as $m) {
+                // 忽略构造函数和魔术方法
+                if ($m->isConstructor() || str_starts_with($m->getName(), '__')) {
+                    continue;
+                }
+
+                // 策略检查：如果开启显式模式，必须有 #[Action]
+                if ($this->requireExplicitAction) {
+                    if (empty($m->getAttributes(Action::class))) {
+                        continue;
+                    }
+                }
+
+                $validMethods[] = $m->getName();
+            }
+
+            return $this->methodExistenceCache[$class] = $validMethods;
+        } catch (Throwable $e) {
+            return $this->methodExistenceCache[$class] = [];
+        }
+    }
+
     private function buildActionName(array $segments): string
     {
-        if (empty($segments)) {
-            return 'index';
-        }
-        // 首字母小写，后续段首字母大写（如 [user, list] → userList）
+        // convert ['user', 'profile'] to 'userProfile'
         return lcfirst(implode('', array_map('ucfirst', $segments)));
     }
 
-    /**
-     * 从路径段提取参数
-     *
-     * @param array $segments 路径段数组
-     * @return array 参数数组
-     */
-    private function extractParamsFromSegments(array $segments): array
+    private function extractParams(array $segments): array
     {
-        $params       = [];
-        $segmentCount = count($segments);
-
-        // 单参数：默认映射为id（如 /user/1 → id=1）
-        if ($segmentCount === 1) {
-            $params[self::PARAM_SINGLE_KEY] = $segments[0];
+        if (empty($segments)) {
+            return [];
         }
-        // 多参数：按顺序映射为param1/param2...（如 /user/search/1/admin → param1=1, param2=admin）
-        elseif ($segmentCount > 1) {
-            foreach ($segments as $key => $value) {
-                $params[self::PARAM_MULTI_PREFIX . ($key + 1)] = $value;
-            }
+        if (count($segments) === 1) {
+            return [self::PARAM_SINGLE_KEY => $segments[0]];
         }
 
+        $params = [];
+        foreach ($segments as $i => $v) {
+            $params[self::PARAM_MULTI_PREFIX . ($i + 1)] = $v;
+        }
         return $params;
     }
 
-    /**
-     * 根据HTTP方法获取RESTful默认动作
-     *
-     * @param string $method HTTP请求方法
-     * @return string 对应的默认动作名
-     */
-    private function getRestDefaultAction(string $method): string
+    private function getRestAction(string $method): string
     {
         return match (strtoupper($method)) {
-            'GET'    => 'index',
             'POST'   => 'store',
-            'PUT'    => 'update',
-            'PATCH'  => 'update', // 支持PATCH方法（HTTP标准更新方法）
+            'PUT',
+            'PATCH'  => 'update',
             'DELETE' => 'destroy',
-            default  => 'index'
+            default  => 'index',
         };
     }
 
-    /**
-     * 请求预处理：中间件+URL后缀处理
-     *
-     * @param Request $request 请求对象
-     */
+    private function tryHomeController(Request $request): ?array
+    {
+        foreach (['Home', 'HomeController'] as $name) {
+            $class = "{$this->controllerNamespace}\\{$name}";
+            if ($this->isControllerMethodValid($class, 'index')) {
+                // 使用 finalizeRoute 确保走统一的元数据加载逻辑
+                return $this->finalizeRoute(
+                    $request, 
+                    $class, 
+                    'index', 
+                    [], 
+                    self::AUTO_ROUTE_PREFIX . 'home'
+                );
+            }
+        }
+        return null;
+    }
+
+    private function isControllerMethodValid(string $class, string $method): bool
+    {
+        return class_exists($class)
+            && in_array($method, $this->getValidControllerMethods($class), true);
+    }
+
     private function preprocessRequest(Request $request): void
     {
-        // 处理PUT/DELETE请求（通过表单隐藏字段_method）
-        // $this->applyMethodOverrideMiddleware($request);
-        // 去除URL的.html后缀（如 /user/1.html → /user/1）
-        $this->removeHtmlSuffix($request);
-    }
-
-    /**
-     * 应用MethodOverride中间件
-     *
-     * @param Request $request 请求对象
-     */
-    private function applyMethodOverrideMiddleware(Request $request): void
-    {
-        $methodOverride = new MiddlewareDispatcher($this->container);
-        $methodOverride->dispatch($request, function ($req) {
-            return new \Symfony\Component\HttpFoundation\Response();
-        });
-    }
-
-    /**
-     * 安全移除URL的.html后缀
-     *
-     * @param Request $request 请求对象
-     */
-    private function removeHtmlSuffix(Request $request): void
-    {
-        $originalPath = $request->getPathInfo();
-        // 仅匹配末尾的 .html 后缀，避免误处理含多个点的路径
-        if (str_ends_with($originalPath, '.html')) {
-            $cleanPath = substr($originalPath, 0, -5); // 移除末尾的 .html
-            // 安全验证：确保新路径仅包含合法字符
-            if (preg_match('/^[a-zA-Z0-9_\/-]+$/', $cleanPath)) {
-                $newUri = str_replace($originalPath, $cleanPath, $request->getUri());
-                $request->server->set('REQUEST_URI', $newUri);
-                // 重新初始化请求（确保路径生效）
-                $request->initialize(
-                    $request->query->all(),
-                    $request->request->all(),
-                    $request->attributes->all(),
-                    $request->cookies->all(),
-                    $request->files->all(),
-                    $request->server->all(),
-                    $request->getContent()
+        if (str_ends_with($request->getPathInfo(), '.html')) {
+            $clean = substr($request->getPathInfo(), 0, -5);
+            if (preg_match('#^[a-zA-Z0-9/_-]+$#', $clean)) {
+                $request->server->set(
+                    'REQUEST_URI',
+                    str_replace($request->getPathInfo(), $clean, $request->getUri())
                 );
             }
         }
     }
 
-    /**
-     * 验证控制器和方法是否有效
-     *
-     * @param string $controller 控制器类名
-     * @param string $method 方法名
-     * @return bool 有效返回true，否则返回false
-     */
-    private function isControllerMethodValid(string $controller, string $method): bool
+    private function logException(Throwable $e, string $context): void
     {
-        $cacheKey = md5("valid_{$controller}::{$method}");
-        if (isset($this->classMethodCache[$cacheKey])) {
-            return $this->classMethodCache[$cacheKey];
-        }
-
-        $isValid = false;
-        if (class_exists($controller)) {
-            $validMethods = $this->getValidControllerMethods($controller);
-            $isValid = $validMethods && in_array($method, $validMethods);
-        }
-
-        $this->classMethodCache[$cacheKey] = $isValid;
-        return $isValid;
-    }
-
-    /**
-     * 记录异常日志
-     * 可替换为框架的日志组件（如 Monolog）
-     *
-     * @param \Throwable $e 异常对象
-     * @param string $context 上下文描述
-     */
-    private function logException(\Throwable $e, string $context): void
-    {
-        error_log(sprintf(
-            '[Router] %s: %s (File: %s, Line: %d, Trace: %s)',
-            $context,
-            $e->getMessage(),
-            $e->getFile(),
-            $e->getLine(),
-            $e->getTraceAsString()
-        ));
+        // 建议替换为 Psr\Log\LoggerInterface
+        error_log("[Router] {$context}: {$e->getMessage()}");
     }
 }

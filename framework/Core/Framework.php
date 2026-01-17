@@ -19,6 +19,7 @@ namespace Framework\Core;
 use Framework\Container\Container;
 use Framework\Middleware\MiddlewareDispatcher;
 use Psr\Log\LoggerInterface;
+use Psr\SimpleCache\CacheInterface;
 use RuntimeException;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -193,6 +194,28 @@ final class Framework
 			#$this->logger,
             self::CONTROLLER_NAMESPACE
         );
+		// 4. 从容器获取缓存实例
+		$cacheService = app('cache');
+
+		// 5. 注入到 Router
+		// 必须做类型检查，因为 Router 强类型要求 Psr\SimpleCache\CacheInterface
+		if ($cacheService instanceof CacheInterface) {
+			$this->router->setCache($cacheService);
+		} else {
+			// 假如你的 cache 是 PSR-6 (Symfony CacheItemPool)，可以用适配器转一下
+			// $psr16Cache = new \Symfony\Component\Cache\Psr16Cache($cacheService);
+			// $router->setCache($psr16Cache);
+			
+			// 或者记录个日志警告
+			error_log("Warning: app('cache') does not implement PSR-16 SimpleCache.");
+		}
+		
+		// 6. 配置安全策略 (可选，但推荐)
+		$this->router->setSecurityPolicy(
+			requireExplicitAction: false, // 默认关闭，建议开启，强制要求 #[Action]
+			blacklist: []
+		);
+		
     }
 
     /**
