@@ -38,7 +38,7 @@ class MiddlewareDispatcher
         ContextInitMiddleware::class,
         MethodOverrideMiddleware::class,
         CorsMiddleware::class,
-        #CsrfTokenGenerateMiddleware::class,
+        CsrfTokenGenerateMiddleware::class,
 		RateLimitMiddleware::class,
         #CircuitBreakerMiddleware::class, //熔断中间件，正式环境使用，开发环境直接溢出错误堆栈
         IpBlockMiddleware::class,

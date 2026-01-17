@@ -81,7 +81,12 @@ class AttributeInjector
     public static function inject(object $instance): void
     {
         $className = get_class($instance);
-
+		
+		// 增加类名验证
+		if (!class_exists($className)) {
+			throw new RuntimeException("Class {$className} does not exist");
+		}
+		
         // 1. Get injection metadata (parse first if not in cache)
         // Using cache to optimize performance for multiple instances of the same class
         if (!isset(self::$metadataCache[$className])) {

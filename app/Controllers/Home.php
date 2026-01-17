@@ -186,13 +186,40 @@ class Home
 	
 	public function index2(Request $request)
 	{
+		$uid = $request->query->getInt('uid', 1);
 		
-		dump($this->logRep->setTenantFilterEnabled(false)->findAll(['uid' => 1]));//禁止租户id
-		($this->logRep)->setTenantFilterEnabled(true);//解除多租户限制
 		
-		($this->logRep)::superAdminDisableTenantFilter();
-		dump($this->logRep->findAll(['id' =>['>' ,3]]));//在不解除之前，这也会默认禁止租户id
-		($this->logRep)::superAdminRestoreTenantFilter();
+		TenantContext::setTenantId(null); 
+		TenantContext::restore(); // 清除忽略状态
+			
+		try {
+			// 3. 设置当前请求的上下文
+			TenantContext::setTenantId((int)$uid);
+
+			// 4. 执行业务逻辑
+			$result1 = $this->userRepo->findAll(['id' => ['>', 3]]);
+			// dump($result1->toArray()); 
+			// 注意：在 Workerman 中 dump 直接输出到控制台，浏览器看不到。建议 return json($result);
+
+			$result2 = $this->userRepo->findAll(['id' => ['<=', 3]]);
+			
+			#dump($result1);
+			
+			return json_encode([
+				'tenant_id' => TenantContext::getTenantId(),
+				'data_gt_3' => $result1,
+				'data_lte_3' => $result2,
+			]);
+
+		} catch (\Throwable $e) {
+			return json_encode(['error' => $e->getMessage()], 500);
+		} finally {
+			// 5. 【核心安全步骤】请求结束前，强制清空上下文！
+			// 这一步在 Workerman/Swoole 中是必须的，否则下个请求会复用这个 ID
+			TenantContext::setTenantId(null);
+			TenantContext::restore();
+		}
+
 	}
 	
 	##[Auth(required: true, roles: ['admin', 'editor'], guard: 'index')]
