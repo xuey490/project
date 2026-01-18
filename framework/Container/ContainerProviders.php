@@ -129,22 +129,6 @@ class ContainerProviders
         }
     }
 
-    public function bootProviders1($container): void
-    {
-        foreach ($this->loadedProviders as $provider) {
-            // 如果还是配置阶段（Configurator），则延迟执行
-            if ($container instanceof ContainerConfigurator) {
-                $this->pendingBoot[] = $provider;
-                continue;
-            }
-
-            // 进入这里说明已经是最终容器（Framework\Container\Container 或 ContainerBuilder）
-            if (method_exists($provider, 'boot')) {
-                $provider->boot($container);
-            }
-        }
-    }
-
     /**
      * 自动获取 Composer 的 PSR-4 映射路径.
      */
