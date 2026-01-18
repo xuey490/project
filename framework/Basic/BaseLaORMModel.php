@@ -483,22 +483,6 @@ class BaseLaORMModel extends Model
     }
 
     // ================= 雪花算法部分优化 =================
-
-    /**
-     * 生成雪花ID
-     */
-    public static function generateSnowflakeID1(): int
-    {
-        if (self::$snowflake === null) {
-            // 优化：从配置读取 WorkerId 和 DataCenterId
-            // 确保不同服务器配置不同，否则ID会冲突
-            $workerId = (int) config('app.snowflake_worker_id', 1);
-            $dataCenterId = (int) config('app.snowflake_datacenter_id', 1);
-            
-            self::$snowflake = new Snowflake($workerId, $dataCenterId);
-        }
-        return self::$snowflake->nextId();
-    }
 	
 	/**
 	 * 生成雪花ID（公共静态方法，支持外部调用）

@@ -321,7 +321,7 @@ class Home
 			dump($user);
 		#$user->restoreTenant();
 			//通用插入
-		
+		/*
 		$user =App::make( Custom::class);
         // 2. 给模型属性赋值（对应数据库表字段）
         $user->name = '8888888';
@@ -344,7 +344,7 @@ class Home
             $string =  "插入失败：" . $user->getError();
         }
 		dump( $string );
-		
+		*/
 		
 		
 		
