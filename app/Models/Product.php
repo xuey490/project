@@ -8,7 +8,7 @@ class Product extends \Framework\Utils\BaseModel
 {
     use SoftDeletes;
 
-    protected $table = 'products';
+    protected $table = 'article';
 	
     // 定义允许批量赋值和作为搜索条件的字段
     protected $fillable = ['name', 'category_id', 'price', 'stock', 'sales', 'status', 'is_hot'];

@@ -13,7 +13,7 @@ namespace App\Models;
 class Admin extends \Framework\Utils\BaseModel
 {
     // 移除这行，让 ORM 自动根据模型类名推断表名并应用前缀
-    // protected $table = 'admin';
+    protected $name = 'admin';
 
     protected $pk = 'id'; // 主键名称
 

@@ -26,12 +26,16 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Framework\Core\Framework;
 #use Symfony\Component\HttpFoundation\Session\Session;
 #use Symfony\Component\HttpFoundation\Session\Storage\NativeSessionStorage;
+use Framework\Schema\SchemaWarmup;
+use Framework\Schema\SchemaRegistry;
 
 
 if (php_sapi_name() !== 'cli') {
     // 如果不是 CLI（即通过 FPM 被包含），什么也不做 -- 以保证 FPM 传统模式兼容
     return;
 }
+
+define('WORKERMAN_ENV' , true);
 
 
 require_once __DIR__ . '/vendor/autoload.php';
@@ -388,7 +392,25 @@ if (isWorkerProcess()) {
         update_health();
 
         $framework = Framework::getInstance();
-		
+
+		// 设置扫描目录和命名空间
+		SchemaWarmup::setScanPath(base_path('app/Models'), 'App\Models');
+
+		// 可选：忽略某些模型
+		SchemaWarmup::ignore([
+			\App\Models\TempView::class,
+		]);
+
+		// 启动时自动扫描 warmup
+		SchemaWarmup::warmupAll();
+
+		// 冻结 schema，防止 runtime 注册新表
+		SchemaRegistry::freeze();
+
+		// 调试：打印已注册表
+		//dump(array_keys(SchemaRegistry::all()));
+			
+			
         // 定时任务：监控内存 + 日志轮转 + 健康记录
 	
 		Timer::add(MEMORY_CHECK_INTERVAL, function() use ($worker) {
@@ -399,7 +421,7 @@ if (isWorkerProcess()) {
 			$pid = getmypid();
 			$memory = memory_get_usage(true) / 1024 / 1024; // MB
 			$time = date('Y-m-d H:i:s');
-
+			#Worker::log(base_path());
 			Worker::log("[{$time}] [Memory] Worker #{$worker->id} PID {$pid} uses {$memory} MB\n" );
 
 			// 如果超出阈值，则安全重启当前 worker
