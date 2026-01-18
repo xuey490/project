@@ -197,18 +197,19 @@ class Home
 			TenantContext::setTenantId((int)$uid);
 
 			// 4. 执行业务逻辑
-			$result1 = $this->userRepo->findAll(['id' => ['>', 3]]);
+			$result1 = $this->userRepo->findById(1);
+			#$result1 = $this->userRepo->findAll(['id' => ['>', 3]]);
 			// dump($result1->toArray()); 
 			// 注意：在 Workerman 中 dump 直接输出到控制台，浏览器看不到。建议 return json($result);
 
-			$result2 = $this->userRepo->findAll(['id' => ['<=', 3]]);
+			$result2 = $this->userRepo->findAll(['id' => ['>=', 3]]);
 			
 			#dump($result1);
 			
 			return json_encode([
 				'tenant_id' => TenantContext::getTenantId(),
-				'data_gt_3' => $result1,
-				'data_lte_3' => $result2,
+				'result1' => $result1,
+				'result2' => $result2,
 			]);
 
 		} catch (\Throwable $e) {
@@ -225,7 +226,7 @@ class Home
 	##[Auth(required: true, roles: ['admin', 'editor'], guard: 'index')]
     public function index1(Request $request)
     {
-		TenantContext::setTenantId(2);
+		TenantContext::setTenantId(1);
 		
         // session测试
         $session = app('session');
@@ -317,30 +318,32 @@ class Home
         //$user1 =App::make( Custom::class);
 		
 		$user = App::make( Custom::class)->find(4152260622576254976);//更新操作
-			dump($user->toArray());
+			dump($user);
 		#$user->restoreTenant();
 			//通用插入
-		/*
+		
 		$user =App::make( Custom::class);
         // 2. 给模型属性赋值（对应数据库表字段）
-        $user->name = '9999';
+        $user->name = '8888888';
         $user->englishname = '777';
         $user->nickname = '王111';
         $user->email = 'test11@example.com';
         $user->group_id = 101;
         #$user->created_at = time(); // 若开启自动时间戳，可省略
-        $user->setPkGenerateType('snowflake'); // 强行临时切换为雪花ID
+        //$user->setPkGenerateType('snowflake'); // 强行临时切换为雪花ID
         // 3. 调用save()方法插入数据
         $result = $user->save();
+
         if ($result) {
             // 获取插入后的自增主键ID
             $insertId = $user->id;
             $string =  "插入成功，主键ID：{$insertId}";
+			
         } else {
             // 获取错误信息
             $string =  "插入失败：" . $user->getError();
         }
-		*/
+		dump( $string );
 		
 		
 		
@@ -421,7 +424,7 @@ class Home
 
 		
 		#TenantContext::setTenantId(1);
-		$userList1 = ($this->userRepo)(\App\Models\User::class)->where('id','>', 1)->get()->toArray();//默认带租户id
+		$userList1 = ($this->userRepo)(\App\Models\User::class)->where('id','>', 1)->get();//默认带租户id
 		#$userList1 = ($this->userRepo)(\App\Models\User::class)->withoutTenancy()->where('status', 1)->get()->toArray();//取消带租户id限制
 		dump($userList1);
 		
@@ -447,7 +450,6 @@ $user = Custom::withoutTenancy()->find(4152260622576254976);
 		
 		
 		
-		($this->userRepo)::superAdminDisableTenantFilter();
 		#dump($this->userRepo->findByArrayId([1,2,3]));
 		#($this->userRepo)::superAdminRestoreTenantFilter();
 		

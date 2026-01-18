@@ -1,90 +1,98 @@
 <?php
-
 declare(strict_types=1);
-
-/**
- * This file is part of FssPHP Framework.
- *
- * @link     https://github.com/xuey490/project
- * @license  https://github.com/xuey490/project/blob/main/LICENSE
- *
- * @Filename: %filename%
- * @Date: 2025-12-6
- * @Developer: xuey863toy
- * @Email: xuey863toy@gmail.com
- */
 
 namespace Framework\Repository;
 
-/**
- * Interface RepositoryInterface
- * 定义通用的数据仓库操作标准
- */
+use Framework\Repository\Exceptions\DatabaseException;
+
 interface RepositoryInterface
 {
     /**
-     * 根据主键查找
-     * @param array $relations 预加载关联模型，如 ['profile', 'orders']
+     * 根据ID查找记录
+     * @throws DatabaseException
      */
-    public function findById(int|string $id, array $relations = []): mixed;
+    public function findById(int|string $id, array $with = []): mixed;
 
     /**
-     * 根据条件查找单条
+     * 根据条件查找单条记录
+     * @throws DatabaseException
      */
-    public function findOneBy(array $criteria, array $relations = []): mixed;
+    public function findOneBy(array $criteria, array $with = []): mixed;
 
     /**
      * 根据条件查找多条记录
-     * @param array $criteria 查询条件 ['status' => 1]
-     * @param array $orderBy  排序 ['id' => 'desc']
-     * @param int|null $limit 限制条数
+     * @throws DatabaseException
      */
-    public function findAll(array $criteria = [], array $orderBy = [], ?int $limit = null, array $relations = []): mixed;
+    public function findAll(array $criteria = [], array $orderBy = [], ?int $limit = null, array $with = []): mixed;
 
     /**
      * 分页查询
+     * @throws DatabaseException
      */
-    public function paginate(array $criteria = [], int $perPage = 15, array $orderBy = [], array $relations = []): mixed;
-
+    public function paginate(array $criteria = [], int $perPage = 15, array $orderBy = [], array $with = []): mixed;
 
     /**
-     * 创建数据
+     * 创建记录
+     * @throws DatabaseException
      */
     public function create(array $data): mixed;
 
     /**
-     * 更新数据
-     * @param int|string $id 主键
-     * @param array $data 更新内容
+     * 更新记录
+     * @throws DatabaseException
      */
-    public function update(int|string $id, array $data): bool;
+    public function update(array $criteria, array $data): bool;
 
     /**
-     * 删除数据
+     * 按条件批量更新
+     * @throws DatabaseException
      */
-    public function delete(int|string $id): bool;
-    
+    public function updateBy(array $criteria, array $data): int;
+
     /**
-     * 聚合统计 (count, sum, max)
-     * @param string $type 统计类型
-     * @param string $field 字段名
+     * 删除记录
+     * @throws DatabaseException
+     */
+    public function delete(array $criteria): bool;
+
+    /**
+     * 按条件批量删除
+     * @throws DatabaseException
+     */
+    public function deleteBy(array $criteria): int;
+
+    /**
+     * 自增操作
+     * @throws DatabaseException
+     */
+    public function increment(array $criteria, string $field, int $amount = 1, array $extra = []): bool;
+
+    /**
+     * 自减操作
+     * @throws DatabaseException
+     */
+    public function decrement(array $criteria, string $field, int $amount = 1, array $extra = []): bool;
+
+    /**
+     * 聚合查询
+     * @throws DatabaseException
      */
     public function aggregate(string $type, array $criteria = [], string $field = '*'): string|int|float;
 
     /**
-     * 数据库事务闭包
+     * 事务处理
      */
     public function transaction(\Closure $callback): mixed;
-	
+
     /**
-     * 执行原生 SQL 查询 (SELECT)
-     * @return array 返回数组结果集
+     * 原生查询
+     * @throws DatabaseException
      */
     public function query(string $sql, array $bindings = []): array;
 
     /**
-     * 执行原生 SQL 指令 (INSERT, UPDATE, DELETE)
-     * @return int 返回受影响的行数
+     * 原生执行
+     * @throws DatabaseException
      */
     public function execute(string $sql, array $bindings = []): int;
 }

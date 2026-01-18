@@ -3,7 +3,7 @@
 // config/cache.php
 return [
     'default' => env('CACHE_DRIVER', 'file'),
-
+	'REPO_CACHE_DISABLED'	=> true,	//数据库缓存
     'stores' => [
         'file' => [
             'driver' => 'file',
