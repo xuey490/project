@@ -8,7 +8,7 @@ use Framework\Utils\BaseModel;
 
 class Notice extends BaseModel
 {
-    protected $table = 'ma_sys_notice';
+    protected $table = 'article';
     protected $pk = 'id';
 
     protected $autoWriteTimestamp = true;

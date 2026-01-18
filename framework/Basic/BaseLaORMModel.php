@@ -24,6 +24,7 @@ use Framework\Basic\Traits\LaBelongsToTenant;
 use Framework\Basic\Casts\TimestampCast;
 #use Illuminate\Support\Facades\Cache;
 use think\facade\Cache;
+use Framework\Schema\SchemaRegistry;
 
 class BaseLaORMModel extends Model
 {
@@ -185,6 +186,69 @@ class BaseLaORMModel extends Model
     }
 
     // ================= 审计字段 =================
+
+    /**
+     * FPM 检查字段是否存在
+     */
+    protected function hasColumnCached(string $column): bool
+    {
+        $table = $this->getTable();
+		
+		// 使用 getTableColumnsCached 取代 getFields
+		return in_array(
+			$column,
+			$this->getTableColumnsCached(),
+			true
+		);
+
+		/*
+        if (!isset(self::$tableColumns[$table])) {
+            self::$tableColumns[$table] = $this->getConnection()
+                ->getSchemaBuilder()
+                ->getColumnListing($table);
+        }
+
+        return in_array($column, self::$tableColumns[$table], true);
+		*/
+    }
+	
+	/*
+	* 返回字段缓存
+	*/
+	protected function getTableColumnsCached(): array
+	{
+		$connection = $this->getConnection();
+		$driver     = $connection->getDriverName();
+		
+		$table = $this->getTable();
+		$cacheKey = 'schema:columns:' . $driver . ':' . $table;
+
+		return Cache::remember($cacheKey, function () use ($table) {
+			return $this->getConnection()
+				->getSchemaBuilder()
+				->getColumnListing($table);
+		});
+	}	
+
+    /* ===== 字段相关 ===== */
+
+    public function getFields(): array
+    {
+		if (defined('WORKERMAN_ENV')) {
+			return SchemaRegistry::getColumns($this->getTable());
+		}else{
+			/**
+			 * 对外 API：获取模型字段（带缓存、受控）
+			 */			
+			return $this->getTableColumns();
+		}
+    }
+
+    protected function hasColumn(string $column): bool
+    {
+        return SchemaRegistry::hasColumn($this->getTable(), $column);
+    }
+
     /**
      * 【性能优化核心】填充审计字段
      * 避免使用 SHOW COLUMNS，改用 Schema 缓存 或 静态变量
@@ -195,57 +259,25 @@ class BaseLaORMModel extends Model
             ? \getCurrentUser()
             : null;
 
-        if (!$uid) return;
-
-        if ($this->hasColumnCached($column)) {
-            $this->setAttribute($column, $uid);
-        }
-    }
-
-    /**
-     * 检查字段是否存在
-     */
-    protected function hasColumnCached(string $column): bool
-    {
-        $table = $this->getTable();
+        if (!$uid) return;	
 		
-		/*
-		return in_array(
-			$column,
-			$this->getTableColumnsCached(),
-			true
-		);
-		*/
-
-        if (!isset(self::$tableColumns[$table])) {
-            self::$tableColumns[$table] = $this->getConnection()
-                ->getSchemaBuilder()
-                ->getColumnListing($table);
-        }
-
-        return in_array($column, self::$tableColumns[$table], true);
+		if (defined('WORKERMAN_ENV')) {
+			if (!in_array($column, SchemaRegistry::getAuditColumns($this->getTable()), true)) {
+				return;
+			}
+			if ($uid) {
+				$this->setAttribute($column, $uid);
+			}
+		}else{
+			$this->hasColumnCached($column);
+			if ($this->hasColumnCached($column)) {
+				$this->setAttribute($column, $uid);
+			}
+			
+		}
     }
-	
-	protected function getTableColumnsCached(): array
-	{
-		$table = $this->getTable();
-		$cacheKey = 'schema:columns:' . $this->getConnectionName() . ':' . $table;
+	/* ===== 字段相关 ===== */
 
-		return Cache::remember($cacheKey, function () use ($table) {
-			return $this->getConnection()
-				->getSchemaBuilder()
-				->getColumnListing($table);
-		});
-	}	
-
-
-	/**
-	 * 对外 API：获取模型字段（带缓存、受控）
-	 */
-	public function getFields(): array
-	{
-		return $this->getTableColumns();
-	}
 
 	/**
 	 * 缓存治理层
