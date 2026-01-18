@@ -5,852 +5,654 @@ declare(strict_types=1);
 namespace Framework\Repository;
 
 use Framework\Database\DatabaseFactory;
-use RuntimeException;
-use think\facade\Db as ThinkDb;
-use Illuminate\Database\Capsule\Manager as IlluminateDb;
+use Framework\Repository\Builders\QueryConditionBuilder;
+use Framework\Repository\Exceptions\DatabaseException;
+use Framework\Repository\Strategies\EloquentStrategy;
+use Framework\Repository\Strategies\OrmStrategyInterface;
+use Framework\Repository\Strategies\ThinkStrategy;
 use Framework\DI\Injectable;
-use Framework\Core\App;
-use Framework\Tenant\TenantContext; // [新增] 引入租户上下文
+use Psr\SimpleCache\CacheInterface;
+use Framework\Tenant\TenantContext;	//启用租户隔离#
 
 /**
  * Class BaseRepository
- * 核心数据库操作基类（兼容 Illuminate ORM & ThinkPHP 8 ORM）
- * 集成 TenantContext 实现轻量级多租户隔离，屏蔽底层ORM差异
- * @package Framework\Repository
+ * 核心数据库操作基类（优化版）
  */
 abstract class BaseRepository implements RepositoryInterface
 {
-    /**
-     * 模型类全名（子类必须覆盖定义，如：\App\Models\User::class）
-     * @var string
-     */
-    protected string $modelClass = '';
+    protected string $modelClass;
+    protected OrmStrategyInterface $ormStrategy;
+    protected ?CacheInterface $cache = null; // 改为可空类型并初始化为null
+    protected int $cacheTtl = 3600; // 默认缓存过期时间（秒）
 
-    /**
-     * 是否启用 Illuminate Eloquent ORM（由 DatabaseFactory 初始化）
-     * @var bool
-     */
-    protected bool $isEloquent = false;
-
-    /**
-     * 租户字段名（默认为 tenant_id，子类可覆盖）
-     * @var string
-     */
-    protected string $tenantField = 'tenant_id';
-
-    // 引入依赖注入能力
+    // 引入注入能力
     use Injectable;
 
-    /**
-     * BaseRepository 构造函数
-     * 初始化ORM类型、模型校验、依赖注入
-     * @param DatabaseFactory $factory 数据库工厂
-     * @throws RuntimeException 当未定义 $modelClass 时抛出异常
-     */
     public function __construct(protected DatabaseFactory $factory)
     {
-        // 1. 执行依赖注入
         $this->inject();
+		
+		$this->cache = app('cache');
 
-        // 2. 校验模型类是否定义
         if (empty($this->modelClass)) {
-            throw new RuntimeException('Repository 必须定义 $modelClass 属性（指定对应模型类全名）');
+            throw new DatabaseException('Repository必须定义$modelClass属性');
         }
 
-        // 3. 初始化ORM类型标识
-        $this->isEloquent = $this->factory->isEloquent();
+        // 初始化ORM策略
+        $this->initializeOrmStrategy();
 
-        // 4. 子类初始化钩子
+        // 初始化缓存（如果有注入）
+        $this->initializeCache();
+
         $this->initialize();
+		
     }
 
     /**
-     * 子类初始化钩子方法
-     * 子类可覆盖此方法，实现自定义初始化逻辑
-     * @return void
+     * 初始化ORM策略
+     */
+    protected function initializeOrmStrategy(): void
+    {
+        $this->ormStrategy = $this->factory->isEloquent() 
+            ? new EloquentStrategy() 
+            : new ThinkStrategy();
+    }
+
+    /**
+     * 初始化缓存
+     */
+    protected function initializeCache(): void
+    {
+        // 子类可重写此方法注入缓存实例
+    }
+
+    /**
+     * 子类可根据需要覆盖生命周期方法
      */
     protected function initialize(): void
     {
     }
 
     /**
-     * 应用多租户筛选条件
-     * 自动判断是否需要拼接 tenant_id 条件
-     * 注意：模型类通常由 Global Scope 处理，此处主要针对纯表查询或特定场景补漏
-     * @param mixed $query 查询构造器
-     * @param array $criteria 查询条件
-     * @return void
-     */
-    protected function applyTenantFilter(mixed $query, array $criteria): void
-    {
-        // 1. 如果查询条件中已手动包含 tenant_id，则跳过自动筛选，避免冲突
-        if (isset($criteria[$this->tenantField])) {
-            return;
-        }
-
-        // 2. 检查上下文是否应该应用租户隔离 (TenantContext 已封装了 ignore 和 id 是否存在的判断)
-        if (!TenantContext::shouldApplyTenant()) {
-            return;
-        }
-
-        // 3. 如果是模型类 (isModelClass = true)，则租户筛选应由 Model 的 Global Scope 负责
-        // Repository 不应再手动添加 where，否则会出现 "WHERE tenant_id = 1 AND tenant_id = 1"
-        if ($this->isModelClass()) {
-            return;
-        }
-
-        // 4. 纯表模式：手动拼接租户筛选条件
-        $query->where($this->tenantField, TenantContext::getTenantId());
-    }
-
-    /**
      * 判断是否配置了有效的模型类
-     * @return bool
      */
-    public function isModelClass(): bool
+    protected function isModelClass(): bool
     {
         return class_exists($this->modelClass);
     }
 
     /**
-     * 获取模型实例（容器实例化，保证单例和依赖注入一致性）
-     * @return mixed 模型实例（Illuminate\Model 或 think\Model）
+     * 获取查询构建器
      */
-    protected function getModel(): mixed
+    protected function newQuery(?string $modelClass = null): mixed
     {
-        // 再次校验模型类是否存在，不存在则尝试通过工厂创建（兼容纯表模式）
-        if (!class_exists($this->modelClass)) {
-            return ($this->factory)->make($this->modelClass);
+        try {
+            return $this->ormStrategy->getQueryBuilder($modelClass ?? $this->modelClass);
+        } catch (\Exception $e) {
+            throw DatabaseException::queryFailed("获取查询构建器失败: {$e->getMessage()}", $e);
         }
-        // 通过应用容器实例化模型
-        return App()->make($this->modelClass);
     }
 
     /**
-     * 获取查询构造器（统一模型实例转构造器，屏蔽ORM差异）
-     * 等价于 newQuery()，是核心查询入口
-     * @return mixed 查询构造器（EloquentBuilder 或 ThinkQuery）
-     */
-    protected function newQuery(): mixed
-    {
-        // 1. 获取基础构造器
-        $builder = $this->getBuilder($this->getModel());
-
-        // 2. 检查上下文是否处于“忽略租户”模式 (超管/系统模式)
-        if (TenantContext::isIgnoring()) {
-            
-            // --- Illuminate ORM 处理 ---
-            if ($this->isEloquent) {
-                // [核心修复]：只有当 builder 是 Eloquent 构建器时，才存在 GlobalScope 的概念
-                // 如果是基础 Query\Builder (纯表查询)，它没有 Scope，无需也无法调用 withoutGlobalScope
-                if ($builder instanceof \Illuminate\Database\Eloquent\Builder) {
-                    // 移除由 Trait 注入的全局作用域
-                    $builder->withoutGlobalScope(\Framework\Basic\Scopes\LaTenantScope::class);
-                }
-            } 
-            // --- ThinkPHP ORM 处理 ---
-            else {
-                $model = $this->getModel();
-                // 确保是 ThinkPHP 模型且具备 ignoreTenant 能力
-                if ($model instanceof \think\Model && class_exists($this->modelClass)) {
-                    // 如果模型有 ignoreTenant 方法（TP通常通过静态变量控制 Scope）
-                    if (method_exists($model, 'ignoreTenant')) {
-                        // A. 【开启忽略】
-                        $model->ignoreTenant();
-                        
-                        // B. 【重新生成构造器】
-                        // 因为 TP 的 Scope 通常在调用 db() 时触发，所以需要在设置忽略后重新获取 Builder
-                        $builder = $this->getBuilder($model);
-
-                        // C. 【立即还原】
-                        // 还原开关，避免污染后续该模型实例的其他查询
-                        if (method_exists($model, 'restoreTenant')) {
-                            $model->restoreTenant();
-                        }
-                    }
-                }
-            }
-        }
-
-        return $builder;
-    }
-
-    /**
-     * 语法糖：$repo() 直接获取底层查询构造器
-     * @param string|null $modelClass 自定义模型类
-     * @return mixed
+     * 语法糖：$repo() 获取底层 Builder
      */
     public function __invoke(?string $modelClass = null): mixed
     {
-        return $this->factory->make($modelClass ?? $this->modelClass);
+        return $this->newQuery($modelClass);
     }
 
     /**
-     * 获取原生查询构建器（已自动处理租户条件）
-     * @return mixed
-     */
-    public function rawQuery(): mixed
-    {
-        $query = $this->newQuery();
-        
-        // 纯表模式或特殊情况下，如果 newQuery 没能加上租户条件（例如绕过了 Scope），这里进行补救
-        // 如果是 Model 模式，Tenant Scope 会自动处理，这里不再重复添加以免冲突
-        if (TenantContext::shouldApplyTenant()) {
-            $isEloquentBuilder = $query instanceof \Illuminate\Database\Eloquent\Builder;
-            
-            // 只有不是 Eloquent Model Builder (即纯表查询) 才手动加，防止重复
-            if (!$isEloquentBuilder && !$this->isModelClass()) {
-                 $query->where($this->tenantField, TenantContext::getTenantId());
-            }
-        }
-        
-        return $query;
-    }
-
-    /**
-     * 统一处理关联预加载
-     * @param mixed $query
-     * @param array $with
-     * @return mixed
+     * 统一处理Eager Loading
      */
     protected function applyWith(mixed $query, array $with = []): mixed
     {
-        if (empty($with)) {
+        if (empty($with) || !$this->isModelClass()) {
             return $query;
         }
-        if (!$this->isModelClass()) {
-            return $query;
-        }
+
         if (method_exists($query, 'with')) {
             return $query->with($with);
         }
+
         return $query;
     }
 
-    /**
-     * 统一获取查询构造器
-     * @param mixed $query
-     * @return mixed
-     */
-    protected function getBuilder(mixed $query): mixed
-    {
-        // 非模型类场景，直接返回原查询
-        if (!$this->isModelClass()) {
-            return $query;
-        }
-
-        // Illuminate ORM
-        if ($this->isEloquent) {
-            if ($query instanceof \Illuminate\Database\Eloquent\Model) {
-                return $query->newQuery();
-            }
-            return $query;
-        }
-
-        // ThinkPHP ORM
-        if ($query instanceof \think\Model) {
-            return $query->db();
-        }
-        return $query;
-    }
+    // --- 查询方法（统一异常处理 + 缓存支持）---
 
     /**
-     * 统一获取主键名
-     * @return string
-     */
-    protected function getPrimaryKey(): string
-    {
-        if (!$this->isModelClass()) {
-            return 'id';
-        }
-        $model = $this->getModel();
-        if ($this->isEloquent) {
-            return $model->getKeyName();
-        }
-        return $model->getPk();
-    }
+     * 根据ID查找记录
+     * @throws DatabaseException
+     */	
+	// 修改查询方法中的缓存逻辑（增加缓存开关判断）
+	public function findById(int|string $id, array $with = []): mixed
+	{
+		try {
+			// 缓存开关：不启用则直接查询数据库
+			$cacheEnabled = $this->isCacheEnabled(__FUNCTION__, func_get_args());
+			$cacheKey = $cacheEnabled ? $this->getCacheKey(__FUNCTION__, $id, $with) : '';
 
-    // --- 通用查询方法 ---
+			// 尝试从缓存获取
+			if ($cacheEnabled && $this->cache !== null && $this->cache->has($cacheKey)) {
+				return $this->cache->get($cacheKey);
+			}
+
+			// 数据库查询逻辑（原有逻辑不变）
+			$result = null;
+			if ($this->isModelClass() && $this->factory->isEloquent()) {
+				/** @var \Illuminate\Database\Eloquent\Model $model */
+				$model = new $this->modelClass;
+				$result = $model->with($with)->find($id);
+			} else {
+				$query = $this->newQuery();
+				$query = $this->applyWith($query, $with);
+				if ($this->isModelClass()) {
+					$result = $query->find($id);
+				} else {
+					$result = $query->where('id', $id)->first() ?? null;
+				}
+			}
+
+			// 写入缓存（仅当缓存启用且查询结果非空时）
+			if ($cacheEnabled && $this->cache !== null && $result !== null) {
+				$this->cache->set($cacheKey, $result, $this->cacheTtl);
+			}
+
+			return $result;
+		} catch (\Exception $e) {
+			throw DatabaseException::queryFailed("根据ID[{$id}]查询失败: {$e->getMessage()}", $e);
+		}
+	}
 
     /**
-     * 根据主键ID查询单条记录
-     */
-    public function findById(int|string $id, array $with = []): mixed
-    {
-        $query = $this->newQuery();
-        $query = $this->applyWith($query, $with);
-
-        if ($this->isModelClass()) {
-            return $query->find($id); 
-        }
-
-        $primaryKey = $this->getPrimaryKey();
-        if ($this->isEloquent) {
-             return $query->where($primaryKey, $id)->first();
-        } else {
-            return $query->where($primaryKey, $id)->find();
-        }
-    }
-
-    /**
-     * 根据主键ID查询批量记录
-     */
-    public function findByArrayId(array $id, array $with = []): mixed
-    {
-        $query = $this->newQuery();
-        $query = $this->applyWith($query, $with);
-        $primaryKey = $this->getPrimaryKey();
-
-        if ($this->isModelClass()) {
-            if ($this->isEloquent) {
-                 return $query->find($id);
-            } else {
-                 return $query->whereIn($primaryKey, $id)->select(); 
-            }
-        } else {
-            if ($this->isEloquent) {
-                 return $query->whereIn($primaryKey, $id)->get();
-            } else {
-                 return $query->whereIn($primaryKey, $id)->select(); 
-            }
-        }
-    }
-    
-    /**
-     * 根据条件查询单条记录
+     * 根据条件查找单条记录
+     * @throws DatabaseException
      */
     public function findOneBy(array $criteria, array $with = []): mixed
     {
-        $query = $this->buildQuery($this->newQuery(), $criteria);
-        $query = $this->applyWith($query, $with);
+        try {
+            $cacheKey = $this->getCacheKey('findOneBy', $criteria, $with);
+            if ($this->cache && $this->cache->has($cacheKey)) {
+                return $this->cache->get($cacheKey);
+            }
 
-        if ($this->isEloquent) {
-            return $query->first();
+            $query = $this->buildQuery($this->newQuery(), $criteria);
+            $query = $this->applyWith($query, $with);
+
+            $result = $this->factory->isEloquent() ? $query->first() : ($query->find() ?: null);
+
+            if ($this->cache && $result) {
+                $this->cache->set($cacheKey, $result, $this->cacheTtl);
+            }
+
+            return $result;
+        } catch (\Exception $e) {
+            throw DatabaseException::queryFailed("根据条件查询单条记录失败: {$e->getMessage()}", $e);
         }
-        return $query->find() ?: null;
     }
 
     /**
-     * 根据条件查询多条记录
+     * 根据条件查找多条记录
+     * @throws DatabaseException
      */
     public function findAll(array $criteria = [], array $orderBy = [], ?int $limit = null, array $with = []): mixed
     {
-        $query = $this->buildQuery($this->newQuery(), $criteria, $orderBy);
-        $query = $this->applyWith($query, $with);
+        try {
 
-        if ($limit) {
-            $query->limit($limit);
-        }
+			// 缓存开关：不启用则直接查询数据库
+			$cacheEnabled = $this->isCacheEnabled(__FUNCTION__, func_get_args());
+			$cacheKey = $this->getCacheKey('findAll', $criteria, $orderBy, $limit, $with);
 
-        if ($this->isEloquent) {
-            return $query->get();
+			// 尝试从缓存获取
+			if ($cacheEnabled && $this->cache !== null && $this->cache->has($cacheKey)) {
+				return $this->cache->get($cacheKey);
+			}
+			
+            $query = $this->buildQuery($this->newQuery(), $criteria, $orderBy);
+            $query = $this->applyWith($query, $with);
+
+            if ($limit) {
+                $query->limit($limit);
+            }
+
+            $result = $this->factory->isEloquent() ? $query->get() : $query->select();
+
+            if ($this->cache && $result) {
+                $this->cache->set($cacheKey, $result, $this->cacheTtl);
+            }
+
+            return $result;
+        } catch (\Exception $e) {
+            throw DatabaseException::queryFailed("查询多条记录失败: {$e->getMessage()}", $e);
         }
-        return $query->select();
     }
 
     /**
      * 分页查询
+     * @throws DatabaseException
      */
     public function paginate(array $criteria = [], int $perPage = 15, array $orderBy = [], array $with = []): mixed
     {
-        $query = $this->buildQuery($this->newQuery(), $criteria, $orderBy);
-        $query = $this->applyWith($query, $with);
-
-        return $query->paginate($perPage);
-    }
-
-    // --- 字段增减方法 ---
-
-    /**
-     * 字段自增操作
-     */
-    public function increment(int|string $id, string $field, int $amount = 1, array $extra = []): bool
-    {
-        $primaryKey = $this->getPrimaryKey();
-        $query = $this->newQuery()->where($primaryKey, $id);
-
-        if ($this->isEloquent) {
-            return (bool) $query->increment($field, $amount, $extra);
-        } else {
-            return (bool) $query->inc($field, $amount)->update($extra);
+        try {
+            $query = $this->buildQuery($this->newQuery(), $criteria, $orderBy);
+            $query = $this->applyWith($query, $with);
+            return $query->paginate($perPage);
+        } catch (\Exception $e) {
+            throw DatabaseException::queryFailed("分页查询失败: {$e->getMessage()}", $e);
         }
     }
 
-    /**
-     * 字段自减操作
-     */
-    public function decrement(int|string $id, string $field, int $amount = 1, array $extra = []): bool
-    {
-        return $this->increment($id, $field, -abs($amount), $extra);
-    }
-
-    // --- 写入操作 ---
+    // --- 写入方法（统一异常处理 + 清除缓存）---
 
     /**
-     * 新增记录
+     * 创建记录
+     * @throws DatabaseException
      */
     public function create(array $data): mixed
     {
-        // 1. 模型模式
-        if ($this->isModelClass()) {
-            // 使用 forward_static_call 兼容不同调用方式
-            return forward_static_call([$this->modelClass, 'create'], $data);
-        }
+        try {
+            $this->clearCache(); // 创建成功后清除缓存
 
-        // 2. 表名模式
-        $primaryKey = $this->getPrimaryKey();
-        
-        // 雪花ID/已存在主键场景
-        if (isset($data[$primaryKey]) && !empty($data[$primaryKey])) {
-            $insertResult = $this->newQuery()->insert($data);
-            return $insertResult ? $this->findById($data[$primaryKey]) : null;
-        }
-
-        // 自增ID场景
-        if ($this->isEloquent) {
-            $id = $this->newQuery()->insertGetId($data);
-        } else {
-            $id = $this->newQuery()->insert($data, true);
-        }
-
-        return $this->findById($id);
-    }
-
-    /**
-     * 通用保存方法（有主键更新，无主键新增）
-     */
-    public function save(array $data)
-    {
-        // 1. 表名模式
-        if (!$this->isModelClass()) {
-            $primaryKey = $this->getPrimaryKey();
-            if (isset($data[$primaryKey]) && !empty($data[$primaryKey])) {
-                $updateCount = $this->updateBy([$primaryKey => $data[$primaryKey]], $data);
-                return $updateCount > 0;
+            if ($this->isModelClass()) {
+                $result = forward_static_call([$this->modelClass, 'create'], $data);
+            } else {
+                if ($this->factory->isEloquent()) {
+                    $id = $this->newQuery()->insertGetId($data);
+                } else {
+                    $id = $this->newQuery()->insert($data, true);
+                }
+                $result = $this->findById($id);
             }
-            return $this->create($data);
-        }
 
-        // 2. 模型模式
-        $model = $this->getModel();
-        $primaryKey = $this->isEloquent ? $model->getKeyName() : $model->getPk();
-
-        // 无主键：新增
-        if (!isset($data[$primaryKey]) || empty($data[$primaryKey])) {
-            if ($this->isEloquent) {
-                return $this->modelClass::create($data);
+            if (!$result) {
+                throw new DatabaseException("创建记录后无法获取新记录");
             }
-            return $this->modelClass::create($data); 
-        }
 
-        // 更新
-        $id = $data[$primaryKey];
-        $instance = $this->findById($id);
-        
-        if (!$instance) {
-            throw new RuntimeException("Record with ID {$id} not found.");
+            return $result;
+        } catch (\Exception $e) {
+            throw DatabaseException::createFailed($e->getMessage(), $e);
         }
-
-        if ($this->isEloquent) {
-            $instance->fill($data);
-        } else {
-            $instance->save($data);
-            return $instance;
-        }
-
-        $instance->save();
-        return $instance;
     }
 
     /**
-     * 根据主键ID更新记录
+     * 根据ID更新记录
+     * @throws DatabaseException
      */
-    public function update(int|string $id, array $data): bool
+    public function update(array $criteria, array $data): bool
     {
-        $item = $this->findById($id);
-        if (!$item) {
-            return false;
-        }
+        try {
+            // 统一参数格式：支持ID或条件数组
+            if (isset($criteria['id']) || is_string($criteria) || is_int($criteria)) {
+                $id = is_array($criteria) ? $criteria['id'] : $criteria;
+                $item = $this->findById($id);
+                $criteria = ['id' => $id];
+            } else {
+                $item = $this->findOneBy($criteria);
+            }
 
-        if (!is_object($item)) {
-            $primaryKey = $this->getPrimaryKey();
-            $updateCount = $this->newQuery()->where($primaryKey, $id)->update($data);
-            return $updateCount > 0;
-        }
+            if (!$item) {
+                throw new DatabaseException("未找到符合条件的记录");
+            }
 
-        if ($this->isEloquent) {
-            $item->fill($data);
-        } else {
-            $item->data($data);
-        }
+            $result = false;
 
-        $saveResult = $item->save();
-        return $saveResult !== false;
+            if (is_object($item) && method_exists($item, 'save')) {
+                if ($this->factory->isEloquent()) {
+                    $item->fill($data);
+                    $result = (bool) $item->save();
+                } else {
+                    $res = $item->save($data);
+                    $result = $res !== false;
+                }
+            } else {
+                $query = $this->buildQuery($this->newQuery(), $criteria);
+                $result = $query->update($data) > 0;
+            }
+
+            if ($result) {
+                $this->clearCache(); // 更新成功后清除缓存
+            }
+
+            return $result;
+        } catch (\Exception $e) {
+            throw DatabaseException::updateFailed($e->getMessage(), $e);
+        }
     }
 
     /**
-     * 根据条件批量更新记录
+     * 按条件批量更新（兼容旧方法，统一参数格式）
+     * @throws DatabaseException
      */
     public function updateBy(array $criteria, array $data): int
     {
-        $query = $this->buildQuery($this->newQuery(), $criteria);
-        return (int) $query->update($data);
-    }
-
-    // --- 删除操作 ---
-
-    /**
-     * 根据主键ID删除记录
-     */
-    public function delete(int|string $id): bool
-    {
-        if ($this->isModelClass()) {
-            return (bool) forward_static_call([$this->modelClass, 'destroy'], $id);
+        try {
+            $query = $this->buildQuery($this->newQuery(), $criteria);
+            $affected = (int) $query->update($data);
+            
+            if ($affected > 0) {
+                $this->clearCache();
+            }
+            
+            return $affected;
+        } catch (\Exception $e) {
+            throw DatabaseException::updateFailed("批量更新失败: {$e->getMessage()}", $e);
         }
-
-        $primaryKey = $this->getPrimaryKey();
-        return (bool) $this->newQuery()->where($primaryKey, $id)->delete();
     }
 
     /**
-     * 根据条件批量删除记录
+     * 删除记录
+     * @throws DatabaseException
+     */
+    public function delete(array $criteria): bool
+    {
+        try {
+            // 统一参数格式：支持ID或条件数组
+            if (isset($criteria['id']) || is_string($criteria) || is_int($criteria)) {
+                $id = is_array($criteria) ? $criteria['id'] : $criteria;
+                $criteria = ['id' => $id];
+            }
+
+            $result = false;
+
+            if ($this->isModelClass()) {
+                $id = $criteria['id'] ?? null;
+                $result = (bool) forward_static_call([$this->modelClass, 'destroy'], $id ?? $criteria);
+            } else {
+                $query = $this->buildQuery($this->newQuery(), $criteria);
+                $result = (bool) $query->delete();
+            }
+
+            if ($result) {
+                $this->clearCache(); // 删除成功后清除缓存
+            }
+
+            return $result;
+        } catch (\Exception $e) {
+            throw DatabaseException::deleteFailed($e->getMessage(), $e);
+        }
+    }
+
+    /**
+     * 按条件批量删除（兼容旧方法）
+     * @throws DatabaseException
      */
     public function deleteBy(array $criteria): int
     {
-        $query = $this->buildQuery($this->newQuery(), $criteria);
-        return (int) $query->delete();
+        try {
+            $query = $this->buildQuery($this->newQuery(), $criteria);
+            $affected = (int) $query->delete();
+            
+            if ($affected > 0) {
+                $this->clearCache();
+            }
+            
+            return $affected;
+        } catch (\Exception $e) {
+            throw DatabaseException::deleteFailed("批量删除失败: {$e->getMessage()}", $e);
+        }
     }
 
-    // --- 统计与原生SQL操作 ---
+    // --- 通用操作方法 ---
+
+    /**
+     * 自增操作
+     * @throws DatabaseException
+     */
+    public function increment(array $criteria, string $field, int $amount = 1, array $extra = []): bool
+    {
+        try {
+            $query = $this->buildQuery($this->newQuery(), $criteria);
+            $result = $this->ormStrategy->increment($query, $field, $amount, $extra);
+            
+            if ($result) {
+                $this->clearCache();
+            }
+            
+            return $result;
+        } catch (\Exception $e) {
+            throw DatabaseException::updateFailed("自增操作失败: {$e->getMessage()}", $e);
+        }
+    }
+
+    /**
+     * 自减操作
+     * @throws DatabaseException
+     */
+    public function decrement(array $criteria, string $field, int $amount = 1, array $extra = []): bool
+    {
+        try {
+            $query = $this->buildQuery($this->newQuery(), $criteria);
+            $result = $this->ormStrategy->decrement($query, $field, $amount, $extra);
+            
+            if ($result) {
+                $this->clearCache();
+            }
+            
+            return $result;
+        } catch (\Exception $e) {
+            throw DatabaseException::updateFailed("自减操作失败: {$e->getMessage()}", $e);
+        }
+    }
 
     /**
      * 聚合查询
+     * @throws DatabaseException
      */
-    public function aggregate(string $type, array $criteria = [], string $field = '*'): int|float
+    public function aggregate(string $type, array $criteria = [], string $field = '*'): string|int|float
     {
-        $query = $this->buildQuery($this->newQuery(), $criteria);
+        try {
+            $query = $this->buildQuery($this->newQuery(), $criteria);
+            
+            $result = match (strtolower($type)) {
+                'count' => $query->count($field),
+                'sum'   => $query->sum($field),
+                'max'   => $query->max($field),
+                'min'   => $query->min($field),
+                'avg'   => $query->avg($field),
+                default => 0,
+            };
 
-        $result = match (strtolower($type)) {
-            'count' => $query->count($field),
-            'sum'   => $query->sum($field),
-            'max'   => $query->max($field),
-            'min'   => $query->min($field),
-            'avg'   => $query->avg($field),
-            default => 0,
-        };
+            if ($type === 'sum' && is_numeric($result)) {
+                return (string) $result;
+            }
 
-        return is_numeric($result) ? (float)$result : 0;
+            return $result;
+        } catch (\Exception $e) {
+            throw DatabaseException::queryFailed("聚合查询失败: {$e->getMessage()}", $e);
+        }
     }
 
     /**
-     * 事务操作
+     * 事务处理
      */
     public function transaction(\Closure $callback): mixed
     {
-        if ($this->isEloquent) {
-            return IlluminateDb::transaction($callback);
+        try {
+            return $this->ormStrategy->transaction($callback);
+        } catch (\Exception $e) {
+            throw new DatabaseException("事务执行失败: {$e->getMessage()}", 0, $e);
         }
-        return ThinkDb::transaction($callback);
     }
 
     /**
-     * 执行原生查询SQL
+     * 原生查询
      */
     public function query(string $sql, array $bindings = []): array
     {
-        if ($this->isEloquent) {
-            $result = IlluminateDb::select($sql, $bindings);
-            return array_map(fn($item) => (array) $item, $result);
+        try {
+            return $this->ormStrategy->query($sql, $bindings);
+        } catch (\Exception $e) {
+            throw DatabaseException::queryFailed("原生查询失败: {$e->getMessage()}", $e);
         }
-        return ThinkDb::query($sql, $bindings);
     }
 
     /**
-     * 执行原生执行SQL
+     * 原生执行
      */
     public function execute(string $sql, array $bindings = []): int
     {
-        if ($this->isEloquent) {
-            return IlluminateDb::affectingStatement($sql, $bindings);
+        try {
+            $affected = $this->ormStrategy->execute($sql, $bindings);
+            
+            if ($affected > 0) {
+                $this->clearCache();
+            }
+            
+            return $affected;
+        } catch (\Exception $e) {
+            throw DatabaseException::updateFailed("原生执行失败: {$e->getMessage()}", $e);
         }
-        return (int) ThinkDb::execute($sql, $bindings);
     }
 
-    // --- 核心查询条件构建器 ---
+    // --- 内部工具方法 ---
 
     /**
-     * 构建查询条件
+     * 构建查询条件（使用独立的构建器）
      */
     protected function buildQuery(mixed $query, array $criteria, array $orderBy = []): mixed
     {
-        // 1. 统一转为查询构造器
-        $query = $this->getBuilder($query);
-
-        // 2. 多租户自动筛选（通过上下文判断，仅针对纯表或补漏）
-        $this->applyTenantFilter($query, $criteria);
-
-        // 3. SELECT 指定字段
-        if (!empty($criteria['select'])) {
-            $query->select($criteria['select']);
-            unset($criteria['select']);
-        }
-
-        // 4. DISTINCT 去重
-        if (!empty($criteria['distinct'])) {
-            $query->distinct();
-            unset($criteria['distinct']);
-        }
-
-        // 5. LOCK 悲观锁
-        if (!empty($criteria['lock'])) {
-            if ($this->isEloquent) {
-                $query->lockForUpdate();
-            } else {
-                $query->lock(true);
-            }
-            unset($criteria['lock']);
-        }
-
-        // 6. JOIN 关联查询
-        $this->applyJoins($query, $criteria);
-
-        // 7. WHERE NULL / NOT NULL
-        $this->applyWhereNull($query, $criteria);
-
-        // 8. WHERE IN / NOT IN
-        $this->applyWhereIn($query, $criteria);
-
-        // 9. GROUP BY & HAVING
-        $this->applyGroupByAndHaving($query, $criteria);
-
-        // 10. OR 分组查询
-        $this->applyOrGroup($query, $criteria);
-
-        // 11. 基础 WHERE 条件
-        $this->applyBasicWhere($query, $criteria);
-
-        // 12. ORDER BY 排序
-        $this->applyOrderBy($query, $orderBy);
-
-        return $query;
+        $builder = new QueryConditionBuilder(
+            $query,
+            $this->factory->isEloquent(),
+            $this->isModelClass()
+        );
+        
+        return $builder->build($criteria, $orderBy);
     }
 
+
+	/**
+	 * 生成缓存Key（彻底修复：完整包含所有动态参数）
+	 * @param string $method 调用的方法名（如findById、findAll）
+	 * @param mixed ...$params 方法的所有入参（查询条件、排序、分页等）
+	 * @return string 唯一的缓存Key
+	 */
+	protected function getCacheKey(string $method, ...$params): string
+	{
+		// 1. 收集所有影响查询结果的动态因素（核心：不能遗漏任何维度）
+		$cacheFactors = [
+			// 基础维度：模型类 + 方法名
+			'model' => $this->modelClass,
+			'method' => $method,
+			
+			// 动态维度1：方法的所有入参（查询条件、排序、分页、关联等）
+			'params' => $this->normalizeParams($params),
+			
+			// 动态维度2：业务上下文（租户ID、用户ID等）
+			'context' => [
+				'tenant_id' => TenantContext::getTenantId() , //method_exists('TenantContext', 'getTenantId') ? TenantContext::getTenantId() : 0,
+				// 可扩展：其他上下文（如用户ID、语言、环境等）
+				// 'user_id' => UserContext::getUserId() ?? 0,
+			],
+			
+			// 动态维度3：ORM类型（避免不同ORM的缓存冲突）
+			'orm_type' => $this->factory->isEloquent() ? 'eloquent' : 'think',
+		];
+		
+		#dump($cacheFactors);
+
+		// 2. 序列化并生成MD5（确保唯一性和固定长度）
+		$serializedFactors = serialize($cacheFactors);
+		$factorsMd5 = md5($serializedFactors);
+
+		// 3. 生成易读且唯一的缓存Key（便于调试）
+		return sprintf(
+			'repo:%s:%s:%s',
+			str_replace('\\', '_', $this->modelClass), // 替换命名空间分隔符
+			$method,
+			$factorsMd5
+		);
+	}
+
+	/**
+	 * 标准化参数（解决数组顺序、空值等导致的Key不一致问题）
+	 * @param array $params 原始参数
+	 * @return array 标准化后的参数
+	 */
+	private function normalizeParams(array $params): array
+	{
+		array_walk_recursive($params, function (&$value) {
+			// 处理闭包（无法序列化）：闭包查询条件不缓存
+			if ($value instanceof \Closure) {
+				throw new \RuntimeException("包含闭包的查询条件不支持缓存，请关闭缓存或移除闭包");
+			}
+			// 统一空值格式（避免null和''导致Key不同）
+			if ($value === '') {
+				$value = null;
+			}
+			// 数组排序（避免['id'=>1, 'status'=>2]和['status'=>2, 'id'=>1]生成不同Key）
+			if (is_array($value)) {
+				ksort($value);
+			}
+		});
+		
+		// 排序顶层参数（确保参数顺序不影响Key）
+		ksort($params);
+		
+		return $params;
+	}
+
+	/**
+	 * 是否启用缓存（子类可重写，或通过入参控制）
+	 * @param string $method 调用的方法名
+	 * @param array $params 方法入参
+	 * @return bool
+	 */
+	protected function isCacheEnabled(string $method, array $params): bool
+	{
+		// 1. 全局关闭缓存（可通过配置控制）
+		$cacheDisabled = false;
+		if (function_exists('config')) {
+			$cacheDisabled = (bool)config('cache.REPO_CACHE_DISABLED', false);
+		}
+		#dump($cacheDisabled);
+		if ($cacheDisabled) {
+			return true;
+		}
+		
+		// 2. 包含闭包的查询不缓存（闭包无法序列化）
+		$hasClosure = false;
+		array_walk_recursive($params, function ($value) use (&$hasClosure) {
+			if ($value instanceof \Closure) {
+				$hasClosure = true;
+			}
+		});
+		if ($hasClosure) {
+			return false;
+		}
+		
+		// 3. 写入操作不缓存（只缓存查询操作）
+		$writeMethods = ['create', 'update', 'delete', 'increment', 'decrement'];
+		if (in_array($method, $writeMethods)) {
+			return false;
+		}
+		
+		return true;
+	}
+
+
     /**
-     * 应用JOIN关联查询
+     * 清除缓存
      */
-    protected function applyJoins(mixed $query, array &$criteria): void
+    protected function clearCache(?string $key = null): void
     {
-        foreach (['join', 'leftJoin', 'rightJoin'] as $joinType) {
-            if (empty($criteria[$joinType]) || !is_array($criteria[$joinType])) {
-                continue;
-            }
-
-            foreach ($criteria[$joinType] as $join) {
-                $table = $join[0] ?? null;
-                $field1 = $join[1] ?? null;
-                $operator = $join[2] ?? '=';
-                $field2 = $join[3] ?? null;
-
-                if (!$table || !$field1) continue;
-
-                if ($field2 === null && isset($join[2])) {
-                    $field2 = $join[2];
-                    $operator = '=';
-                }
-
-                if (!$this->isEloquent) {
-                    $query->$joinType($table, "{$field1} {$operator} {$field2}");
-                } else {
-                    $query->$joinType($table, $field1, $operator, $field2);
-                }
-            }
-            unset($criteria[$joinType]);
-        }
-    }
-
-    /**
-     * 应用 WHERE NULL / NOT NULL
-     */
-    protected function applyWhereNull(mixed $query, array &$criteria): void
-    {
-        if (!empty($criteria['whereNull'])) {
-            foreach ((array)$criteria['whereNull'] as $field) {
-                $query->whereNull($field);
-            }
-            unset($criteria['whereNull']);
-        }
-
-        if (!empty($criteria['whereNotNull'])) {
-            foreach ((array)$criteria['whereNotNull'] as $field) {
-                $query->whereNotNull($field);
-            }
-            unset($criteria['whereNotNull']);
-        }
-    }
-
-    /**
-     * 应用 WHERE IN / NOT IN
-     */
-    protected function applyWhereIn(mixed $query, array &$criteria): void
-    {
-        if (!empty($criteria['whereIn'])) {
-            foreach ($criteria['whereIn'] as $field => $values) {
-                $query->whereIn($field, $values);
-            }
-            unset($criteria['whereIn']);
-        }
-
-        if (!empty($criteria['whereNotIn'])) {
-            foreach ($criteria['whereNotIn'] as $field => $values) {
-                $query->whereNotIn($field, $values);
-            }
-            unset($criteria['whereNotIn']);
-        }
-    }
-
-    /**
-     * 应用 GROUP BY & HAVING
-     */
-    protected function applyGroupByAndHaving(mixed $query, array &$criteria): void
-    {
-        if (!empty($criteria['groupBy'])) {
-            $groupBy = (array) $criteria['groupBy'];
-            $query->groupBy(...$groupBy);
-            unset($criteria['groupBy']);
-        }
-
-        if (!empty($criteria['having']) && is_array($criteria['having'])) {
-            foreach ($criteria['having'] as $cond) {
-                if (count($cond) === 3) {
-                    $query->having($cond[0], $cond[1], $cond[2]);
-                } elseif (count($cond) === 2) {
-                    $query->having($cond[0], '=', $cond[1]);
-                }
-            }
-            unset($criteria['having']);
-        }
-
-        if (!empty($criteria['havingRaw'])) {
-            $query->havingRaw($criteria['havingRaw']);
-            unset($criteria['havingRaw']);
-        }
-    }
-
-    /**
-     * 应用 OR 分组查询
-     */
-    protected function applyOrGroup(mixed $query, array &$criteria): void
-    {
-        if (empty($criteria['or_group']) || !is_array($criteria['or_group'])) {
+        if (!$this->cache) {
             return;
         }
 
-        $orGroup = $criteria['or_group'];
-        $query->where(function ($subQuery) use ($orGroup) {
-            $this->buildQuery($subQuery, $orGroup);
-        }, null, null, 'or');
-
-        unset($criteria['or_group']);
-    }
-
-    /**
-     * 应用基础 WHERE 条件
-     */
-    protected function applyBasicWhere(mixed $query, array &$criteria): void
-    {
-        foreach ($criteria as $field => $value) {
-            if (in_array($field, ['page', 'limit', 'per_page'])) {
-                continue;
-            }
-
-            if ($field === 'or' && is_array($value)) {
-                $callback = function ($q) use ($value) {
-                    $this->buildQuery($q, $value);
-                };
-                if ($this->isEloquent) {
-                    $query->orWhere($callback);
-                } else {
-                    $query->whereOr($callback);
-                }
-                continue;
-            }
-
-            if ($field === 'and' && is_array($value)) {
-                $callback = function ($q) use ($value) {
-                    $this->buildQuery($q, $value);
-                };
-                $query->where($callback);
-                continue;
-            }
-
-            if ($field === 'group' && is_callable($value)) {
-                $query->where(function ($q) use ($value) {
-                    $value($q);
-                });
-                continue;
-            }
-
-            if ($field === 'raw') {
-                $query->whereRaw($value);
-                continue;
-            }
-
-            if (is_array($value)) {
-                $op = $value[0] ?? '=';
-                $val = $value[1] ?? $value[0];
-
-                switch (strtolower($op)) {
-                    case 'in':
-                        $query->whereIn($field, $val);
-                        break;
-                    case 'not in':
-                    case 'not_in':
-                        $query->whereNotIn($field, $val);
-                        break;
-                    case 'between':
-                        $query->whereBetween($field, $val);
-                        break;
-                    case 'not between':
-                        $query->whereNotBetween($field, $val);
-                        break;
-                    case 'like':
-                        $query->where($field, 'like', $val);
-                        break;
-                    case 'not like':
-                        $query->where($field, 'not like', $val);
-                        break;
-                    case 'null':
-                        $query->whereNull($field);
-                        break;
-                    case 'not null':
-                        $query->whereNotNull($field);
-                        break;
-                    case 'exists':
-                        if ($val instanceof \Closure) {
-                            $query->whereExists($val);
-                        }
-                        break;
-                    default:
-                        $query->where($field, $op, $val);
-                }
-            } else {
-                $query->where($field, $value);
-            }
+        if ($key) {
+            $this->cache->delete($key);
+        } else {
+            // 可以实现按前缀清除缓存
+            // $this->cache->deleteMatching("repo:{$this->modelClass}:*");
         }
     }
 
     /**
-     * 应用 ORDER BY 排序条件
+     * 设置缓存实例
      */
-    protected function applyOrderBy(mixed $query, array $orderBy): void
+    public function setCache(CacheInterface $cache, int $ttl = 3600): void
     {
-        foreach ($orderBy as $field => $direction) {
-            $direction = strtoupper($direction) === 'DESC' ? 'DESC' : 'ASC';
-            if ($this->isEloquent) {
-                $query->orderBy($field, $direction);
-            } else {
-                $query->order($field, $direction);
-            }
-        }
+        $this->cache = $cache;
+        $this->cacheTtl = $ttl;
     }
 }

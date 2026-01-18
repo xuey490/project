@@ -22,6 +22,8 @@ use Illuminate\Support\Carbon;
 use Framework\Utils\Snowflake;
 use Framework\Basic\Traits\LaBelongsToTenant;
 use Framework\Basic\Casts\TimestampCast;
+#use Illuminate\Support\Facades\Cache;
+use think\facade\Cache;
 
 class BaseLaORMModel extends Model
 {
@@ -75,6 +77,12 @@ class BaseLaORMModel extends Model
      * 表字段缓存
      */
     private static array $tableColumns = [];
+	
+	private const MAX_SCHEMA_CACHE = 128;
+	
+	private static bool $schemaFrozen = false;
+
+
 
     // ================= 初始化 =================
 
@@ -200,6 +208,14 @@ class BaseLaORMModel extends Model
     protected function hasColumnCached(string $column): bool
     {
         $table = $this->getTable();
+		
+		/*
+		return in_array(
+			$column,
+			$this->getTableColumnsCached(),
+			true
+		);
+		*/
 
         if (!isset(self::$tableColumns[$table])) {
             self::$tableColumns[$table] = $this->getConnection()
@@ -209,6 +225,88 @@ class BaseLaORMModel extends Model
 
         return in_array($column, self::$tableColumns[$table], true);
     }
+	
+	protected function getTableColumnsCached(): array
+	{
+		$table = $this->getTable();
+		$cacheKey = 'schema:columns:' . $this->getConnectionName() . ':' . $table;
+
+		return Cache::remember($cacheKey, function () use ($table) {
+			return $this->getConnection()
+				->getSchemaBuilder()
+				->getColumnListing($table);
+		});
+	}	
+
+
+	/**
+	 * 对外 API：获取模型字段（带缓存、受控）
+	 */
+	public function getFields(): array
+	{
+		return $this->getTableColumns();
+	}
+
+	/**
+	 * 缓存治理层
+	 */
+	protected function getTableColumns(): array
+	{
+		$table = $this->getTable();
+
+		if (isset(self::$tableColumns[$table])) {
+			return self::$tableColumns[$table];
+		}
+
+		if (self::$schemaFrozen) {
+			throw new \RuntimeException(
+				"Schema is frozen. Table columns not preloaded: {$table}"
+			);
+		}
+
+		$columns = $this->loadTableColumnsFromDb($table);
+
+		return $this->rememberTableColumns($table, $columns);
+	}
+
+	/**
+	 * 真正的 DB I/O（禁止在业务层直接调用）
+	 */
+	protected function loadTableColumnsFromDb(string $table): array
+	{
+		$connection = $this->getConnection();
+		$driver     = $connection->getDriverName();
+
+		if ($driver === 'mysql') {
+			$prefix = $connection->getTablePrefix();
+			$rows = $connection->select(
+				'SHOW COLUMNS FROM `' . $prefix . $table . '`'
+			);
+
+			return array_map(
+				static fn($row) => $row->Field,
+				$rows
+			);
+		}
+
+		return $connection
+			->getSchemaBuilder()
+			->getColumnListing($table);
+	}
+	
+	protected function rememberTableColumns(string $table, array $columns): array
+	{
+		if (count(self::$tableColumns) >= self::MAX_SCHEMA_CACHE) {
+			array_shift(self::$tableColumns); // FIFO
+		}
+
+		return self::$tableColumns[$table] = $columns;
+	}
+	
+	public static function freezeSchema(): void
+	{
+		self::$schemaFrozen = true;
+	}
 
     // ================= 动态字段控制 =================
 	
@@ -247,6 +345,7 @@ class BaseLaORMModel extends Model
     {
         $this->setAttribute($name, $value);
     }
+			
 
     // ================= 表信息 =================
     public function getTable(): string
@@ -275,7 +374,7 @@ class BaseLaORMModel extends Model
 	 *
 	 * @return array
 	 */
-	public function getFields(): array
+	public function getFields2(): array
 	{
 		try {
 			$table = $this->getTable();
