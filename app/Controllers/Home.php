@@ -318,7 +318,7 @@ class Home
         //$user1 =App::make( Custom::class);
 		
 		$user = App::make( Custom::class)->find(4152260622576254976);//更新操作
-			dump($user);
+			#dump($user);
 		#$user->restoreTenant();
 			//通用插入
 		/*
@@ -426,7 +426,7 @@ class Home
 		#TenantContext::setTenantId(1);
 		$userList1 = ($this->userRepo)(\App\Models\User::class)->where('id','>', 1)->get();//默认带租户id
 		#$userList1 = ($this->userRepo)(\App\Models\User::class)->withoutTenancy()->where('status', 1)->get()->toArray();//取消带租户id限制
-		dump($userList1);
+		#dump($userList1);
 		
 /*最安全（推荐）
 $user = Custom::withIgnoreTenant(function () {
