@@ -27,7 +27,7 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Framework\Core\Framework;
 use Framework\Schema\SchemaWarmup;
 use Framework\Schema\SchemaRegistry;
-use Framework\Utils\BaseModel;
+use Illuminate\Support\Facades\DB;
 
 if (php_sapi_name() !== 'cli') {
     return;
@@ -188,6 +188,7 @@ function scanFilesLastModify(array $dirs): array
 /**
  * 跨平台安全重启
  */
+
 function restartWorkerman(Worker $worker): void
 {
     global $needRestart;
@@ -198,7 +199,7 @@ function restartWorkerman(Worker $worker): void
 
     // === 1. Windows 环境处理 ===
     if (DIRECTORY_SEPARATOR === '\\') {
-        echo "[System] Windows下检测到变更/内存溢出，正在停止服务(等待bat重启)...\n";
+        Worker::log( "[System] Windows下检测到变更/内存溢出，正在停止服务(等待bat重启)...\n");
         // Windows下直接停止，依靠外部 .bat 文件的无限循环来重启
         Worker::stopAll();
         return;
@@ -210,7 +211,7 @@ function restartWorkerman(Worker $worker): void
     // 如果是因为"内存溢出"，只需要杀掉当前这一个进程，让 Master 重新拉起一个新的即可
     // 这样其他正常的进程不会受影响，服务更平滑
     if (getMemoryUsage() > MEMORY_LIMIT_MB) {
-        echo "[System] 内存溢出，重置当前 Worker 进程...\n";
+        Worker::log( "[System] 内存溢出，重置当前 Worker 进程...\n");
         Worker::stopAll(); // 停止当前进程，Master会自动重启它
         return;
     }
@@ -222,6 +223,24 @@ function restartWorkerman(Worker $worker): void
         posix_kill(posix_getppid(), SIGUSR1);
     } else {
         Worker::stopAll();
+    }
+}
+
+/**
+ * 检查数据库连接是否正常
+ * @param string|null $connection 连接名（null 表示默认连接）
+ * @return bool
+ */
+function isDatabaseConnected(?string $connection = null): bool
+{
+    try {
+        $db = $connection ? DB::connection($connection) : DB::connection();
+        $db->getPdo();
+        return true;
+    } catch (\Exception $e) {
+        // 可选：记录错误日志
+        //\Illuminate\Support\Facades\Log::error('数据库连接失败：' . $e->getMessage());
+        return false;
     }
 }
 
@@ -241,14 +260,15 @@ $httpWorker->onWorkerStart = function (Worker $worker) use (&$framework) {
     
     $framework = Framework::getInstance();
 
-    SchemaWarmup::setScanPath(
-        __DIR__ . '/app/Models',
-        'App\Models'
-    );
-    SchemaWarmup::warmupAll();
-    SchemaRegistry::freeze();
 	
-	$pid = getmypid();
+	if(config('database.engine') == 'laravelORM' && isDatabaseConnected() ){
+		SchemaWarmup::setScanPath(
+			__DIR__ . '/app/Models',
+			'App\Models'
+		);
+		SchemaWarmup::warmupAll();
+		SchemaRegistry::freeze();
+	}
 
     // -------------------------- 初始化监控任务 --------------------------
     // 1. 初始化文件修改时间（仅在进程启动时执行一次）
