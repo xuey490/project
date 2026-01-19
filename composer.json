@@ -56,7 +56,7 @@
         "vlucas/phpdotenv": "^5.6",
         "workerman/workerman": "^5.1",
         "xuey490/config": "^1.0.4",
-        "xuey490/database": "^1.0",
+        "xuey490/database": "^1.0.2",
         "xuey490/log": "^1.0.2",
         "xuey490/storage": "^1.1.0"
     },

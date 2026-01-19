@@ -53,6 +53,7 @@ abstract class BaseRepository implements RepositoryInterface
      */
     protected function initializeOrmStrategy(): void
     {
+		#dump($this->factory->isEloquent());
         $this->ormStrategy = $this->factory->isEloquent() 
             ? new EloquentStrategy() 
             : new ThinkStrategy();
