@@ -239,7 +239,7 @@ function isDatabaseConnected(?string $connection = null): bool
         return true;
     } catch (\Exception $e) {
         // 可选：记录错误日志
-        //\Illuminate\Support\Facades\Log::error('数据库连接失败：' . $e->getMessage());
+        #\Illuminate\Support\Facades\Log::error('数据库连接失败：' . $e->getMessage());
         return false;
     }
 }
@@ -261,14 +261,27 @@ $httpWorker->onWorkerStart = function (Worker $worker) use (&$framework) {
     $framework = Framework::getInstance();
 
 	
-	if(config('database.engine') == 'laravelORM' && isDatabaseConnected() ){
-		SchemaWarmup::setScanPath(
-			__DIR__ . '/app/Models',
-			'App\Models'
-		);
-		SchemaWarmup::warmupAll();
-		SchemaRegistry::freeze();
+	if(config('database.engine') == 'laravelORM' ){
+		try {
+			// 测试连接（执行一个无副作用的简单查询）
+			#DB::connection()->getPdo();
+			SchemaWarmup::setScanPath(
+				__DIR__ . '/app/Models',
+				'App\Models'
+			);
+
+			SchemaWarmup::warmupAll();
+			SchemaRegistry::freeze();
+		} catch (\Exception $e) {
+			/*return response()->json([
+				'status' => 'error',
+				'message' => '数据库连接失败：' . $e->getMessage()
+			], 500);
+			*/
+			dump('数据库连接失败：' . $e->getMessage());
+		}
 	}
+	
 
     // -------------------------- 初始化监控任务 --------------------------
     // 1. 初始化文件修改时间（仅在进程启动时执行一次）
