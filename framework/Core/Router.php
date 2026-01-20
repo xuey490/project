@@ -34,7 +34,7 @@ class Router
 {
     private const AUTO_ROUTE_PREFIX = 'auto_route_';
     private const DEFAULT_CONTROLLER_NAMESPACE = 'App\Controllers';
-    private const CACHE_KEY_PREFIX = 'route_match_v1_';
+    private const CACHE_KEY_PREFIX = ':route_match_v1_';//redis 分组
     private const CACHE_TTL = 3600; // 缓存 1 小时
 
     // 定义参数处理常量
