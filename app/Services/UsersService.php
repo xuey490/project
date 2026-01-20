@@ -51,6 +51,7 @@ class UsersService extends BaseService
     {
 		$this->dao = app(UserDao::class);
 		// 注册租户ID获取回调
+		/*
 		BaseDao::initTenantCallback(function () {
 			// 示例1：从请求头获取租户ID
 			$request = app('request');
@@ -61,7 +62,7 @@ class UsersService extends BaseService
 			// $user = app('auth')->user();
 			// return $user->tenant_id ?? 0;
 		});	
-
+		*/
     }
 	
 	

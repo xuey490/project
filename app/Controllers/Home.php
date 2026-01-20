@@ -13,6 +13,7 @@ use App\Models\Admin;
 use App\Models\Config;
 use App\Models\Custom;
 use App\Dao\CustomDao;
+use App\Dao\CustomGroupDao;
 
 use App\Middlewares\AuthMiddleware;
 use Framework\Middleware\MiddlewareXssFilter;
@@ -54,6 +55,8 @@ use App\Validate\NewUser as UserValidate; // 引入你的验证器类
 
 
 use App\Services\UserService;
+use App\Services\UsersService;
+use App\Services\CustomGroupService;
 use Framework\Tenant\TenantContext;	//启用租户隔离#
 
 use App\Common\LogService;
@@ -72,12 +75,14 @@ class Home
 	
     // 注解注入服务
     #[Inject]
-    private UserService $UserService;	
+    private UsersService $UsersService;	
 
     #[Inject]
     protected LogService $logger;
 	
 	private CustomDao $customDao;
+	
+	private CustomGroupService $CustomGroupService;
 
 
     // 甚至可以在 private 属性上使用
@@ -85,20 +90,21 @@ class Home
     private object $config; 
 	
     public function __construct(
-        private CsrfTokenManager $csrf,
-		private RequestStack $requestStack,
-		private Request $request,
-		private CookieManager $cookie, 
-		private DatabaseFactory $db,
+        #private CsrfTokenManager $csrf,
+		#private RequestStack $requestStack,
+		#private Request $request,
+		#private CookieManager $cookie, 
+		#private DatabaseFactory $db,
 		private UserRepository $userRepo,
 		private LogRepository $logRep,
 		CustomDao $customDao,
-
+		CustomGroupService $CustomGroupService
 		#private DB $db1,
 		#private DbManager $db1
 		//SessionServiceProvider 已经注册的服务名是 'session'， 容器会自动注入 Session 实例
     ) {
 		$this->customDao = $customDao;
+		$this->CustomGroupService = $CustomGroupService;
 	}
 	
 	public function setcookies(Request $request):Response
@@ -188,6 +194,9 @@ class Home
 	{
 		$uid = $request->query->getInt('uid', 1);
 		
+		
+		#dump($this->UsersService->selectList([], '*', 1, 3));
+		#dump($this->CustomGroupService->selectList([], '*', 1, 3));
 		
 		TenantContext::setTenantId(null); 
 		TenantContext::restore(); // 清除忽略状态
