@@ -39,7 +39,7 @@ class UserService extends BaseService
      */
     protected function initialize(): void
     {
-		//dump($this->userBusiness);
+		//$this->dao = app('App\Dao\NoticeDao');
     }
 
 

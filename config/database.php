@@ -15,7 +15,7 @@ return [
     'connections'     => [
         'mysql' => [
 			//Illuminate\Database driver必须指定
-			//'driver' => 'mysql',
+			#'driver' => 'mysql',
             // 数据库类型
             'type'               =>  'mysql',
             // 服务器地址 // ThinkORM 可定义多个别名

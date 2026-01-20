@@ -20,6 +20,7 @@ use Framework\DI\Injectable;
 use Framework\ORM\Adapter\ORMAdapterFactory;
 use RuntimeException;
 use Throwable;
+use Framework\Database\DatabaseFactory;
 
 /**
  * @method count(array $where = [], bool $search = true)
@@ -67,11 +68,16 @@ abstract class BaseDao
     public function __construct(?string $mode = null, object|string|null $modelClass = null)
     {
         $this->inject();
+		
+		
 
         // 1. 获取 ORM 模式
-        if ($mode === null) {
+        if ($mode == null) {
             $mode = config('database.engine', 'thinkORM') ?? env('ORM_DRIVER');
         }
+
+		$db = app('db');
+
         $this->mode = $mode;
 
         // 2. 获取模型类
@@ -79,7 +85,7 @@ abstract class BaseDao
 
         // 3. 创建适配器
         $this->instance = ORMAdapterFactory::createAdapter($mode, $modelClass);
-        //dump($this->instance);
+        #dump($this->instance);
         //dump("created model: " . get_class($this->instance));
         $this->initialize();
     }

@@ -13,11 +13,11 @@ use App\Dao\NoticeDao;
 
 class CustomDao extends BaseDao
 {
-    #[Autowire]
-    protected ModuleRepository $moduleRepo;	
+    ##[Autowire]
+    #protected ModuleRepository $moduleRepo;	
 	
-	#[Autowire]
-    protected NoticeDao $noticedao;	
+	##[Autowire]
+    #protected NoticeDao $noticedao;	
 	
 	protected string $modelClass = \App\Models\Custom::class;
 

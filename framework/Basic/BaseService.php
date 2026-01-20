@@ -39,7 +39,7 @@ abstract class BaseService
      * 模型注入：使用泛型类型
      * @var ?T
      */
-    protected ?BaseDao $dao;
+    protected ?BaseDao $dao = null;
 
     // 构造函数不接受参数，完全由内部解决
     public function __construct()
