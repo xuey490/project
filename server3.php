@@ -278,7 +278,7 @@ $httpWorker->onWorkerStart = function (Worker $worker) use (&$framework) {
 				'message' => '数据库连接失败：' . $e->getMessage()
 			], 500);
 			*/
-			dump('数据库连接失败：' . $e->getMessage());
+			Worker::log('数据库连接失败：' . $e->getMessage());
 		}
 	}
 	
