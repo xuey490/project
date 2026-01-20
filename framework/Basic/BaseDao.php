@@ -18,7 +18,6 @@ namespace Framework\Basic;
 
 use Framework\DI\Injectable;
 use Framework\ORM\Adapter\ORMAdapterFactory;
-use Framework\Basic\Traits\TenantFilterTrait; // 引入租户Trait
 use RuntimeException;
 use Throwable;
 
@@ -52,101 +51,46 @@ use Throwable;
  * @method decStockIncSales(array $where, int $num, string $stock = 'stock', string $sales = 'sales')
  * @method incStockDecSales(array $where, int $num, string $stock = 'stock', string $sales = 'sales')
  */
-
 abstract class BaseDao
 {
+    // 引入注入能力
     use Injectable;
-	
-    use TenantFilterTrait;
 
+    /** @var mixed ORM Adapter，如 LaravelORMFactory 或 ThinkphpORMFactory */
     protected mixed $instance = null;
-	
+
     protected ?string $mode = null;
-	
+
+    /** @var mixed Eloquent/ThinkORM 模型类名 */
     protected string $modelClass = '';
 
-    // --- 核心：通用查询入口，统一添加租户条件 ---
-    /**
-     * 封装通用查询前置处理（租户过滤 + 其他规则）
-     * @param string $method 适配器方法名
-     * @param array $arguments 方法参数
-     * @return array 处理后的参数
-     */
-    protected function beforeQuery(string $method, array $arguments): array
-    {
-        // 1. 提取 where 条件（适配不同方法的参数位置）
-        $whereIndex = match ($method) {
-            'selectList', 'getCount', 'getOne', 'search', 'sum', 'getMax', 'getMin' => 0,
-            'get' => [$this->getPk() => $arguments[0]], // get 方法第一个参数是 ID
-            'delete', 'update' => is_array($arguments[0]) ? 0 : [$this->getPk() => $arguments[0]],
-            default => -1,
-        };
-
-        // 2. 添加租户条件
-        if ($whereIndex !== -1) {
-            if (is_array($whereIndex)) {
-                $arguments[0] = $this->autoAddTenantCondition($whereIndex);
-            } else {
-                $arguments[$whereIndex] = $this->autoAddTenantCondition($arguments[$whereIndex] ?? []);
-            }
-        }
-
-        return $arguments;
-    }
-
-    // --- 重写核心方法，统一调用前置处理 ---
-    public function selectList(array $where, string $field = '*', int $page = 0, int $limit = 0, string $order = '', array $with = [], bool $search = false)
-    {
-        $args = $this->beforeQuery(__FUNCTION__, func_get_args());
-        return $this->instance->selectList(...$args);
-    }
-
-    public function getCount(array $where)
-    {
-        $args = $this->beforeQuery(__FUNCTION__, func_get_args());
-        return $this->instance->getCount(...$args);
-    }
-
-    public function getOne(array $where, ?string $field = '*', array $with = [])
-    {
-        $args = $this->beforeQuery(__FUNCTION__, func_get_args());
-        return $this->instance->getOne(...$args);
-    }
-
-    public function get($id, ?array $field = [], ?array $with = [], string $order = '')
-    {
-        $args = $this->beforeQuery(__FUNCTION__, func_get_args());
-        return $this->instance->getOne($args[0], $field, $with);
-    }
-
-    public function delete(array|int|string $id, ?string $key = null)
-    {
-        $args = $this->beforeQuery(__FUNCTION__, func_get_args());
-        return $this->instance->delete(...$args);
-    }
-
-    public function update(string|int|array $id, array $data, ?string $key = null)
-    {
-        $args = $this->beforeQuery(__FUNCTION__, func_get_args());
-        return $this->instance->update(...$args);
-    }
-
-
-    // --- 原有构造函数/初始化方法不变 ---
     public function __construct(?string $mode = null, object|string|null $modelClass = null)
     {
         $this->inject();
-        $this->mode = $mode ?? config('database.engine', 'thinkORM') ?? env('ORM_DRIVER');
+
+        // 1. 获取 ORM 模式
+        if ($mode === null) {
+            $mode = config('database.engine', 'thinkORM') ?? env('ORM_DRIVER');
+        }
+        $this->mode = $mode;
+
+        // 2. 获取模型类
         $modelClass = $modelClass ?? $this->setModel();
-        $this->instance = ORMAdapterFactory::createAdapter($this->mode, $modelClass);
+
+        // 3. 创建适配器
+        $this->instance = ORMAdapterFactory::createAdapter($mode, $modelClass);
+        //dump($this->instance);
+        //dump("created model: " . get_class($this->instance));
         $this->initialize();
     }
 
+    /**
+     * 获取底层 ORM 适配器实例.
+     */
     public function getAdapter(): mixed
     {
         return $this->instance;
     }
-
 
     /**
      * 动态代理调用 —— 将所有方法转发给 ORM Adapter.
@@ -176,9 +120,6 @@ abstract class BaseDao
                 )
             );
         }
-
-        // 对未重写的方法，自动应用租户条件
-        $arguments = $this->beforeQuery($name, $arguments);
 
         try {
             return $this->instance->{$name}(...$arguments);
