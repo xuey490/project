@@ -44,7 +44,7 @@ abstract class BaseService
     // 构造函数不接受参数，完全由内部解决
     public function __construct()
     {
-$db = app('db');
+//$db = app('db');
 		$this->inject();
 		$this->initialize();
 	}
