@@ -1,11 +1,18 @@
 <?php
-/**
- * @desc RedisWatcher.php 描述信息
- * @author Tinywan(ShaoBo Wan)
- * @date 2022/1/17 10:02
- */
 
 declare(strict_types=1);
+
+/**
+ * This file is part of FssPHP Framework.
+ *
+ * @link     https://github.com/xuey490/project
+ * @license  https://github.com/xuey490/project/blob/main/LICENSE
+ *
+ * @Filename: RedisWatcher.php
+ * @Date: 2026-2-7
+ * @Developer: xuey863toy
+ * @Email: xuey863toy@gmail.com
+ */
 
 namespace Framework\Casbin\Watcher;
 
