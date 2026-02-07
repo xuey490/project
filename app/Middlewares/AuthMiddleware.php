@@ -63,9 +63,6 @@ class AuthMiddleware
 
             // 3️⃣ 自动续期（失败不影响当前请求）
             $remaining = $exp - time();
-			
-			#dump($remaining);
-			#dump($this->refreshThreshold);
             if ($remaining < $this->refreshThreshold) {
                 $this->tryRefresh($request, $jwt, $uid);
             }

@@ -63,6 +63,8 @@ use App\Common\LogService;
 use Framework\Container\Container;
 use Framework\Attributes\Action;
 
+use Framework\Casbin\Permission;
+
 ##[Auth(roles: ['admin'])]
 ##[Prefix('/secures', middleware: [AuthMiddleware::class])]
 ##[Route(prefix: '/vvv2/admins', group: 'aaaa', middleware: [\App\Middlewares\AuthMiddleware::class])]
@@ -180,9 +182,19 @@ class Home
 		#dump($this->config->get('app'));
 		
 		#dump($this->UserService);
+		#dump(app('log'));
 		
-		$this->logger->info('hello World!');
-
+		//$this->logger->info('hello World!');
+		Permission::addPolicy('user1', 'resource1', 'read');
+		Permission::addPolicy('user2', 'resource1', 'edit');
+		#Permission::addPolicy('user3', 'resource1', 'all');
+		//Permission::deleteUser('user3');
+		
+		#$model = new \Framework\Casbin\Model\LaravelRuleModel([], 'default');
+		#echo "连接名称：" . $model->getConnectionName() . "\n"; // 输出 mysql
+		#echo "表名：" . $model->getTable() . "\n"; // 输出 oa_casbin_rules
+		#dump($model->get()->toArray());
+		
 		return new Response(
 			'<html><body><h1>Hello, World!</h1></body></html>',
 			Response::HTTP_OK, // Code（200）

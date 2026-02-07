@@ -21,35 +21,25 @@ use Symfony\Component\HttpFoundation\Response;
 
 class CorsMiddleware implements MiddlewareInterface
 {
-    protected const ALLOW_HEADERS = 'X-Requested-With, Content-Type, Accept, Origin, Authorization, X-Tenant-Id, X-XSRF-TOKEN, X-CSRF-TOKEN, X-TOKEN-REFRESH';
-    protected const ALLOW_METHODS = 'GET, POST, PUT, DELETE, PATCH, OPTIONS';
-    protected const ALLOW_CREDENTIALS = 'true';
-    protected const ALLOW_ORIGINS = ['https://example.com', 'https://sub.example.com'];
-
     public function handle(Request $request, callable $next): Response
     {
-        $response = new Response();
-
-        if (!$request->isMethod('OPTIONS')) {
-            try {
-                $response = $next($request);
-            } catch (\Exception $e) {
-                // 返回 500 错误并记录日志
-                return new Response('Internal Server Error', 500);
-            }
+        // dump('--- 进入 CorsMiddleware (中间件) ---');
+        // 1. 处理预检请求 (OPTIONS)
+        if ($request->isMethod('OPTIONS')) {
+            $response = new Response();
+        } else {
+            // 2. 对其他请求，先执行后续逻辑，获取响应
+            $response = $next($request);
         }
 
-        // 动态设置 Allow-Origin
-        $origin = $request->headers->get('Origin');
-		
-        #if (in_array($origin, self::ALLOW_ORIGINS, true)) {
-            $response->headers->set('Access-Control-Allow-Origin', '*');
-            $response->headers->set('Access-Control-Allow-Credentials', self::ALLOW_CREDENTIALS);
-        #}
+        // 3. 在响应中添加 CORS 头
+        $response->headers->set('Access-Control-Allow-Origin', '*');
+        $response->headers->set('Access-Control-Allow-Headers', 'X-Requested-With, Content-Type, Accept, Origin, Authorization,X-Tenant-Id, X-XSRF-TOKEN, X-CSRF-TOKEN, X-TOKEN-REFRESH');
+        $response->headers->set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+        $response->headers->set('Access-Control-Allow-Credentials', 'true');
+        // dump('--- 退出 CorsMiddleware (中间件) ---');
 
-        $response->headers->set('Access-Control-Allow-Headers', self::ALLOW_HEADERS);
-        $response->headers->set('Access-Control-Allow-Methods', self::ALLOW_METHODS);
-
+        // 4. 返回最终的响应
         return $response;
     }
 }
