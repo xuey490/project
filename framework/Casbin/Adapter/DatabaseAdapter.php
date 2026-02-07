@@ -1,12 +1,18 @@
 <?php
 
-/**
- * @desc  Policy Adapter
- * @author Tinywan(ShaoBo Wan)
- * @date 2022/01/12 10:37
- */
-
 declare(strict_types=1);
+
+/**
+ * This file is part of FssPHP Framework.
+ *
+ * @link     https://github.com/xuey490/project
+ * @license  https://github.com/xuey490/project/blob/main/LICENSE
+ *
+ * @Filename: DatabaseAdapter.php
+ * @Date: 2026-2-7
+ * @Developer: xuey863toy
+ * @Email: xuey863toy@gmail.com
+ */
 
 namespace Framework\Casbin\Adapter;
 
