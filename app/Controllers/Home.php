@@ -186,8 +186,8 @@ class Home
 		
 		//$this->logger->info('hello World!');
 		Permission::addPolicy('user1', 'resource1', 'read');
-		Permission::addPolicy('user2', 'resource1', 'edit');
-		#Permission::addPolicy('user3', 'resource1', 'all');
+		//Permission::addPolicy('user2', 'resource1', 'edit');
+		//Permission::addPermissionForUser('CEO', 'buy');
 		//Permission::deleteUser('user3');
 		
 		#$model = new \Framework\Casbin\Model\LaravelRuleModel([], 'default');

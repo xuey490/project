@@ -20,6 +20,7 @@ return [
             ],
             // 注意：命名空间要加反斜杠（\），且确保类文件存在
             'adapter' => \Framework\Casbin\Adapter\LaravelDatabaseAdapter::class,
+            //'adapter' => \Framework\Casbin\Adapter\DatabaseAdapter::class,
             // 数据库设置	
             'database' => [
                 'connection' => 'mysql',
