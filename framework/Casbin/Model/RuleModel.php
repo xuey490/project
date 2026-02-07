@@ -1,34 +1,21 @@
 <?php
-
 declare(strict_types=1);
-
-/**
- * This file is part of FssPHP Framework.
- *
- * @link     https://github.com/xuey490/project
- * @license  https://github.com/xuey490/project/blob/main/LICENSE
- *
- * @Filename: RuleModel.php
- * @Date: 2026-2-7
- * @Developer: xuey863toy
- * @Email: xuey863toy@gmail.com
- */
-
 
 namespace Framework\Casbin\Model;
 
 use think\Model;
+use think\facade\Db;
 
 /**
- * RuleModel Model
+ * Casbin RuleModel for ThinkPHP
  */
 class RuleModel extends Model
 {
-    /**
-     * 设置字段信息
-     *
-     * @var array
-     */
+    public $autoWriteTimestamp = false;
+
+    // 建议显式定义 table 属性，有助于IDE提示也能避免部分魔术方法干扰
+    protected $table; 
+
     protected $schema = [
         'id'    => 'int',
         'ptype' => 'string',
@@ -40,34 +27,31 @@ class RuleModel extends Model
         'v5'    => 'string'
     ];
 
-    /** @var string|null $driver */
-    protected ?string $driver;
+    protected ?string $driver = null;
 
-    /**
-     * 架构函数
-     * @param array $data
-     * @param string|null $driver
-     */
     public function __construct(array $data = [], ?string $driver = null)
     {
-        $this->driver = $driver;
-        $this->connection = $this->config('database.connection') ?: '';
-        $this->table = $this->config('database.rules_table');
-        $this->name = $this->config('database.rules_name');
+        // 1. 【关键修改】先调用父类构造函数，初始化 ORM 内部结构
         parent::__construct($data);
+
+        $this->driver = $driver;
+
+        // ---------- 设置表名 ----------
+        $tableName = $this->getCasbinConfig('rules_table', 'casbin_rules');
+
+        // 获取默认连接前缀
+        $prefix = config('database.connections.' . config('database.default') . '.prefix', '');
+        if ($prefix && !str_starts_with($tableName, $prefix)) {
+            $tableName = $prefix . $tableName;
+        }
+        
+        // 2. 此时内部结构已初始化，可以安全地设置 table
+        $this->table = $tableName;
     }
 
-    /**
-     * Gets config value by key.
-     *
-     * @param string|null $key
-     * @param null $default
-     *
-     * @return mixed
-     */
-    protected function config(string $key = null, $default = null)
+    protected function getCasbinConfig(?string $key = null, $default = null)
     {
-        $driver = $this->driver ?? config('plugin.casbin.webman-permission.permission.default');
-        return config('plugin.casbin.webman-permission.permission.' . $driver . '.' . $key, $default);
+        $driver = $this->driver ?? config('permission.enforcers.default');
+        return config("permission.enforcers.{$driver}.{$key}", $default);
     }
 }

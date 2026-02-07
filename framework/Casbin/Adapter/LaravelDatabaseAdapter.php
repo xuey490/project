@@ -34,8 +34,7 @@ use Throwable;
 /**
  * DatabaseAdapter - Laravel 适配版 Casbin 数据库适配器
  * 移除 Webman 依赖，完善 Laravel 生态适配
- *
- * @author techlee@qq.com
+
  */
 class LaravelDatabaseAdapter implements Adapter, UpdatableAdapter, BatchAdapter, FilteredAdapter
 {

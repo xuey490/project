@@ -21,3 +21,5 @@ storage/workerman/health.json
 storage/workerman/server.log
 watch.php
 workerman.log
+framework/Casbin/Permissionx.php
+framework/Casbin/Watcher/Redis.php
