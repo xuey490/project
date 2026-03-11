@@ -8,7 +8,7 @@ declare(strict_types=1);
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
- * @Filename: %filename%
+ * @Filename: BaseLaORMModel.php
  * @Date: 2026-1-11
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
@@ -22,31 +22,61 @@ use Illuminate\Support\Carbon;
 use Framework\Utils\Snowflake;
 use Framework\Basic\Traits\LaBelongsToTenant;
 use Framework\Basic\Casts\TimestampCast;
-#use Illuminate\Support\Facades\Cache;
 use think\facade\Cache;
 use Framework\Schema\SchemaRegistry;
 
+/**
+ * BaseLaORMModel - Laravel Eloquent ORM 模型基类
+ *
+ * 提供以下核心功能：
+ * - 雪花算法主键生成
+ * - 多租户隔离
+ * - 自动时间戳管理（可配置字段名）
+ * - 软删除支持
+ * - 表结构缓存优化
+ *
+ * 子模型可通过以下属性自定义时间字段配置：
+ * - $timestamps: 是否自动维护时间戳（默认 true）
+ * - $createdAtColumn: 创建时间字段名（默认 'created_at'，设为 null 则不使用）
+ * - $updatedAtColumn: 更新时间字段名（默认 'updated_at'，设为 null 则不使用）
+ *
+ * @package Framework\Basic
+ */
 class BaseLaORMModel extends Model
 {
     use LaBelongsToTenant;
 
     // ================= 基础配置 =================
 
+    /**
+     * 是否自增主键
+     * @var bool
+     */
     public $incrementing = false;
-    public $timestamps  = true;
-    protected $keyType  = 'int';
 
-    const CREATED_AT = 'created_at';
-    const UPDATED_AT = 'updated_at';
-    const DELETED_AT = 'deleted_at';
+    /**
+     * 是否自动维护时间戳
+     * 子类可覆盖设为 false 以禁用所有时间相关功能
+     * @var bool
+     */
+    public $timestamps = true;
+
+    /**
+     * 主键类型
+     * @var string
+     */
+    protected $keyType = 'int';
 
     /**
      * 数据库存储统一使用 Unix 时间戳
+     * @var string
      */
     protected $dateFormat = 'U';
 
     /**
      * 基础日期字段（父类统一定义）
+     * 子类可通过 extraDates() 方法扩展
+     * @var array
      */
     protected $dates = [
         'created_at',
@@ -58,41 +88,69 @@ class BaseLaORMModel extends Model
     ];
 
     /**
-     * 前端精度保护
+     * 前端精度保护 - ID 转为字符串
+     * @var array
      */
     protected $casts = [
         'id' => 'string',
     ];
 
     /**
-     * 雪花算法实例
+     * 雪花算法实例（单例）
+     * @var Snowflake|null
      */
     private static ?Snowflake $snowflake = null;
 
     /**
      * 主键生成策略
+     * 可选值: 'snowflake'（雪花ID）, 'auto'（自增）
+     * @var string
      */
     protected string $pkGenerateType = 'snowflake';
 
     /**
      * 表字段缓存
+     * @var array
      */
     private static array $tableColumns = [];
-	
-	private const MAX_SCHEMA_CACHE = 128;
-	
-	private static bool $schemaFrozen = false;
 
+    /**
+     * Schema 缓存最大数量
+     */
+    private const MAX_SCHEMA_CACHE = 128;
 
+    /**
+     * Schema 是否已冻结
+     * @var bool
+     */
+    private static bool $schemaFrozen = false;
+
+    /**
+     * 创建时间字段名
+     * 子类可覆盖定义，设为 null 则不自动填充
+     * @var string|null
+     */
+    protected ?string $createdAtColumn = 'created_at';
+
+    /**
+     * 更新时间字段名
+     * 子类可覆盖定义，设为 null 则不自动填充
+     * @var string|null
+     */
+    protected ?string $updatedAtColumn = 'updated_at';
 
     // ================= 初始化 =================
 
+    /**
+     * 初始化模型
+     *
+     * 自动为所有日期字段注册 TimestampCast，
+     * 不侵入 setAttribute / getAttribute 方法。
+     *
+     * @return void
+     */
     protected function initializeBaseLaORMModel(): void
     {
-        /**
-         * 自动为所有日期字段注册 TimestampCast
-         * 不侵入 setAttribute / getAttribute
-         */
         foreach ($this->getDates() as $field) {
             $this->casts[$field] = TimestampCast::class;
         }
@@ -100,65 +158,124 @@ class BaseLaORMModel extends Model
 
     // ================= Model Boot =================
 
+    /**
+     * 模型启动方法
+     *
+     * 注册以下模型事件：
+     * - creating: 生成雪花ID、填充创建时间
+     * - updating: 填充更新时间
+     * - deleting: 填充软删除时间
+     * - deleted: 执行删除后处理
+     *
+     * @return void
+     */
     protected static function boot()
     {
         parent::boot();
 
-        // 创建
+        // 创建事件
         static::creating(function ($model) {
-            // 1. 雪花ID
+            // 1. 雪花ID生成
             if ($model->pkGenerateType === 'snowflake') {
                 if (empty($model->{$model->getKeyName()})) {
                     $model->{$model->getKeyName()} = self::generateSnowflakeID();
                 }
             }
 
-            $now = Carbon::now()->timestamp;
-
-            // 2. 自动时间字段
-            foreach (['created_at', 'create_time'] as $f) {
-                if (empty($model->{$f})) {
-                    $model->{$f} = $now;
-                }
-            }
-
-            foreach (['updated_at', 'update_time'] as $f) {
-                if (empty($model->{$f})) {
-                    $model->{$f} = $now;
-                }
-            }
-
-            // 3. 创建人
-            $model->fillAuditColumn('created_by');
-        });
-
-        // 更新
-        static::updating(function ($model) {
-            $now = Carbon::now()->timestamp;
-            $model->updated_at  = $now;
-            $model->update_time = $now;
-
-            $model->fillAuditColumn('updated_by');
-        });
-
-        // 删除（软删时间同步）
-        static::deleting(function ($model) {
-            if ($model::isSoftDeleteEnabled()) {
+            // 2. 自动时间字段填充（仅在 timestamps 启用时生效）
+            if ($model->timestamps) {
                 $now = Carbon::now()->timestamp;
-                $model->deleted_at  = $now;
-                $model->delete_time = $now;
+                $model->fillTimestampFields($now, true);
             }
         });
 
+        // 更新事件
+        static::updating(function ($model) {
+            if ($model->timestamps) {
+                $now = Carbon::now()->timestamp;
+                $model->fillTimestampFields($now, false);
+            }
+        });
+
+        // 删除事件（软删时间同步）
+        static::deleting(function ($model) {
+            if ($model->timestamps && $model::isSoftDeleteEnabled()) {
+                $now = Carbon::now()->timestamp;
+                // 填充 deleted_at 和 delete_time
+                if ($model->hasColumnCached('deleted_at')) {
+                    $model->deleted_at = $now;
+                }
+                if ($model->hasColumnCached('delete_time')) {
+                    $model->delete_time = $now;
+                }
+            }
+        });
+
+        // 删除后处理
         static::deleted(function ($model) {
             self::onAfterDelete($model);
         });
     }
 
+    /**
+     * 填充时间戳字段
+     *
+     * 根据子模型定义的字段名自动填充创建时间或更新时间。
+     * 支持同时填充 Laravel 风格（created_at/updated_at）和 ThinkPHP 风格（create_time/update_time）字段。
+     *
+     * @param int $timestamp 当前时间戳
+     * @param bool $isCreate 是否为创建操作
+     * @return void
+     */
+    protected function fillTimestampFields(int $timestamp, bool $isCreate): void
+    {
+        if ($isCreate) {
+            // 创建时填充创建时间
+            $createFields = array_filter([
+                $this->createdAtColumn,
+                $this->createdAtColumn === 'created_at' ? 'create_time' : null,
+            ]);
+
+            foreach ($createFields as $field) {
+                if ($field && $this->hasColumnCached($field) && empty($this->{$field})) {
+                    $this->{$field} = $timestamp;
+                }
+            }
+
+            // 同时填充更新时间（创建时通常等于创建时间）
+            $updateFields = array_filter([
+                $this->updatedAtColumn,
+                $this->updatedAtColumn === 'updated_at' ? 'update_time' : null,
+            ]);
+
+            foreach ($updateFields as $field) {
+                if ($field && $this->hasColumnCached($field) && empty($this->{$field})) {
+                    $this->{$field} = $timestamp;
+                }
+            }
+        } else {
+            // 更新时只填充更新时间
+            $updateFields = array_filter([
+                $this->updatedAtColumn,
+                $this->updatedAtColumn === 'updated_at' ? 'update_time' : null,
+            ]);
+
+            foreach ($updateFields as $field) {
+                if ($field && $this->hasColumnCached($field)) {
+                    $this->{$field} = $timestamp;
+                }
+            }
+        }
+    }
+
     // ================= 日期体系（核心优化） =================
 
     /**
-     * 子类可扩展日期字段（推荐方式）
+     * 子类可扩展日期字段
+     *
+     * 子类可覆盖此方法添加自定义的日期字段。
+     *
+     * @return array 日期字段列表
      */
     protected function extraDates(): array
     {
@@ -167,6 +284,10 @@ class BaseLaORMModel extends Model
 
     /**
      * 统一日期字段入口
+     *
+     * 合并父类日期字段、类属性 $dates 和子类扩展字段。
+     *
+     * @return array 日期字段列表
      */
     public function getDates(): array
     {
@@ -179,6 +300,11 @@ class BaseLaORMModel extends Model
 
     /**
      * 统一序列化格式
+     *
+     * 将日期对象序列化为 'Y-m-d H:i:s' 格式字符串。
+     *
+     * @param \DateTimeInterface $date 日期对象
+     * @return string 格式化后的日期字符串
      */
     protected function serializeDate(\DateTimeInterface $date)
     {
@@ -188,180 +314,205 @@ class BaseLaORMModel extends Model
     // ================= 审计字段 =================
 
     /**
-     * FPM 检查字段是否存在
+     * 检查字段是否存在（带缓存）
+     *
+     * 使用 Schema 缓存避免重复查询数据库结构。
+     *
+     * @param string $column 字段名
+     * @return bool 字段是否存在
      */
     protected function hasColumnCached(string $column): bool
     {
         $table = $this->getTable();
-		
-		// 使用 getTableColumnsCached 取代 getFields
-		return in_array(
-			$column,
-			$this->getTableColumnsCached(),
-			true
-		);
 
-		/*
-        if (!isset(self::$tableColumns[$table])) {
-            self::$tableColumns[$table] = $this->getConnection()
+        return in_array(
+            $column,
+            $this->getTableColumnsCached(),
+            true
+        );
+    }
+
+    /**
+     * 获取表字段缓存
+     *
+     * 使用缓存系统存储表结构信息，提升性能。
+     *
+     * @return array 字段名列表
+     */
+    protected function getTableColumnsCached(): array
+    {
+        $connection = $this->getConnection();
+        $driver = $connection->getDriverName();
+
+        $table = $this->getTable();
+        $cacheKey = 'schema:columns:' . $driver . ':' . $table;
+
+        return Cache::remember($cacheKey, function () use ($table) {
+            return $this->getConnection()
                 ->getSchemaBuilder()
                 ->getColumnListing($table);
-        }
-
-        return in_array($column, self::$tableColumns[$table], true);
-		*/
+        });
     }
-	
-	/*
-	* 返回字段缓存
-	*/
-	protected function getTableColumnsCached(): array
-	{
-		$connection = $this->getConnection();
-		$driver     = $connection->getDriverName();
-		
-		$table = $this->getTable();
-		$cacheKey = 'schema:columns:' . $driver . ':' . $table;
 
-		return Cache::remember($cacheKey, function () use ($table) {
-			return $this->getConnection()
-				->getSchemaBuilder()
-				->getColumnListing($table);
-		});
-	}	
+    // ================= 字段相关 =================
 
-    /* ===== 字段相关 ===== */
-
+    /**
+     * 获取模型字段列表
+     *
+     * 根据运行环境选择不同的获取方式：
+     * - Workerman 环境：使用 SchemaRegistry
+     * - 其他环境：使用数据库查询
+     *
+     * @return array 字段列表
+     */
     public function getFields(): array
     {
-		if (defined('WORKERMAN_ENV')) {
-			return SchemaRegistry::getColumns($this->getTable());
-		}else{
-			/**
-			 * 对外 API：获取模型字段（带缓存、受控）
-			 */			
-			return $this->getTableColumns();
-		}
+        if (defined('WORKERMAN_ENV')) {
+            return SchemaRegistry::getColumns($this->getTable());
+        } else {
+            return $this->getTableColumns();
+        }
     }
 
+    /**
+     * 检查字段是否存在（SchemaRegistry 方式）
+     *
+     * @param string $column 字段名
+     * @return bool 字段是否存在
+     */
     protected function hasColumn(string $column): bool
     {
         return SchemaRegistry::hasColumn($this->getTable(), $column);
     }
 
     /**
-     * 【性能优化核心】填充审计字段
-     * 避免使用 SHOW COLUMNS，改用 Schema 缓存 或 静态变量
+     * 缓存治理层
+     *
+     * 管理表字段的内存缓存，避免重复查询。
+     *
+     * @return array 字段列表
      */
-    protected function fillAuditColumn(string $column): void
+    protected function getTableColumns(): array
     {
-        $uid = (function_exists('getCurrentUser') && is_callable('getCurrentUser'))
-            ? \getCurrentUser()
-            : null;
+        $table = $this->getTable();
 
-        if (!$uid) return;	
-		
-		if (defined('WORKERMAN_ENV')) {
-			if (!in_array($column, SchemaRegistry::getAuditColumns($this->getTable()), true)) {
-				return;
-			}
-			if ($uid) {
-				$this->setAttribute($column, $uid);
-			}
-		}else{
-			$this->hasColumnCached($column);
-			if ($this->hasColumnCached($column)) {
-				$this->setAttribute($column, $uid);
-			}
-			
-		}
+        if (isset(self::$tableColumns[$table])) {
+            return self::$tableColumns[$table];
+        }
+
+        if (self::$schemaFrozen) {
+            throw new \RuntimeException(
+                "Schema is frozen. Table columns not preloaded: {$table}"
+            );
+        }
+
+        $columns = $this->loadTableColumnsFromDb($table);
+
+        return $this->rememberTableColumns($table, $columns);
     }
-	/* ===== 字段相关 ===== */
 
+    /**
+     * 从数据库加载表字段
+     *
+     * 直接查询数据库获取表结构信息。
+     *
+     * @param string $table 表名
+     * @return array 字段列表
+     */
+    protected function loadTableColumnsFromDb(string $table): array
+    {
+        $connection = $this->getConnection();
+        $driver = $connection->getDriverName();
 
-	/**
-	 * 缓存治理层
-	 */
-	protected function getTableColumns(): array
-	{
-		$table = $this->getTable();
+        if ($driver === 'mysql') {
+            $prefix = $connection->getTablePrefix();
+            $rows = $connection->select(
+                'SHOW COLUMNS FROM `' . $prefix . $table . '`'
+            );
 
-		if (isset(self::$tableColumns[$table])) {
-			return self::$tableColumns[$table];
-		}
+            return array_map(
+                static fn($row) => $row->Field,
+                $rows
+            );
+        }
 
-		if (self::$schemaFrozen) {
-			throw new \RuntimeException(
-				"Schema is frozen. Table columns not preloaded: {$table}"
-			);
-		}
+        return $connection
+            ->getSchemaBuilder()
+            ->getColumnListing($table);
+    }
 
-		$columns = $this->loadTableColumnsFromDb($table);
+    /**
+     * 缓存表字段
+     *
+     * 将字段列表存入内存缓存，使用 FIFO 策略控制缓存大小。
+     *
+     * @param string $table 表名
+     * @param array $columns 字段列表
+     * @return array 字段列表
+     */
+    protected function rememberTableColumns(string $table, array $columns): array
+    {
+        if (count(self::$tableColumns) >= self::MAX_SCHEMA_CACHE) {
+            array_shift(self::$tableColumns); // FIFO
+        }
 
-		return $this->rememberTableColumns($table, $columns);
-	}
+        return self::$tableColumns[$table] = $columns;
+    }
 
-	/**
-	 * 真正的 DB I/O（禁止在业务层直接调用）
-	 */
-	protected function loadTableColumnsFromDb(string $table): array
-	{
-		$connection = $this->getConnection();
-		$driver     = $connection->getDriverName();
-
-		if ($driver === 'mysql') {
-			$prefix = $connection->getTablePrefix();
-			$rows = $connection->select(
-				'SHOW COLUMNS FROM `' . $prefix . $table . '`'
-			);
-
-			return array_map(
-				static fn($row) => $row->Field,
-				$rows
-			);
-		}
-
-		return $connection
-			->getSchemaBuilder()
-			->getColumnListing($table);
-	}
-	
-	protected function rememberTableColumns(string $table, array $columns): array
-	{
-		if (count(self::$tableColumns) >= self::MAX_SCHEMA_CACHE) {
-			array_shift(self::$tableColumns); // FIFO
-		}
-
-		return self::$tableColumns[$table] = $columns;
-	}
-	
-	public static function freezeSchema(): void
-	{
-		self::$schemaFrozen = true;
-	}
+    /**
+     * 冻结 Schema
+     *
+     * 冻结后禁止从数据库加载新的表结构。
+     * 适用于生产环境预加载场景。
+     *
+     * @return void
+     */
+    public static function freezeSchema(): void
+    {
+        self::$schemaFrozen = true;
+    }
 
     // ================= 动态字段控制 =================
-	
-	/**
-	 * 兼容 TP: 动态隐藏字段（语义优化，避免与原生 $hidden 冲突）
-	 */
-	public function dynamicHidden(array $fields): static
-	{
-		$this->makeHidden($fields);
-		return $this;
-	}
 
-	/**
-	 * 补充：动态显示字段（双向兼容，功能更完整）
-	 */
-	public function dynamicVisible(array $fields): static
-	{
-		$this->makeVisible($fields);
-		return $this;
-	}
+    /**
+     * 动态隐藏字段
+     *
+     * 兼容 ThinkPHP 风格的动态隐藏方法。
+     *
+     * @param array $fields 要隐藏的字段列表
+     * @return static 当前模型实例
+     */
+    public function dynamicHidden(array $fields): static
+    {
+        $this->makeHidden($fields);
+        return $this;
+    }
+
+    /**
+     * 动态显示字段
+     *
+     * 兼容 ThinkPHP 风格的动态显示方法。
+     *
+     * @param array $fields 要显示的字段列表
+     * @return static 当前模型实例
+     */
+    public function dynamicVisible(array $fields): static
+    {
+        $this->makeVisible($fields);
+        return $this;
+    }
 
     // ================= TP 风格兼容 =================
 
+    /**
+     * 获取字段值
+     *
+     * 兼容 ThinkPHP 的 getData 方法。
+     * 自动将 Carbon 对象格式化为字符串。
+     *
+     * @param string $field 字段名
+     * @return mixed 字段值
+     */
     public function getData(string $field): mixed
     {
         $value = $this->getAttribute($field);
@@ -373,13 +524,32 @@ class BaseLaORMModel extends Model
         return $value;
     }
 
+    /**
+     * 设置字段值
+     *
+     * 兼容 ThinkPHP 的 set 方法。
+     *
+     * @param string $name 字段名
+     * @param mixed $value 字段值
+     * @return void
+     */
     public function set(string $name, mixed $value): void
     {
         $this->setAttribute($name, $value);
     }
-			
 
     // ================= 表信息 =================
+
+    /**
+     * 获取表名
+     *
+     * 支持三种方式指定表名：
+     * 1. $table 属性
+     * 2. $name 属性
+     * 3. 父类自动推断
+     *
+     * @return string 表名
+     */
     public function getTable(): string
     {
         if (!empty($this->table)) {
@@ -392,7 +562,11 @@ class BaseLaORMModel extends Model
     }
 
     /**
-     * 获取模型定义的数据库表名【全称】.
+     * 获取模型定义的数据库表名（全称）
+     *
+     * 静态方法，便于在不实例化模型的情况下获取表名。
+     *
+     * @return string 表名
      */
     public static function getTableName(): string
     {
@@ -401,64 +575,44 @@ class BaseLaORMModel extends Model
         return $self->getTable();
     }
 
-	/**
-	 * 获取模型对应表的字段列表（复用静态缓存，性能最优）
-	 *
-	 * @return array
-	 */
-	public function getFields2(): array
-	{
-		try {
-			$table = $this->getTable();
-			// 复用已缓存的字段列表，避免重复调用 Schema
-			if (!isset(self::$tableColumns[$table])) {
-				self::$tableColumns[$table] = $this->getConnection()->getSchemaBuilder()->getColumnListing($table);
-			}
-			return self::$tableColumns[$table];
-		} catch (\Exception $e) {
-			return [];
-		}
-	}
+    /**
+     * 获取模型对应表的字段列表
+     *
+     * 复用静态缓存，性能最优。
+     *
+     * @return array 字段列表
+     */
+    public function getFields2(): array
+    {
+        try {
+            $table = $this->getTable();
+            if (!isset(self::$tableColumns[$table])) {
+                self::$tableColumns[$table] = $this->getConnection()->getSchemaBuilder()->getColumnListing($table);
+            }
+            return self::$tableColumns[$table];
+        } catch (\Exception $e) {
+            return [];
+        }
+    }
 
     /**
      * 获取主键名称
+     *
+     * 兼容 ThinkPHP 的 getPk 方法。
+     *
+     * @return string 主键名
      */
     public function getPk(): string
     {
         return $this->getKeyName();
     }
-	
-    /**
-     * 自动设置创建人
-     */
-    private static function setCreatedBy(Model $model): void
-    {
-		$self = new static();
-        // 需确保 getCurrentUser() 存在且安全
-        $uid = function_exists('getCurrentUser') ? \getCurrentUser() : null;
-
-        // 检查 created_by 是否在 fillable 中或数据库有此字段，防止报错
-        // 这里假设只要数据库有这个字段就填，不强制 fillable
-        if ($uid && in_array('created_by', $self->getFields())) {
-            $model->setAttribute('created_by', $uid);
-        }
-    }
 
     /**
-     * 自动设置更新人
-     */
-    private static function setUpdatedBy(Model $model): void
-    {
-		$self = new static();
-        $uid = function_exists('getCurrentUser') ? \getCurrentUser() : null;
-        
-        if ($uid && in_array('updated_by' ,$self->getFields())) {
-             $model->setAttribute('updated_by', $uid);
-        }
-    }
-
-    /**
-     * 是否开启软删
+     * 是否开启软删除
+     *
+     * 检查当前模型是否使用了 SoftDeletes trait。
+     *
+     * @return bool 是否开启软删除
      */
     public static function isSoftDeleteEnabled(): bool
     {
@@ -467,6 +621,14 @@ class BaseLaORMModel extends Model
 
     // ================= 删除后处理 =================
 
+    /**
+     * 删除后处理
+     *
+     * 物理删除后执行清理逻辑（预留回收站功能）。
+     *
+     * @param Model $model 被删除的模型实例
+     * @return void
+     */
     public static function onAfterDelete(Model $model)
     {
         if ($model::isSoftDeleteEnabled()) {
@@ -483,143 +645,167 @@ class BaseLaORMModel extends Model
     }
 
     // ================= 雪花算法部分优化 =================
-	
-	/**
-	 * 生成雪花ID（公共静态方法，支持外部调用）
-	 */
-	public static function generateSnowflakeID(): string
-	{
-		// 懒加载雪花算法实例，全局只初始化一次
-		if (self::$snowflake === null) {
-			self::$snowflake = self::createSnowflakeInstance();
-		}
 
-		// 生成雪花ID并转为字符串（避免精度丢失）
-		return (string) self::$snowflake->nextId();
-	}
+    /**
+     * 生成雪花ID
+     *
+     * 公共静态方法，支持外部调用。
+     * 使用懒加载模式初始化雪花算法实例。
+     *
+     * @return string 雪花ID字符串
+     */
+    public static function generateSnowflakeID(): string
+    {
+        // 懒加载雪花算法实例，全局只初始化一次
+        if (self::$snowflake === null) {
+            self::$snowflake = self::createSnowflakeInstance();
+        }
 
-	/**
-	 * 创建雪花算法实例（独立方法，便于扩展和自定义）
-	 */
-	private static function createSnowflakeInstance(): Snowflake
-	{
-		// 从Laravel配置文件读取worker_id和datacenter_id，避免硬编码
-		// 建议在config/app.php中添加：'snowflake_worker_id' => 0, 'snowflake_datacenter_id' => 0
-		$workerId = (int) config('app.snowflake_worker_id', 0);
-		$dataCenterId = (int) config('app.snowflake_datacenter_id', 0);
+        // 生成雪花ID并转为字符串（避免精度丢失）
+        return (string) self::$snowflake->nextId();
+    }
 
-		// 校验worker_id和datacenter_id范围（雪花算法标准：0-31）
-		if ($workerId < 0 || $workerId > 31 || $dataCenterId < 0 || $dataCenterId > 31) {
-			throw new \InvalidArgumentException("雪花算法WorkerId和DataCenterId必须在0-31之间");
-		}
+    /**
+     * 创建雪花算法实例
+     *
+     * 从配置文件读取 worker_id 和 datacenter_id。
+     * 配置建议在 config/app.php 中添加：
+     * - 'snowflake_worker_id' => 0
+     * - 'snowflake_datacenter_id' => 0
+     *
+     * @return Snowflake 雪花算法实例
+     * @throws \InvalidArgumentException 配置值超出范围时抛出
+     */
+    private static function createSnowflakeInstance(): Snowflake
+    {
+        $workerId = (int) config('app.snowflake_worker_id', 0);
+        $dataCenterId = (int) config('app.snowflake_datacenter_id', 0);
 
-		return new Snowflake($workerId, $dataCenterId);
-	}
+        // 校验 worker_id 和 datacenter_id 范围（雪花算法标准：0-31）
+        if ($workerId < 0 || $workerId > 31 || $dataCenterId < 0 || $dataCenterId > 31) {
+            throw new \InvalidArgumentException("雪花算法 WorkerId 和 DataCenterId 必须在 0-31 之间");
+        }
 
-	/**
-	 * 重置雪花算法实例（可选，供子类/特殊场景自定义）
-	 */
-	public static function resetSnowflakeInstance(?Snowflake $snowflake = null): void
-	{
-		if ($snowflake === null) {
-			self::$snowflake = self::createSnowflakeInstance();
-		} else {
-			self::$snowflake = $snowflake;
-		}
-	}
-		
-	/**
-	 * 获取表字段的详细结构信息（基于 Schema，无原生 SQL 依赖）
-	 *
-	 * @return array 格式：[字段名 => [type: 字段类型, nullable: 是否允许为空, default: 默认值, ...]]
-	 */
-	public function getFieldDetails(): array
-	{
-		try {
-			$table = $this->getTable();
-			$connection = $this->getConnection();
-			$schema = $connection->getSchemaBuilder();
-			$columns = $schema->getColumns($table);
-			
-			// 1. 先获取当前表的所有主键字段（复合主键也支持）
-			$primaryKeys = $this->getPrimaryKeys();
-			#return $columns;
-			$fieldDetails = [];
-			foreach ($columns as $column) {
-				$fieldName = $column['name'] ?? '';
-				if (empty($fieldName)) {
-					continue; // 过滤无效字段
-				}
-				$fieldDetails[$fieldName] = [
-					'auto_increment' => $column['auto_increment'],
-					'type_name'     => $column['type_name'] ?? 'unknown',
-					'type'     		=> $column['type'] ?? 'unknown',
-					'nullable' 		=> $column['nullable'] ?? null,
-					'default'  		=> $column['default'] ?? null,
-					'length'   		=> $column['length'] ?? null,
-					'comment'  		=> $column['comment'] ?? null,
-					'primary'  		=> in_array($fieldName, $primaryKeys), // 2. 通过主键列表判断，无兼容问题
-				];
-			}
+        return new Snowflake($workerId, $dataCenterId);
+    }
 
-			return $fieldDetails;
-		} catch (\Exception $e) {
-			#\Illuminate\Support\Facades\Log::error("获取表结构失败：{$e->getMessage()}");
-			return [];
-		}
-	}
+    /**
+     * 重置雪花算法实例
+     *
+     * 供子类或特殊场景自定义雪花算法实例。
+     *
+     * @param Snowflake|null $snowflake 自定义的雪花算法实例，null 则重新创建
+     * @return void
+     */
+    public static function resetSnowflakeInstance(?Snowflake $snowflake = null): void
+    {
+        if ($snowflake === null) {
+            self::$snowflake = self::createSnowflakeInstance();
+        } else {
+            self::$snowflake = $snowflake;
+        }
+    }
 
-	/**
-	 * 检查指定字段是否为目标类型（基于 Schema，兼容性强）
-	 *
-	 * @param string $column 字段名
-	 * @param string|array $targetTypes 目标类型（如 'varchar'、['int', 'bigint']）
-	 * @return bool
-	 */
-	public function isFieldType(string $column, string|array $targetTypes): bool
-	{
-		if (!is_array($targetTypes)) {
-			$targetTypes = [$targetTypes];
-		}
+    /**
+     * 获取表字段的详细结构信息
+     *
+     * 基于 Schema，无原生 SQL 依赖。
+     *
+     * @return array 格式：[字段名 => [type, nullable, default, ...]]
+     */
+    public function getFieldDetails(): array
+    {
+        try {
+            $table = $this->getTable();
+            $connection = $this->getConnection();
+            $schema = $connection->getSchemaBuilder();
+            $columns = $schema->getColumns($table);
 
-		$fieldDetails = $this->getFieldDetails();
-		if (!isset($fieldDetails[$column])) {
-			return false;
-		}
+            // 获取当前表的所有主键字段（复合主键也支持）
+            $primaryKeys = $this->getPrimaryKeys();
 
-		// 忽略大小写，提升兼容性
-		$fieldType = strtolower($fieldDetails[$column]['type']);
-		$targetTypes = array_map('strtolower', $targetTypes);
+            $fieldDetails = [];
+            foreach ($columns as $column) {
+                $fieldName = $column['name'] ?? '';
+                if (empty($fieldName)) {
+                    continue; // 过滤无效字段
+                }
+                $fieldDetails[$fieldName] = [
+                    'auto_increment' => $column['auto_increment'],
+                    'type_name' => $column['type_name'] ?? 'unknown',
+                    'type' => $column['type'] ?? 'unknown',
+                    'nullable' => $column['nullable'] ?? null,
+                    'default' => $column['default'] ?? null,
+                    'length' => $column['length'] ?? null,
+                    'comment' => $column['comment'] ?? null,
+                    'primary' => in_array($fieldName, $primaryKeys),
+                ];
+            }
 
-		return in_array($fieldType, $targetTypes);
-	}
+            return $fieldDetails;
+        } catch (\Exception $e) {
+            return [];
+        }
+    }
 
-	/**
-	 * 获取表的主键字段（独立方法，供关联使用）
-	 */
-	public function getPrimaryKeys(): array
-	{
-		try {
-			$table = $this->getTable();
-			$connection = $this->getConnection();
-			$schema = $connection->getSchemaBuilder();
-			
-			// 获取主键信息（兼容所有 Laravel 版本和数据库驱动）
-			$indexes = $schema->getIndexes($table);
-			$primaryKeys = [];
+    /**
+     * 检查指定字段是否为目标类型
+     *
+     * 基于 Schema，兼容性强。
+     *
+     * @param string $column 字段名
+     * @param string|array $targetTypes 目标类型（如 'varchar'、['int', 'bigint']）
+     * @return bool 是否匹配
+     */
+    public function isFieldType(string $column, string|array $targetTypes): bool
+    {
+        if (!is_array($targetTypes)) {
+            $targetTypes = [$targetTypes];
+        }
 
-			foreach ($indexes as $index) {
-				if ($index['primary']) {
-					// 复合主键会返回多个字段，普通主键仅一个
-					$primaryKeys = array_merge($primaryKeys, $index['columns']);
-					break; // 主键索引唯一，找到后直接退出循环
-				}
-			}
+        $fieldDetails = $this->getFieldDetails();
+        if (!isset($fieldDetails[$column])) {
+            return false;
+        }
 
-			return $primaryKeys;
-		} catch (\Exception $e) {
-			\Illuminate\Support\Facades\Log::error("获取主键失败：{$e->getMessage()}");
-			return [];
-		}
-	}
+        // 忽略大小写，提升兼容性
+        $fieldType = strtolower($fieldDetails[$column]['type']);
+        $targetTypes = array_map('strtolower', $targetTypes);
+
+        return in_array($fieldType, $targetTypes);
+    }
+
+    /**
+     * 获取表的主键字段
+     *
+     * 独立方法，供关联使用。
+     * 支持复合主键。
+     *
+     * @return array 主键字段列表
+     */
+    public function getPrimaryKeys(): array
+    {
+        try {
+            $table = $this->getTable();
+            $connection = $this->getConnection();
+            $schema = $connection->getSchemaBuilder();
+
+            // 获取主键信息（兼容所有 Laravel 版本和数据库驱动）
+            $indexes = $schema->getIndexes($table);
+            $primaryKeys = [];
+
+            foreach ($indexes as $index) {
+                if ($index['primary']) {
+                    // 复合主键会返回多个字段，普通主键仅一个
+                    $primaryKeys = array_merge($primaryKeys, $index['columns']);
+                    break; // 主键索引唯一，找到后直接退出循环
+                }
+            }
+
+            return $primaryKeys;
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("获取主键失败：{$e->getMessage()}");
+            return [];
+        }
+    }
 }

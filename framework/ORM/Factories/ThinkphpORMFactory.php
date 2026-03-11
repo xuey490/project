@@ -26,15 +26,32 @@ use think\Model;
 use think\Paginator;
 use Throwable;
 
+/**
+ * ThinkPHP ORM工厂类
+ * 
+ * 提供ThinkPHP ORM的数据库操作封装，包括查询、插入、更新、删除等操作。
+ * 支持搜索器、条件构建、分页、高精度计算等功能。
+ */
 class ThinkphpORMFactory
 {
+    /**
+     * 模型类名
+     * @var mixed
+     */
     private mixed $modelClass;
 
+    /**
+     * 模型实例（懒加载）
+     * @var Model|null
+     */
     private ?Model $modelInstance = null;
 
     /**
-     * 构造函数.
-     * @param Model|string|null $model 模型类名或实例
+     * 构造函数
+     * 
+     * 初始化ThinkPHP ORM工厂实例，接收模型类名或实例。
+     * 
+     * @param Model|string|null $model 模型类名或实例，用于初始化工厂
      */
     public function __construct(Model|string|null $model = null)
     {
@@ -47,7 +64,12 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 获取模型实例 (懒加载).
+     * 获取模型实例（懒加载）
+     * 
+     * 延迟加载模型实例，首次调用时才创建实例。
+     * 
+     * @return Model 返回模型实例
+     * @throws Exception 当模型类不存在或加载失败时抛出异常
      */
     public function getModel(): Model
     {
@@ -69,8 +91,14 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 核心优化：统一查询条件构建器
-     * 适配 ThinkPHP 的 Query 对象
+     * 构建查询条件
+     * 
+     * 根据条件数组构建查询构建器，支持普通条件和搜索器。
+     * 
+     * @param array      $where         查询条件数组
+     * @param bool       $search        是否启用搜索器模式，默认false
+     * @param array|null $withoutScopes 需要移除的作用域列表
+     * @return Query 返回ThinkPHP查询构建器实例
      */
     private function buildQuery(array $where, bool $search = false, ?array $withoutScopes = null): Query
     {
@@ -87,6 +115,14 @@ class ThinkphpORMFactory
         return $query;
     }
 
+    /**
+     * 分离特殊查询条件
+     * 
+     * 将IN和NOT IN条件从普通条件中分离出来单独处理。
+     * 
+     * @param array $where 原始查询条件数组
+     * @return array 返回[普通条件, 特殊条件]数组
+     */
     private function splitWhere(array $where): array
     {
         $special = [];
@@ -102,6 +138,15 @@ class ThinkphpORMFactory
         return [$where, $special];
     }
 
+    /**
+     * 应用查询条件到构建器
+     * 
+     * 将条件数组应用到查询构建器，处理普通条件和IN/NOT IN特殊条件。
+     * 
+     * @param Query $query 查询构建器实例
+     * @param array $where 查询条件数组
+     * @return void
+     */
     private function applyConditions(Query $query, array $where): void
     {
         [$normal, $special] = $this->splitWhere($where);
@@ -122,6 +167,15 @@ class ThinkphpORMFactory
         }
     }
 
+    /**
+     * 应用字段选择
+     * 
+     * 设置查询返回的字段列表。
+     * 
+     * @param Query        $query 查询构建器实例
+     * @param array|string $field 字段列表，支持数组或逗号分隔的字符串
+     * @return void
+     */
     private function applyFields(Query $query, array|string $field): void
     {
         $isWildcard = ($field === '*' || ($field === ['*']));
@@ -138,7 +192,11 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 获取条数
+     * 获取符合条件的记录数
+     * 
+     * @param array $where  查询条件数组
+     * @param bool  $search 是否启用搜索器模式，默认false
+     * @return int 返回符合条件的记录总数
      */
     public function count(array $where = [], bool $search = false): int
     {
@@ -146,7 +204,19 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 查询列表
+     * 查询列表数据
+     * 
+     * 根据条件查询数据列表，支持分页、排序、关联预加载。
+     * 
+     * @param array       $where         查询条件数组
+     * @param array|string $field        返回字段列表，默认为所有字段
+     * @param int         $page          页码，大于0时启用分页
+     * @param int         $limit         每页记录数
+     * @param string      $order         排序条件
+     * @param array       $with          关联预加载配置
+     * @param bool        $search        是否启用搜索器模式
+     * @param array|null  $withoutScopes 需要移除的作用域列表
+     * @return Collection|null 返回数据集合，分页时返回当前页数据
      */
     public function selectList(array $where, array|string $field = '*', int $page = 0, int $limit = 0, string $order = '', array $with = [], bool $search = false, ?array $withoutScopes = null): ?Collection
     {
@@ -162,7 +232,18 @@ class ThinkphpORMFactory
 
     /**
      * 获取查询构建器或分页结果
-     * @return Query|Paginator
+     * 
+     * 构建查询并返回构建器实例或分页对象。
+     * 
+     * @param array       $where         查询条件数组
+     * @param array|string $field        返回字段列表
+     * @param int         $page          页码
+     * @param int         $limit         每页记录数
+     * @param string      $order         排序条件
+     * @param array       $with          关联预加载配置
+     * @param bool        $search        是否启用搜索器模式
+     * @param array|null  $withoutScopes 需要移除的作用域列表
+     * @return Query|Paginator 返回查询构建器或分页对象
      */
     public function selectModel(array $where, array|string $field = '*', int $page = 0, int $limit = 0, string $order = '', array $with = [], bool $search = false, ?array $withoutScopes = null): Query|Paginator
     {
@@ -190,7 +271,10 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 获取条数 (别名)
+     * 获取符合条件的记录数（别名方法）
+     * 
+     * @param array $where 查询条件数组
+     * @return int 返回记录总数
      */
     public function getCount(array $where): int
     {
@@ -198,7 +282,14 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 计算符合条件的唯一记录数量
+     * 获取去重后的记录数
+     * 
+     * 计算指定字段去重后的记录数量。
+     * 
+     * @param array  $where  查询条件数组
+     * @param string $field  需要去重的字段名
+     * @param bool   $search 是否启用搜索器模式
+     * @return int 返回去重后的记录数
      */
     public function getDistinctCount(array $where, string $field, bool $search = true): int
     {
@@ -206,18 +297,37 @@ class ThinkphpORMFactory
         return (int) $this->buildQuery($where, $search)->count('DISTINCT ' . $field);
     }
 
+    /**
+     * 获取模型主键名
+     * 
+     * @return string 返回主键字段名
+     */
     public function getPk(): string
     {
         return $this->getModel()->getPk();
     }
 
+    /**
+     * 获取数据表名
+     * 
+     * @return string 返回表名（不含前缀）
+     */
     public function getTableName(): string
     {
         return $this->getModel()->getName();
     }
 
     /**
-     * 获取一条数据
+     * 根据ID或条件获取单条记录
+     * 
+     * 支持通过主键ID或条件数组查询单条记录。
+     * 
+     * @param int|string|array     $id           主键值或条件数组
+     * @param array|string|null    $field        返回字段列表
+     * @param array|null           $with         关联预加载配置
+     * @param string               $order        排序条件
+     * @param array|null           $withoutScopes 需要移除的作用域列表
+     * @return Model|null 返回模型实例或null
      */
     public function get($id, array|string|null $field = null, ?array $with = [], string $order = '', ?array $withoutScopes = null): ?Model
     {
@@ -237,7 +347,13 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 查询一条数据是否存在
+     * 检查记录是否存在
+     * 
+     * 判断符合条件的记录是否存在。
+     * 
+     * @param mixed  $map   主键值或条件数组
+     * @param string $field 字段名（当$map为单值时使用）
+     * @return bool 存在返回true，否则返回false
      */
     public function be($map, string $field = ''): bool
     {
@@ -251,7 +367,14 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 根据条件获取一条数据
+     * 根据条件获取单条记录
+     * 
+     * 通过条件数组查询第一条匹配的记录。
+     * 
+     * @param array              $where 查询条件数组
+     * @param array|string|null  $field 返回字段列表
+     * @param array              $with  关联预加载配置
+     * @return Model|null 返回模型实例或null
      */
     public function getOne(array $where, array|string|null $field = '*', array $with = []): ?Model
     {
@@ -266,7 +389,13 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 获取某字段的值
+     * 获取指定字段的值
+     * 
+     * 根据条件查询单个字段的值。
+     * 
+     * @param mixed       $where 主键值或条件数组
+     * @param string|null $field 要获取的字段名，默认为主键
+     * @return mixed 返回字段值
      */
     public function value($where, ?string $field = null): mixed
     {
@@ -277,7 +406,14 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 获取某个字段数组
+     * 获取字段值数组
+     * 
+     * 获取指定字段的所有值，可指定键名。
+     * 
+     * @param array  $where 查询条件数组
+     * @param string $field 要获取的字段名
+     * @param string $key   作为数组键的字段名
+     * @return array 返回字段值数组
      */
     public function getColumn(array $where, string $field, string $key = ''): array
     {
@@ -286,7 +422,14 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 删除
+     * 删除记录
+     * 
+     * 根据主键或条件删除记录。
+     * 
+     * @param array|int|string $id  主键值、主键数组或条件数组
+     * @param string|null      $key 条件字段名
+     * @return int 返回影响的行数
+     * @throws Exception 删除失败时抛出异常
      */
     public function delete(array|int|string $id, ?string $key = null): int
     {
@@ -311,7 +454,13 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 销毁记录 (直接通过主键)
+     * 销毁记录
+     * 
+     * 直接通过主键销毁记录，支持强制删除。
+     * 
+     * @param mixed $id    主键值或主键数组
+     * @param bool  $force 是否强制删除（用于软删除模型）
+     * @return bool 删除成功返回true
      */
     public function destroy(mixed $id, bool $force = false): bool
     {
@@ -319,7 +468,14 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 更新
+     * 更新记录
+     * 
+     * 根据主键或条件更新记录。
+     * 
+     * @param string|int|array $id   主键值或条件数组
+     * @param array            $data 要更新的数据
+     * @param string|null      $key  条件字段名
+     * @return mixed 返回影响的行数
      */
     public function update(string|int|array $id, array $data, ?string $key = null): mixed
     {
@@ -330,6 +486,15 @@ class ThinkphpORMFactory
         return $this->buildQuery($where)->update($data);
     }
 
+    /**
+     * 设置查询条件
+     * 
+     * 将单值转换为条件数组格式。
+     * 
+     * @param mixed       $where 条件值或条件数组
+     * @param string|null $key   条件字段名
+     * @return array 返回条件数组
+     */
     protected function setWhere($where, ?string $key = null): array
     {
         if (!is_array($where)) {
@@ -339,7 +504,14 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 批量更新
+     * 批量更新记录
+     * 
+     * 根据主键数组批量更新多条记录。
+     * 
+     * @param array       $ids  主键值数组
+     * @param array       $data 要更新的数据
+     * @param string|null $key  条件字段名，默认为主键
+     * @return bool 更新成功返回true
      */
     public function batchUpdate(array $ids, array $data, ?string $key = null): bool
     {
@@ -349,7 +521,12 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 保存返回模型
+     * 保存单条记录
+     * 
+     * 创建新记录并返回模型实例。
+     * 
+     * @param array $data 要保存的数据
+     * @return Model|null 返回创建的模型实例
      */
     public function save(array $data): ?Model
     {
@@ -357,7 +534,12 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 批量插入
+     * 批量插入记录
+     * 
+     * 批量创建多条记录。
+     * 
+     * @param array $data 要插入的数据数组
+     * @return bool 插入成功返回true
      */
     public function saveAll(array $data): bool
     {
@@ -371,7 +553,15 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 获取某字段内的值
+     * 获取指定条件下的字段值
+     * 
+     * 根据条件查询特定字段的值。
+     * 
+     * @param mixed       $value    条件值
+     * @param string      $field    要获取的字段名
+     * @param string|null $valueKey 条件字段名
+     * @param array|null  $where    额外的查询条件
+     * @return mixed 返回字段值
      */
     public function getFieldValue($value, string $field, ?string $valueKey = null, ?array $where = []): mixed
     {
@@ -385,7 +575,13 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 辅助方法：应用搜索器逻辑 (ThinkPHP withSearch)
+     * 应用搜索器作用域
+     * 
+     * 使用ThinkPHP的withSearch功能应用搜索器。
+     * 
+     * @param Query $query 查询构建器实例
+     * @param array $where 查询条件数组
+     * @return Query 返回处理后的查询构建器
      */
     private function applySearchScopes(Query $query, array $where): Query
     {
@@ -401,8 +597,13 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 获取搜索器和搜索条件
-     * 适配 ThinkPHP: searchFieldNameAttr
+     * 获取搜索器数据
+     * 
+     * 分离搜索器条件和普通查询条件。
+     * 适配ThinkPHP的searchFieldNameAttr搜索器命名规则。
+     * 
+     * @param array $where 原始查询条件数组
+     * @return array 返回[搜索字段, 搜索数据, 其他条件]
      */
     private function getSearchData(array $where): array
     {
@@ -434,13 +635,25 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 根据搜索器获取内容 (内部使用)
+     * 根据搜索器获取查询结果（内部方法）
+     * 
+     * @param array $where  查询条件数组
+     * @param bool  $search 是否启用搜索器
+     * @return Query 返回查询构建器
      */
     protected function withSearchSelect(array $where, bool $search): Query
     {
         return $this->buildQuery($where, $search);
     }
 
+    /**
+     * 过滤无效字段
+     * 
+     * 移除数据表中不存在的字段条件。
+     * 
+     * @param array $where 查询条件数组
+     * @return array 返回过滤后的条件数组
+     */
     protected function filterWhere(array $where = []): array
     {
         $fields = $this->getModel()->getTableFields();
@@ -465,7 +678,13 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 搜索
+     * 执行搜索查询
+     * 
+     * 根据条件执行搜索，支持搜索器模式。
+     * 
+     * @param array $where  查询条件数组
+     * @param bool  $search 是否启用搜索器模式
+     * @return Model|Query 返回模型实例或查询构建器
      */
     public function search(array $where = [], bool $search = true): Model|Query
     {
@@ -476,7 +695,14 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 求和
+     * 计算字段求和
+     * 
+     * 对指定字段进行求和计算。
+     * 
+     * @param array  $where  查询条件数组
+     * @param string $field  要求和的字段名
+     * @param bool   $search 是否启用搜索器模式
+     * @return float 返回求和结果
      */
     public function sum(array $where, string $field, bool $search = false): float
     {
@@ -484,7 +710,16 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 高精度加法
+     * 高精度加法运算
+     * 
+     * 对指定字段进行高精度加法运算，避免浮点数精度问题。
+     * 
+     * @param mixed       $key      主键值或条件值
+     * @param string      $incField 要增加的字段名
+     * @param string      $inc      增加的值
+     * @param string|null $keyField 条件字段名，默认为主键
+     * @param int         $acc      精度（小数位数），默认为2
+     * @return bool 操作成功返回true
      */
     public function bcInc(mixed $key, string $incField, string $inc, ?string $keyField = null, int $acc = 2): bool
     {
@@ -498,7 +733,16 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 高精度 减法
+     * 高精度减法运算
+     * 
+     * 对指定字段进行高精度减法运算。
+     * 
+     * @param mixed       $key      主键值或条件值
+     * @param string      $decField 要减少的字段名
+     * @param string      $dec      减少的值
+     * @param string|null $keyField 条件字段名
+     * @param int         $acc      精度（小数位数）
+     * @return bool 操作成功返回true，值不足时返回false
      */
     public function bcDec($key, string $decField, string $dec, ?string $keyField = null, int $acc = 2): bool
     {
@@ -506,7 +750,17 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 高精度计算并保存 (应用层计算)
+     * 高精度计算并保存
+     * 
+     * 在应用层进行高精度计算后保存结果。
+     * 
+     * @param mixed       $key      主键值或条件值
+     * @param string      $field    要计算的字段名
+     * @param string      $value    计算值
+     * @param string|null $keyField 条件字段名
+     * @param int         $type     计算类型：1=加法，2=减法
+     * @param int         $acc      精度（小数位数）
+     * @return bool 操作成功返回true
      */
     public function bc($key, string $field, string $value, ?string $keyField = null, int $type = 1, int $acc = 2): bool
     {
@@ -528,8 +782,15 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 减库存加销量 (原子更新)
-     * 适配 ThinkPHP: dec() / inc()
+     * 减库存加销量（原子更新）
+     * 
+     * 在一次操作中减少库存并增加销量，保证数据一致性。
+     * 
+     * @param array  $where 查询条件数组
+     * @param int    $num   操作数量
+     * @param string $stock 库存字段名
+     * @param string $sales 销量字段名
+     * @return bool 操作成功返回true
      */
     public function decStockIncSales(array $where, int $num, string $stock = 'stock', string $sales = 'sales'): bool
     {
@@ -547,7 +808,15 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 加库存减销量 (原子更新)
+     * 加库存减销量（原子更新）
+     * 
+     * 在一次操作中增加库存并减少销量，用于撤销操作。
+     * 
+     * @param array  $where 查询条件数组
+     * @param int    $num   操作数量
+     * @param string $stock 库存字段名
+     * @param string $sales 销量字段名
+     * @return bool 操作成功返回true
      */
     public function incStockDecSales(array $where, int $num, string $stock = 'stock', string $sales = 'sales'): bool
     {
@@ -564,7 +833,11 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 获取最大值
+     * 获取字段最大值
+     * 
+     * @param array  $where 查询条件数组
+     * @param string $field 字段名
+     * @return mixed 返回最大值
      */
     public function getMax(array $where = [], string $field = ''): mixed
     {
@@ -572,19 +845,40 @@ class ThinkphpORMFactory
     }
 
     /**
-     * 获取最小值
+     * 获取字段最小值
+     * 
+     * @param array  $where 查询条件数组
+     * @param string $field 字段名
+     * @return mixed 返回最小值
      */
     public function getMin(array $where = [], string $field = ''): mixed
     {
         return $this->buildQuery($where)->min($field);
     }
 
+    /**
+     * 将字符串转换为驼峰命名
+     * 
+     * 将下划线或连字符分隔的字符串转换为驼峰命名。
+     * 
+     * @param string $string 原始字符串
+     * @return string 驼峰命名字符串
+     */
     private static function studly(string $string): string
     {
         $string = str_replace(['-', '_'], ' ', $string);
         return str_replace(' ', '', ucwords($string));
     }
 
+    /**
+     * 应用作用域移除
+     * 
+     * 移除指定的全局作用域，如软删除作用域。
+     * 
+     * @param Query       $query  查询构建器实例
+     * @param array|null  $scopes 需要移除的作用域列表
+     * @return void
+     */
     protected function applyScopeRemoval(Query $query, ?array $scopes): void
     {
         if (empty($scopes)) return;
@@ -601,6 +895,12 @@ class ThinkphpORMFactory
         }
     }
 
+    /**
+     * 检查数据表是否存在
+     * 
+     * @param string $table 表名
+     * @return bool 存在返回true，否则返回false
+     */
     public function tableExists($table): bool
     {
         try {

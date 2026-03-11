@@ -18,6 +18,28 @@ namespace Framework\Cache;
 
 use think\facade\Cache;
 
+/**
+ * ThinkCache 工厂类
+ * 
+ * 用于创建 ThinkPHP 缓存的适配器实例，封装 ThinkPHP Cache 门面。
+ * 支持根据配置切换不同的缓存存储驱动（如 redis、file 等）。
+ * 
+ * 使用示例：
+ * ```php
+ * // 创建工厂实例
+ * $factory = new ThinkCache(require BASE_PATH . '/config/cache.php');
+ * 
+ * // 创建默认缓存驱动
+ * $cache = $factory->create();
+ * 
+ * // 创建指定存储驱动
+ * $redisCache = $factory->create('redis');
+ * $fileCache  = $factory->create('file');
+ * ```
+ *
+ * @package Framework\Cache
+ * @author  xuey863toy
+ */
 /*
 # thinkcache测试
 #$cache = app('cache');
@@ -46,8 +68,23 @@ echo $fileCache->get('foot');
 */
 class ThinkCache
 {
+    /**
+     * 缓存配置数组
+     * 
+     * 包含 default（默认驱动）、stores（各驱动详细配置）等配置项，
+     * 用于初始化 ThinkPHP Cache 门面。
+     *
+     * @var array
+     */
     private array $config;
 
+    /**
+     * 构造函数
+     * 
+     * 初始化 ThinkCache 工厂实例，配置 ThinkPHP Cache 门面。
+     *
+     * @param array $config 缓存配置数组，包含 default 和 stores 配置
+     */
     public function __construct(array $config = [])
     {
         $this->config =$config;
@@ -70,6 +107,19 @@ class ThinkCache
     }
     */
 
+    /**
+     * 创建缓存适配器实例
+     * 
+     * 根据 store 参数创建指定驱动类型的缓存适配器。
+     * 如果未指定 store，则使用配置中的默认驱动。
+     * 
+     * 支持的存储驱动取决于 ThinkPHP 配置中的 stores 定义，
+     * 通常包括：redis、file、memcache 等。
+     *
+     * @param string|null $store 存储驱动名称，如 'redis'、'file'，为 null 时使用默认驱动
+     * 
+     * @return ThinkAdapter ThinkCache 适配器实例，可进行标准的缓存操作
+     */
     /*
     *
     工厂支持切换 store（即选择 redis 或 file）

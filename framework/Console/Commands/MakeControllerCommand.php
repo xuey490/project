@@ -23,21 +23,39 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Filesystem\Exception\IOExceptionInterface;
 use Symfony\Component\Filesystem\Filesystem;
 
+/**
+ * 创建控制器命令
+ *
+ * 该命令用于通过命令行快速创建新的控制器类文件。
+ * 自动生成包含标准 RESTful 方法（index, create, save, show, edit, update, delete）的控制器模板。
+ *
+ * 使用方法：
+ *   php console make:controller Users
+ *
+ * @package Framework\Console\Commands
+ */
 class MakeControllerCommand extends Command
 {
     /**
-     * 命令名称 - 必须定义
-     * 这是修复错误的关键.
+     * 命令名称
+     *
+     * @var string
      */
     protected static $defaultName = 'make:controller';
 
     /**
-     * 命令描述.
+     * 命令描述
+     *
+     * @var string
      */
     protected static $defaultDescription = '创建一个新的控制器类';
 
     /**
-     * 配置命令.
+     * 配置命令参数和选项
+     *
+     * 设置命令名称、描述以及必需的控制器名称参数。
+     *
+     * @return void
      */
     protected function configure(): void
     {
@@ -55,7 +73,18 @@ class MakeControllerCommand extends Command
     }
 
     /**
-     * 执行命令.
+     * 执行命令
+     *
+     * 创建控制器文件，包含以下步骤：
+     * 1. 解析控制器名称并构建文件路径
+     * 2. 检查文件是否已存在
+     * 3. 创建目标目录（如不存在）
+     * 4. 生成控制器内容并写入文件
+     *
+     * @param InputInterface  $input  输入接口，用于获取命令参数
+     * @param OutputInterface $output 输出接口，用于输出结果信息
+     *
+     * @return int 命令执行状态码（Command::SUCCESS 或 Command::FAILURE）
      */
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
@@ -96,7 +125,14 @@ class MakeControllerCommand extends Command
     }
 
     /**
-     * 生成控制器类内容.
+     * 生成控制器类内容
+     *
+     * 创建包含标准 RESTful 方法模板的控制器类代码。
+     * 生成的方法包括：index, create, save, show, edit, update, delete。
+     *
+     * @param string $controllerName 控制器类名
+     *
+     * @return string 生成的控制器 PHP 代码
      */
     private function generateControllerContent(string $controllerName): string
     {

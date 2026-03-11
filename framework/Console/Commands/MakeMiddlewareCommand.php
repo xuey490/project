@@ -23,20 +23,39 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Filesystem\Exception\IOExceptionInterface;
 use Symfony\Component\Filesystem\Filesystem;
 
+/**
+ * 创建中间件命令
+ *
+ * 该命令用于通过命令行快速创建新的中间件类文件。
+ * 自动生成包含标准 handle 方法的中间件模板，支持请求前后处理逻辑。
+ *
+ * 使用方法：
+ *   php console make:middleware Auth
+ *
+ * @package Framework\Console\Commands
+ */
 class MakeMiddlewareCommand extends Command
 {
     /**
-     * 命令名称 - 必须定义.
+     * 命令名称
+     *
+     * @var string
      */
     protected static $defaultName = 'make:middleware';
 
     /**
-     * 命令描述.
+     * 命令描述
+     *
+     * @var string
      */
     protected static $defaultDescription = '创建一个新的中间件类';
 
     /**
-     * 配置命令.
+     * 配置命令参数和选项
+     *
+     * 设置命令名称、描述以及必需的中间件名称参数。
+     *
+     * @return void
      */
     protected function configure(): void
     {
@@ -52,7 +71,18 @@ class MakeMiddlewareCommand extends Command
     }
 
     /**
-     * 执行命令.
+     * 执行命令
+     *
+     * 创建中间件文件，包含以下步骤：
+     * 1. 解析中间件名称并构建文件路径
+     * 2. 检查文件是否已存在
+     * 3. 创建目标目录（如不存在）
+     * 4. 生成中间件内容并写入文件
+     *
+     * @param InputInterface  $input  输入接口，用于获取命令参数
+     * @param OutputInterface $output 输出接口，用于输出结果信息
+     *
+     * @return int 命令执行状态码（Command::SUCCESS 或 Command::FAILURE）
      */
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
@@ -93,7 +123,14 @@ class MakeMiddlewareCommand extends Command
     }
 
     /**
-     * 生成中间件类内容.
+     * 生成中间件类内容
+     *
+     * 创建包含标准 handle 方法的中间件类模板。
+     * 模板支持在请求处理前后执行自定义逻辑。
+     *
+     * @param string $className 中间件类名
+     *
+     * @return string 生成的中间件 PHP 代码
      */
     private function generateMiddlewareContent(string $className): string
     {
@@ -118,12 +155,12 @@ class {$className}
     {
         // 在请求处理前执行的逻辑
         // 例如：身份验证、权限检查等
-        
+
         \$response = \$next(\$request);
-        
+
         // 在请求处理后执行的逻辑
         // 例如：添加响应头、日志记录等
-        
+
         return \$response;
     }
 }

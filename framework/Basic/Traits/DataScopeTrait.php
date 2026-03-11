@@ -18,20 +18,47 @@ namespace Framework\Basic\Traits;
 
 use Illuminate\Database\Eloquent\Builder;
 
+/**
+ * 数据权限隔离 Trait
+ * 
+ * 该 Trait 提供数据权限隔离功能，用于实现细粒度的数据访问控制。
+ * 根据用户的权限范围（scope）自动过滤查询结果，确保用户只能访问其权限范围内的数据。
+ * 
+ * 支持的权限范围：
+ * - 1: 全部数据权限（不限制）
+ * - 2: 本部门数据
+ * - 3: 本部门及子部门数据
+ * - 4: 仅本人数据
+ * - 5: 本部门及子部门 + 本人数据
+ * - 6: 自定义部门数据
+ * - 其他: 无权限
+ * 
+ * @package Framework\Basic\Traits
+ */
 trait DataScopeTrait
 {
     /**
      * 当前登录用户ID
+     * @var int|null
      */
     protected static ?int $currentAdminId = null;
 
     /**
      * 当前用户数据权限配置 [scope, dept_ids]
+     * @var array{scope: int, dept_ids: array<int>}
      */
     protected static array $dataScope = [];
 
     /**
      * 初始化数据权限
+     * 
+     * 在请求开始时调用，设置当前用户的数据权限信息。
+     * 应在用户认证完成后立即调用此方法。
+     * 
+     * @param int $adminId 当前登录用户ID
+     * @param int $scope 数据权限范围（1-6）
+     * @param array<int> $deptIds 部门ID列表
+     * @return void
      */
     public static function initDataScope(int $adminId, int $scope, array $deptIds): void
     {
@@ -44,6 +71,11 @@ trait DataScopeTrait
 
     /**
      * 清空数据权限（避免请求污染）
+     * 
+     * 在请求结束时调用，清理静态变量，防止跨请求数据污染。
+     * 建议在中间件的 terminate 阶段调用。
+     * 
+     * @return void
      */
     public static function clearDataScope(): void
     {
@@ -53,6 +85,12 @@ trait DataScopeTrait
 
     /**
      * 数据权限查询作用域
+     * 
+     * 根据用户的数据权限范围自动添加查询条件。
+     * 支持多种权限范围的自动过滤。
+     * 
+     * @param Builder $query Eloquent 查询构建器
+     * @return Builder 添加权限条件后的查询构建器
      */
     public function scopeWithDataScope(Builder $query): Builder
     {

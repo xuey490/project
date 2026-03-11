@@ -18,10 +18,27 @@ namespace Framework\Utils;
 
 use Ramsey\Uuid\Uuid;
 
+/**
+ * 验证码工具类
+ *
+ * 提供图形验证码的生成和验证功能，支持字母验证码、数学验证码、
+ * 中文验证码等多种类型，可配置干扰线、杂点、背景图片等视觉效果。
+ * 验证码值通过 Redis 存储并使用 bcrypt 加密，确保安全性。
+ *
+ * @package Framework\Utils
+ */
 class Captcha
 {
     /**
-     * 验证验证码是否正确.
+     * 验证验证码是否正确
+     *
+     * 从 Redis 中获取存储的验证码哈希值，与用户输入进行比对验证。
+     * 验证成功后会自动删除 Redis 中的验证码记录，防止重复使用。
+     *
+     * @param string $code 用户输入的验证码
+     * @param string $key  验证码的唯一标识键
+     *
+     * @return bool 验证通过返回 true，否则返回 false
      */
     public static function check(string $code, string $key): bool
     {
@@ -46,9 +63,16 @@ class Captcha
     }
 
     /**
-     * 输出验证码并把验证码的值保存的session中.
-     * @return array
-     * @throws \Exception
+     * 生成 Base64 编码的验证码图片
+     *
+     * 根据配置生成验证码图片，返回 Base64 编码的图片数据和验证码键名。
+     * 支持自定义配置覆盖默认配置，生成的验证码值会存储到 Redis 中。
+     *
+     * @param array $_config 可选的自定义配置项，会与默认配置合并
+     *
+     * @return array 返回包含 'key'（验证码键名）和 'base64'（Base64 图片数据）的数组
+     *
+     * @throws \Exception 生成验证码时可能抛出异常
      */
     public static function base64(array $_config = [])
     {
@@ -124,7 +148,14 @@ class Captcha
     }
 
     /**
-     * 生成验证码内容并保存到 Redis.
+     * 生成验证码内容并保存到 Redis
+     *
+     * 根据配置生成验证码内容，支持数学运算验证码和字符验证码。
+     * 验证码答案经过 bcrypt 加密后存储到 Redis，设置过期时间。
+     *
+     * @param array $config 验证码配置数组
+     *
+     * @return array 返回包含 'value'（验证码显示内容）和 'key'（验证码键名）的数组
      */
     protected static function generateValue(array $config): array
     {
@@ -162,6 +193,17 @@ class Captcha
         ];
     }
 
+    /**
+     * 从指定路径随机选择一个字体文件
+     *
+     * 扫描指定目录下的 TTF 和 OTF 字体文件，随机选择一个返回。
+     * 如果配置中已指定字体，则直接使用配置的字体。
+     *
+     * @param string $path   字体文件所在目录路径
+     * @param array  $config 配置数组，可包含 'fontttf' 指定字体文件
+     *
+     * @return string 完整的字体文件路径
+     */
     protected static function pickFont(string $path, array &$config): string
     {
         if (! empty($config['fontttf'])) {
@@ -180,10 +222,16 @@ class Captcha
     }
 
     // ====== 干扰项绘制函数 保留原样 =======
+
     /**
-     * @desc: 画一条由两条连在一起构成的随机正弦函数曲线作干扰线(你可以改成更帅的曲线函数)
-     * @param mixed $im
-     * @param mixed $color
+     * 绘制正弦曲线干扰线
+     *
+     * 在验证码图片上绘制一条由两条连接的正弦曲线组成的干扰线，
+     * 用于增加验证码识别难度，防止机器识别。
+     *
+     * @param array $config 验证码配置数组，包含图片宽高信息
+     * @param mixed $im     图像资源句柄
+     * @param mixed $color  线条颜色
      */
     protected static function writeCurve(array $config, $im, $color): void
     {
@@ -231,8 +279,13 @@ class Captcha
     }
 
     /**
-     * @desc: 画杂点  往图片上写不同颜色的字母或数字
-     * @param mixed $im
+     * 绘制杂点干扰
+     *
+     * 在验证码图片上随机绘制多个不同颜色的字母或数字杂点，
+     * 增加验证码识别难度，防止机器自动识别。
+     *
+     * @param array $config 验证码配置数组，包含图片宽高信息
+     * @param mixed $im     图像资源句柄
      */
     protected static function writeNoise(array $config, $im): void
     {
@@ -248,8 +301,13 @@ class Captcha
     }
 
     /**
-     * @desc: 绘制背景图片 注：如果验证码输出图片比较大，将占用比较多的系统资源
-     * @param mixed $im
+     * 绘制背景图片
+     *
+     * 从指定目录随机选择一张背景图片，并将其缩放填充到验证码图片中。
+     * 注意：大尺寸背景图片会占用较多系统资源。
+     *
+     * @param array $config 验证码配置数组，包含图片宽高信息
+     * @param mixed $im     图像资源句柄
      */
     protected static function background(array $config, $im): void
     {
