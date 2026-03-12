@@ -1,0 +1,68 @@
+{
+  "presets": {
+    "game_sprites": {
+      "description": "游戏精灵图集切片",
+      "min_area": 800,
+      "tolerance": 45,
+      "bg_threshold": 240,
+      "use_case": "适用于游戏角色精灵图、道具图标等"
+    },
+    "character_animations": {
+      "description": "角色动画帧切片",
+      "min_area": 1200,
+      "tolerance": 35,
+      "bg_threshold": 235,
+      "use_case": "适用于角色动作序列、表情变化等"
+    },
+    "ui_elements": {
+      "description": "UI元素切片",
+      "min_area": 300,
+      "tolerance": 50,
+      "bg_threshold": 245,
+      "use_case": "适用于按钮、图标、装饰元素等"
+    },
+    "hand_drawn": {
+      "description": "手绘图稿切片",
+      "min_area": 500,
+      "tolerance": 60,
+      "bg_threshold": 220,
+      "use_case": "适用于扫描的手绘图、草图等"
+    },
+    "high_precision": {
+      "description": "高精度切片",
+      "min_area": 200,
+      "tolerance": 25,
+      "bg_threshold": 250,
+      "use_case": "适用于需要保留细节的精密图像"
+    },
+    "batch_processing": {
+      "description": "批量处理模式",
+      "min_area": 600,
+      "tolerance": 40,
+      "bg_threshold": 240,
+      "use_case": "适用于大量相似图像的批量处理"
+    }
+  },
+  "common_issues": {
+    "too_many_fragments": {
+      "problem": "切出太多碎片",
+      "solution": "增大 min_area 到 1000+",
+      "parameters": {"min_area": 1000}
+    },
+    "missing_objects": {
+      "problem": "遗漏了一些物体",
+      "solution": "降低 bg_threshold 和 min_area",
+      "parameters": {"bg_threshold": 200, "min_area": 300}
+    },
+    "poor_background_removal": {
+      "problem": "去底效果不好",
+      "solution": "增大 tolerance 参数",
+      "parameters": {"tolerance": 60}
+    },
+    "over_removal": {
+      "problem": "物体内部被误删",
+      "solution": "减小 tolerance 参数",
+      "parameters": {"tolerance": 25}
+    }
+  }
+}

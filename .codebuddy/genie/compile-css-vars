@@ -1,0 +1,350 @@
+#!/usr/bin/env node
+
+import * as fs from 'fs';
+import * as path from 'path';
+
+const VERSION = '1.0.0';
+
+const HELP_TEXT = `
+compile-css-vars v${VERSION}
+
+Extract CSS variables from index.css to a standalone CSS file.
+
+Usage:
+  compile-css-vars --repo-root <path>
+  compile-css-vars -i <input> -o <output>
+  compile-css-vars -h, --help
+  compile-css-vars -v, --version
+
+Options:
+  -r, --repo-root <path>  Project root directory. Reads docs/project.json to
+                          determine project type and auto-configure paths.
+                          Currently supports: web, miniprogram, prototype
+  -i, --input <path>      Path to index.css file
+  -o, --output <path>     Path to output CSS file
+  -h, --help              Show this help message
+  -v, --version           Show version
+
+Note: Either --repo-root OR both --input and --output are required.
+
+Example:
+  compile-css-vars --repo-root /path/to/project
+  compile-css-vars -r .
+  compile-css-vars -i ./src/index.css -o ./docs/design/index.css
+`;
+
+/**
+ * Parse command line arguments
+ */
+function parseArgs(args) {
+  const result = {
+    input: null,
+    output: null,
+    repoRoot: null,
+    help: false,
+    version: false
+  };
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    
+    if (arg === '-h' || arg === '--help') {
+      result.help = true;
+    } else if (arg === '-v' || arg === '--version') {
+      result.version = true;
+    } else if (arg === '-i' || arg === '--input') {
+      result.input = args[++i];
+    } else if (arg === '-o' || arg === '--output') {
+      result.output = args[++i];
+    } else if (arg === '-r' || arg === '--repo-root') {
+      result.repoRoot = args[++i];
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Project type configurations
+ * Maps project_type to input/output paths relative to repo root
+ */
+const PROJECT_TYPE_CONFIG = {
+  web: {
+    input: 'frontend/src/index.css',
+    output: 'docs/design/index.css'
+  },
+  miniprogram: {
+    input: 'frontend/src/app.scss',
+    output: 'docs/design/index.css'
+  },
+  prototype: {
+    input: 'frontend/src/index.css',
+    output: 'docs/design/index.css'
+  }
+};
+
+/**
+ * Resolve paths from --repo-root option
+ * Reads docs/project.json to determine project type
+ */
+function resolveFromRepoRoot(repoRoot) {
+  const resolvedRoot = path.resolve(repoRoot);
+  const projectJsonPath = path.join(resolvedRoot, 'docs', 'project.json');
+  
+  if (!fs.existsSync(projectJsonPath)) {
+    console.error(`Error: docs/project.json not found at ${projectJsonPath}`);
+    process.exit(1);
+  }
+  
+  let projectConfig;
+  try {
+    const content = fs.readFileSync(projectJsonPath, 'utf-8');
+    projectConfig = JSON.parse(content);
+  } catch (e) {
+    console.error(`Error: Failed to parse docs/project.json: ${e.message}`);
+    process.exit(1);
+  }
+  
+  const projectType = projectConfig.project_type;
+  
+  if (!projectType) {
+    console.error('Error: project_type not found in docs/project.json');
+    process.exit(1);
+  }
+  
+  const config = PROJECT_TYPE_CONFIG[projectType];
+  
+  if (!config) {
+    console.error(`Error: Unsupported project_type "${projectType}". Supported types: ${Object.keys(PROJECT_TYPE_CONFIG).join(', ')}`);
+    process.exit(1);
+  }
+  
+  console.log(`Detected project type: ${projectType}`);
+  
+  return {
+    input: path.join(resolvedRoot, config.input),
+    output: path.join(resolvedRoot, config.output)
+  };
+}
+
+/**
+ * Extract content from a CSS block, handling nested braces
+ */
+function extractBlockContent(cssContent, startPattern) {
+  const match = cssContent.match(startPattern);
+  if (!match) return null;
+  
+  const startIndex = match.index + match[0].length;
+  let braceCount = 1;
+  let endIndex = startIndex;
+  
+  while (braceCount > 0 && endIndex < cssContent.length) {
+    if (cssContent[endIndex] === '{') braceCount++;
+    else if (cssContent[endIndex] === '}') braceCount--;
+    endIndex++;
+  }
+  
+  return cssContent.slice(startIndex, endIndex - 1);
+}
+
+/**
+ * Extract CSS variables from a block content string
+ */
+function extractVariablesFromBlock(blockContent) {
+  const vars = {};
+  if (!blockContent) return vars;
+  
+  const varMatches = blockContent.matchAll(/--([a-zA-Z0-9-]+)\s*:\s*([^;]+);/g);
+  for (const match of varMatches) {
+    vars[match[1]] = match[2].trim();
+  }
+  return vars;
+}
+
+/**
+ * Parse CSS variables from index.css content
+ * Extracts @theme inline, :root and .dark variable blocks
+ */
+function parseCssVariables(cssContent) {
+  const variables = {
+    theme: {},
+    root: {},
+    dark: {}
+  };
+
+  // Parse @theme inline variables (Tailwind v4 theme block)
+  const themeContent = extractBlockContent(cssContent, /@theme\s+inline\s*\{/);
+  if (themeContent) {
+    variables.theme = extractVariablesFromBlock(themeContent);
+  }
+
+  // Parse :root variables
+  const rootContent = extractBlockContent(cssContent, /:root\s*\{/);
+  if (rootContent) {
+    variables.root = extractVariablesFromBlock(rootContent);
+  }
+
+  // Parse .dark variables
+  const darkContent = extractBlockContent(cssContent, /\.dark\s*\{/);
+  if (darkContent) {
+    variables.dark = extractVariablesFromBlock(darkContent);
+  }
+
+  return variables;
+}
+
+/**
+ * Parse SCSS variables from miniprogram app.scss
+ * Extracts color values and converts them to CSS variables format
+ */
+function parseScssVariables(scssContent) {
+  const variables = {
+    root: {},
+    dark: {}
+  };
+  
+  // Extract colors from common patterns in SCSS
+  const pageBgMatch = scssContent.match(/page\s*\{[^}]*background-color\s*:\s*([^;]+);/s);
+  if (pageBgMatch) {
+    variables.root['background'] = pageBgMatch[1].trim();
+  }
+  
+  const pageColorMatch = scssContent.match(/page\s*\{[^}]*[^-]color\s*:\s*([^;]+);/s);
+  if (pageColorMatch) {
+    variables.root['foreground'] = pageColorMatch[1].trim();
+  }
+  
+  const fontSizeMatch = scssContent.match(/page\s*\{[^}]*font-size\s*:\s*([^;]+);/s);
+  if (fontSizeMatch) {
+    variables.root['font-size-body'] = fontSizeMatch[1].trim();
+  }
+  
+  // WeChat green as primary color for miniprogram
+  variables.root['primary'] = '#07C160';
+  variables.root['primary-foreground'] = '#ffffff';
+  variables.root['card'] = '#ffffff';
+  variables.root['card-foreground'] = '#333333';
+  variables.root['muted'] = '#f5f5f5';
+  variables.root['muted-foreground'] = '#666666';
+  variables.root['border'] = '#e5e5e5';
+  variables.root['success'] = '#07C160';
+  variables.root['warning'] = '#FFC107';
+  variables.root['destructive'] = '#FA5151';
+  variables.root['info'] = '#10AEFF';
+  variables.root['radius'] = '8px';
+  
+  return variables;
+}
+
+/**
+ * Generate CSS output with only variables
+ */
+function generateCssOutput(variables) {
+  let css = `/* CSS Variables - Auto-generated by compile-css-vars */\n`;
+  css += `/* Do not edit directly, modify the source index.css instead */\n\n`;
+  
+  // Generate @theme inline block if has theme variables (Tailwind v4)
+  if (variables.theme && Object.keys(variables.theme).length > 0) {
+    css += '@theme inline {\n';
+    for (const [name, value] of Object.entries(variables.theme)) {
+      css += `  --${name}: ${value};\n`;
+    }
+    css += '}\n\n';
+  }
+  
+  // Generate :root block
+  css += ':root {\n';
+  for (const [name, value] of Object.entries(variables.root)) {
+    css += `  --${name}: ${value};\n`;
+  }
+  css += '}\n';
+
+  // Generate .dark block if has dark variables
+  if (Object.keys(variables.dark).length > 0) {
+    css += '\n.dark {\n';
+    for (const [name, value] of Object.entries(variables.dark)) {
+      css += `  --${name}: ${value};\n`;
+    }
+    css += '}\n';
+  }
+
+  return css;
+}
+
+const args = parseArgs(process.argv.slice(2));
+
+if (args.help) {
+  console.log(HELP_TEXT);
+  process.exit(0);
+}
+
+if (args.version) {
+  console.log(VERSION);
+  process.exit(0);
+}
+
+// Resolve input/output paths
+let INPUT_FILE, OUTPUT_FILE;
+
+if (args.repoRoot) {
+  const paths = resolveFromRepoRoot(args.repoRoot);
+  INPUT_FILE = paths.input;
+  OUTPUT_FILE = paths.output;
+} else if (args.input && args.output) {
+  INPUT_FILE = path.resolve(args.input);
+  OUTPUT_FILE = path.resolve(args.output);
+} else {
+  console.error('Error: Either --repo-root OR both --input and --output are required\n');
+  console.log(HELP_TEXT);
+  process.exit(1);
+}
+
+const OUTPUT_DIR = path.dirname(OUTPUT_FILE);
+
+/**
+ * Main function
+ */
+function main() {
+  if (!fs.existsSync(INPUT_FILE)) {
+    console.error(`Error: Input file not found at ${INPUT_FILE}`);
+    process.exit(1);
+  }
+  
+  console.log(`Extracting CSS variables from: ${INPUT_FILE}`);
+  
+  const cssContent = fs.readFileSync(INPUT_FILE, 'utf-8');
+  
+  // Parse variables based on file type
+  let variables;
+  if (INPUT_FILE.endsWith('.scss')) {
+    variables = parseScssVariables(cssContent);
+    console.log('Detected SCSS file, using miniprogram style parsing');
+  } else {
+    variables = parseCssVariables(cssContent);
+  }
+  
+  const themeVarCount = Object.keys(variables.theme || {}).length;
+  const rootVarCount = Object.keys(variables.root).length;
+  const darkVarCount = Object.keys(variables.dark).length;
+  
+  if (rootVarCount === 0 && themeVarCount === 0 && !INPUT_FILE.endsWith('.scss')) {
+    console.warn('Warning: No CSS variables found in file');
+  }
+  
+  console.log(`Found ${themeVarCount} @theme variables, ${rootVarCount} :root variables, ${darkVarCount} .dark variables`);
+  
+  // Generate CSS output
+  const cssOutput = generateCssOutput(variables);
+  
+  // Ensure output directory exists
+  if (!fs.existsSync(OUTPUT_DIR)) {
+    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+  }
+  
+  // Write output
+  fs.writeFileSync(OUTPUT_FILE, cssOutput);
+  
+  console.log(`Successfully generated ${OUTPUT_FILE}`);
+}
+
+main();

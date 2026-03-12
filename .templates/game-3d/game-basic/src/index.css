@@ -1,0 +1,779 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   基础样式
+   ============================================ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Orbitron', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+canvas {
+  display: block;
+}
+
+/* ============================================
+   主题颜色变量
+   ============================================ */
+
+:root {
+  --color-pink: #ff2a6d;
+  --color-blue: #05d9e8;
+  --color-purple: #9d4edd;
+  --color-yellow: #d1f7ff;
+  --color-dark: #0d0221;
+  --color-darker: #05010d;
+}
+
+/* ============================================
+   扫描线效果
+   ============================================ */
+
+.scanline::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    transparent 50%,
+    rgba(5, 217, 232, 0.03) 50%
+  );
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* ============================================
+   霓虹文字效果
+   ============================================ */
+
+.text-neon-pink {
+  text-shadow: 0 0 5px var(--color-pink), 0 0 10px var(--color-pink), 0 0 20px var(--color-pink), 0 0 40px var(--color-pink);
+}
+
+.text-neon-blue {
+  text-shadow: 0 0 5px var(--color-blue), 0 0 10px var(--color-blue), 0 0 20px var(--color-blue), 0 0 40px var(--color-blue);
+}
+
+.text-neon-purple {
+  text-shadow: 0 0 5px var(--color-purple), 0 0 10px var(--color-purple), 0 0 20px var(--color-purple);
+}
+
+/* ============================================
+   霓虹边框效果
+   ============================================ */
+
+.border-neon-pink {
+  box-shadow: 0 0 5px var(--color-pink), inset 0 0 5px var(--color-pink);
+}
+
+.border-neon-blue {
+  box-shadow: 0 0 5px var(--color-blue), inset 0 0 5px var(--color-blue);
+}
+
+.border-neon-purple {
+  box-shadow: 0 0 5px var(--color-purple), inset 0 0 5px var(--color-purple);
+}
+
+/* ============================================
+   故障效果
+   ============================================ */
+
+.glitch-text {
+  position: relative;
+}
+
+.glitch-text::before,
+.glitch-text::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.glitch-text::before {
+  animation: glitch-1 0.3s infinite;
+  color: var(--color-pink);
+  clip-path: polygon(0 0, 100% 0, 100% 45%, 0 45%);
+  transform: translateX(-2px);
+}
+
+.glitch-text::after {
+  animation: glitch-2 0.3s infinite;
+  color: var(--color-blue);
+  clip-path: polygon(0 55%, 100% 55%, 100% 100%, 0 100%);
+  transform: translateX(2px);
+}
+
+@keyframes glitch-1 {
+  0%, 100% { transform: translateX(-2px); }
+  50% { transform: translateX(2px); }
+}
+
+@keyframes glitch-2 {
+  0%, 100% { transform: translateX(2px); }
+  50% { transform: translateX(-2px); }
+}
+
+/* ============================================
+   网格背景
+   ============================================ */
+
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(5, 217, 232, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(5, 217, 232, 0.1) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+.grid-bg-sm {
+  background-image:
+    linear-gradient(rgba(5, 217, 232, 0.3) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(5, 217, 232, 0.3) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.grid-progress {
+  background-image: linear-gradient(90deg, rgba(5, 217, 232, 0.3) 1px, transparent 1px);
+  background-size: 10px 100%;
+}
+
+/* ============================================
+   卡片样式
+   ============================================ */
+
+@layer components {
+  /* 基础卡片 */
+  .card {
+    @apply relative bg-slate-900/90 border border-cyan-500/30 backdrop-blur-sm;
+  }
+
+  /* 卡片光效背景 */
+  .card-glow {
+    @apply absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-purple-500 opacity-0 blur-sm transition-opacity;
+  }
+
+  .card-glow-active {
+    @apply opacity-50;
+  }
+
+  .card-glow-hover {
+    @apply group-hover:opacity-30;
+  }
+
+  /* 卡片角标装饰 */
+  .corner {
+    @apply absolute w-3 h-3;
+  }
+
+  .corner-tl {
+    @apply top-0 left-0 border-t-2 border-l-2 border-cyan-400;
+  }
+
+  .corner-tr {
+    @apply top-0 right-0 border-t-2 border-r-2 border-purple-400;
+  }
+
+  .corner-bl {
+    @apply bottom-0 left-0 border-b-2 border-l-2 border-purple-400;
+  }
+
+  .corner-br {
+    @apply bottom-0 right-0 border-b-2 border-r-2 border-cyan-400;
+  }
+
+  /* 面板 */
+  .panel {
+    @apply relative bg-cyber-darker/90 border border-cyan-500/30;
+  }
+
+  .panel-pink {
+    @apply relative bg-cyber-darker/90 border border-cyber-pink/50;
+  }
+
+  .panel-purple {
+    @apply relative bg-cyber-darker/90 border border-cyber-purple/50;
+  }
+
+  /* 外发光 */
+  .glow-pink {
+    @apply absolute -inset-1 bg-cyber-pink/20 blur-md;
+  }
+
+  .glow-blue {
+    @apply absolute -inset-1 bg-cyber-blue/10 blur-md;
+  }
+
+  .glow-purple {
+    @apply absolute -inset-2 bg-gradient-to-r from-cyber-pink/20 via-cyber-purple/20 to-cyber-blue/20 blur-xl;
+  }
+
+  .glow-gradient {
+    @apply absolute -inset-0.5 bg-gradient-to-r from-cyber-pink via-cyber-purple to-cyber-blue opacity-50 blur-sm;
+  }
+
+  /* 渐变线 */
+  .line-top {
+    @apply absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyber-pink via-cyber-purple to-cyber-blue;
+  }
+
+  .line-bottom {
+    @apply absolute bottom-0 left-0 w-full h-px bg-gradient-to-r from-cyber-blue via-cyber-purple to-cyber-pink;
+  }
+
+  .line-gradient {
+    @apply h-1 w-full bg-gradient-to-r from-transparent via-cyber-pink to-transparent;
+  }
+}
+
+/* ============================================
+   按钮样式
+   ============================================ */
+
+@layer components {
+  .btn {
+    @apply relative font-cyber tracking-wider uppercase;
+  }
+
+  .btn-primary {
+    @apply px-8 py-3 border-2 bg-cyber-pink/20 border-cyber-pink text-cyber-pink;
+    @apply hover:bg-cyber-pink/30 hover:shadow-neon-pink;
+    @apply transition-all;
+  }
+
+  .btn-secondary {
+    @apply px-8 py-3 border-2 bg-cyber-blue/10 border-cyber-blue/50 text-cyber-blue;
+    @apply hover:bg-cyber-blue/20 hover:border-cyber-blue;
+    @apply transition-all;
+  }
+
+  .btn-ghost {
+    @apply px-8 py-3 border-2 bg-transparent border-cyber-purple/30 text-cyber-purple;
+    @apply hover:bg-cyber-purple/10 hover:border-cyber-purple/50;
+    @apply transition-all;
+  }
+
+  /* 按钮外发光 */
+  .btn-glow-pink {
+    @apply absolute -inset-1 bg-cyber-pink/30 opacity-50 blur-md transition-opacity;
+    @apply group-hover:opacity-100;
+  }
+
+  .btn-glow-blue {
+    @apply absolute -inset-1 bg-cyber-blue/20 opacity-0 blur-md transition-opacity;
+    @apply group-hover:opacity-100;
+  }
+
+  /* 按钮角标 */
+  .btn-corner {
+    @apply absolute w-2 h-2;
+  }
+
+  .btn-corner-tl-pink {
+    @apply top-0 left-0 border-t-2 border-l-2 border-cyber-pink;
+  }
+
+  .btn-corner-br-pink {
+    @apply bottom-0 right-0 border-b-2 border-r-2 border-cyber-pink;
+  }
+
+  .btn-corner-tl-blue {
+    @apply top-0 left-0 border-t-2 border-l-2 border-cyber-blue;
+  }
+
+  .btn-corner-br-blue {
+    @apply bottom-0 right-0 border-b-2 border-r-2 border-cyber-blue;
+  }
+
+  .btn-corner-tl-purple {
+    @apply top-0 left-0 border-t-2 border-l-2 border-cyber-purple/50;
+  }
+
+  .btn-corner-br-purple {
+    @apply bottom-0 right-0 border-b-2 border-r-2 border-cyber-purple/50;
+  }
+}
+
+/* ============================================
+   输入框样式
+   ============================================ */
+
+@layer components {
+  .input {
+    @apply flex h-10 w-full px-3 py-2 text-sm font-cyber;
+    @apply bg-cyber-darker/90 border border-cyber-blue/50 text-cyber-blue;
+    @apply placeholder:text-cyber-blue/30;
+    @apply focus:outline-none focus:border-cyber-pink focus:ring-1 focus:ring-cyber-pink;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+    @apply transition-colors;
+  }
+}
+
+/* ============================================
+   对话框样式
+   ============================================ */
+
+@layer components {
+  .dialog-overlay {
+    @apply fixed inset-0 z-50 bg-cyber-darker/80 backdrop-blur-sm;
+  }
+
+  .dialog-content {
+    @apply fixed inset-0 z-50 flex items-center justify-center;
+  }
+
+  .dialog-panel {
+    @apply relative bg-cyber-darker/95 border border-cyber-purple/50 p-6 w-full max-w-lg;
+  }
+
+  .dialog-title {
+    @apply text-xl font-cyber font-bold text-cyber-blue tracking-widest uppercase mb-6 flex items-center gap-2;
+  }
+
+  .dialog-description {
+    @apply text-sm text-cyber-blue/70 mb-4;
+  }
+}
+
+/* ============================================
+   进度条样式
+   ============================================ */
+
+@layer components {
+  .progress {
+    @apply relative h-5 w-full overflow-hidden bg-cyber-darker border border-cyber-blue/50;
+  }
+
+  .progress-indicator {
+    @apply h-full transition-all duration-300;
+  }
+
+  .progress-indicator-default {
+    @apply bg-gradient-to-r from-cyber-blue to-cyber-purple;
+  }
+
+  .progress-indicator-warning {
+    @apply bg-gradient-to-r from-yellow-500 to-orange-500;
+  }
+
+  .progress-indicator-danger {
+    @apply bg-gradient-to-r from-cyber-pink to-red-500;
+  }
+
+  .progress-highlight {
+    @apply absolute inset-0 bg-gradient-to-b from-white/10 to-transparent h-1/2;
+  }
+}
+
+/* ============================================
+   滑块样式
+   ============================================ */
+
+@layer components {
+  .slider-track {
+    @apply relative h-2 w-full grow bg-cyber-dark border border-cyber-blue/30;
+  }
+
+  .slider-range-pink {
+    @apply absolute h-full bg-gradient-to-r from-cyber-pink to-cyber-purple;
+  }
+
+  .slider-range-blue {
+    @apply absolute h-full bg-gradient-to-r from-cyber-blue to-cyber-purple;
+  }
+
+  .slider-range-purple {
+    @apply absolute h-full bg-gradient-to-r from-cyber-purple to-cyber-pink;
+  }
+
+  .slider-thumb {
+    @apply block h-4 w-4 border-2 border-cyber-yellow transition-colors;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyber-pink;
+    @apply disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .slider-thumb-pink {
+    @apply bg-cyber-pink shadow-neon-pink;
+  }
+
+  .slider-thumb-blue {
+    @apply bg-cyber-blue shadow-neon-blue;
+  }
+
+  .slider-thumb-purple {
+    @apply bg-cyber-purple;
+  }
+}
+
+/* ============================================
+   开关样式
+   ============================================ */
+
+@layer components {
+  .switch {
+    @apply inline-flex h-7 w-14 shrink-0 cursor-pointer items-center rounded-none border transition-colors;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyber-pink focus-visible:ring-offset-2;
+    @apply disabled:cursor-not-allowed disabled:opacity-50;
+    @apply data-[state=checked]:bg-cyber-pink/20 data-[state=checked]:border-cyber-pink;
+    @apply data-[state=unchecked]:bg-cyber-dark data-[state=unchecked]:border-cyber-blue/30;
+  }
+
+  .switch-thumb {
+    @apply pointer-events-none block h-5 w-5 shadow-lg transition-all;
+    @apply data-[state=checked]:translate-x-7 data-[state=unchecked]:translate-x-1;
+    @apply data-[state=checked]:bg-cyber-pink data-[state=unchecked]:bg-cyber-blue/50;
+  }
+}
+
+/* ============================================
+   提示框样式
+   ============================================ */
+
+@layer components {
+  .tooltip {
+    @apply z-50 overflow-hidden px-3 py-1.5 text-xs font-cyber;
+    @apply bg-cyber-darker/95 border border-cyber-blue/50 text-cyber-blue;
+  }
+}
+
+/* ============================================
+   标签样式
+   ============================================ */
+
+@layer components {
+  .label {
+    @apply text-sm font-cyber text-cyber-blue tracking-wider flex items-center gap-2;
+  }
+}
+
+/* ============================================
+   分隔线样式
+   ============================================ */
+
+@layer components {
+  .separator {
+    @apply shrink-0 bg-cyber-purple/30;
+  }
+
+  .separator-horizontal {
+    @apply h-px w-full;
+  }
+
+  .separator-vertical {
+    @apply h-full w-px;
+  }
+}
+
+/* ============================================
+   文字样式
+   ============================================ */
+
+@layer components {
+  /* 标题样式 */
+  .title {
+    @apply text-transparent bg-clip-text bg-gradient-to-r from-cyber-pink via-cyber-purple to-cyber-blue;
+    @apply font-cyber font-black tracking-wider;
+  }
+
+  .title-lg {
+    @apply text-5xl md:text-7xl;
+  }
+
+  .title-md {
+    @apply text-4xl;
+  }
+
+  .title-sm {
+    @apply text-2xl;
+  }
+
+  /* 副标题样式 */
+  .subtitle {
+    @apply text-cyber-blue/60 font-cyber text-sm tracking-[0.3em] uppercase;
+  }
+
+  /* 标签文字 */
+  .text-label {
+    @apply text-cyber-blue text-xs font-cyber tracking-widest uppercase;
+  }
+
+  /* 数值文字 */
+  .text-value {
+    @apply text-cyber-yellow font-cyber tracking-wider tabular-nums;
+  }
+
+  .text-value-pink {
+    @apply text-cyber-pink font-cyber font-bold tracking-wider tabular-nums;
+  }
+
+  /* 说明文字 */
+  .text-muted {
+    @apply text-cyber-blue/70;
+  }
+
+  .text-hint {
+    @apply text-cyber-blue/40 text-xs font-cyber tracking-wider;
+  }
+}
+
+/* ============================================
+   加载动画
+   ============================================ */
+
+@layer components {
+  .loader-ring {
+    @apply border-2 border-cyber-blue/30 rounded-full;
+  }
+
+  .loader-ring-inner {
+    @apply border-t-2 border-r-2 border-cyber-pink rounded-full;
+  }
+
+  .loader-dot {
+    @apply w-3 h-3 bg-cyber-yellow rounded-full animate-pulse;
+  }
+}
+
+/* ============================================
+   加载界面样式
+   ============================================ */
+
+@layer components {
+  /* 加载界面容器 */
+  .loading-screen {
+    @apply fixed inset-0 z-[100] flex flex-col items-center justify-center bg-cyber-darker;
+  }
+
+  /* 加载界面背景层 */
+  .loading-screen-bg {
+    @apply absolute inset-0 opacity-10;
+  }
+
+  /* 加载界面扫描线层 */
+  .loading-screen-scanline {
+    @apply absolute inset-0 pointer-events-none;
+  }
+
+  /* 加载界面标题区域 */
+  .loading-screen-header {
+    @apply mb-12 text-center;
+  }
+
+  /* 加载界面 spinner 容器 */
+  .loading-screen-spinner {
+    @apply mb-8;
+  }
+
+  .loading-screen-spinner-box {
+    @apply relative w-20 h-20;
+  }
+
+  /* 加载界面底部提示 */
+  .loading-screen-footer {
+    @apply absolute bottom-8;
+  }
+
+  /* 进度条容器 */
+  .loading-progress {
+    @apply w-80;
+  }
+
+  .loading-progress-header {
+    @apply flex justify-between items-center mb-2;
+  }
+
+  .loading-progress-percentage {
+    @apply text-xs;
+  }
+
+  .loading-progress-bar {
+    @apply relative;
+  }
+
+  .loading-progress-bar-inner {
+    @apply relative overflow-hidden;
+  }
+
+  /* 进度条扫光效果 */
+  .loading-progress-shine {
+    @apply absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none;
+  }
+
+  /* 当前加载资产文字 */
+  .loading-progress-asset {
+    @apply mt-2 text-xs truncate h-4;
+  }
+
+  .loading-progress-asset-inner {
+    @apply flex items-center gap-1;
+  }
+
+  /* 加载统计 */
+  .loading-stats {
+    @apply flex gap-6 text-xs;
+  }
+
+  .loading-stats-item {
+    @apply flex items-center gap-2;
+  }
+
+  .loading-stats-item-primary {
+    @apply text-cyber-blue/70;
+  }
+
+  .loading-stats-item-secondary {
+    @apply text-cyber-pink/70;
+  }
+
+  .loading-stats-item-tertiary {
+    @apply text-cyber-purple/70;
+  }
+
+  /* 加载错误 */
+  .loading-errors {
+    @apply mt-4 p-3 max-w-md;
+  }
+
+  .loading-errors-title {
+    @apply flex items-center gap-2 text-red-400 text-sm mb-2;
+  }
+
+  .loading-errors-list {
+    @apply text-xs text-red-300/70 space-y-1;
+  }
+
+  .loading-errors-more {
+    @apply text-red-400;
+  }
+
+  /* 内联加载器 */
+  .inline-loader {
+    @apply flex items-center gap-2 text-sm;
+  }
+
+  /* 加载器图标尺寸 */
+  .loader-icon-sm {
+    @apply w-3 h-3;
+  }
+
+  .loader-icon-md {
+    @apply w-4 h-4;
+  }
+}
+
+/* ============================================
+   通知样式
+   ============================================ */
+
+@layer components {
+  .notification {
+    @apply absolute bottom-4 left-1/2 -translate-x-1/2 px-6 py-3 border;
+  }
+
+  .notification-success {
+    @apply bg-green-500/20 border-green-500/50 text-green-300;
+  }
+
+  .notification-error {
+    @apply bg-red-500/20 border-red-500/50 text-red-300;
+  }
+
+  .notification-warning {
+    @apply bg-yellow-500/20 border-yellow-500/50 text-yellow-300;
+  }
+}
+
+/* ============================================
+   clipPath 样式
+   ============================================ */
+
+.clip-corner {
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+
+.clip-corner-lg {
+  clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px);
+}
+
+.clip-corner-xl {
+  clip-path: polygon(20px 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%, 0 20px);
+}
+
+.clip-progress {
+  clip-path: polygon(0 0, 100% 0, 95% 100%, 0 100%);
+}
+
+/* ============================================
+   HUD 样式
+   ============================================ */
+
+@layer components {
+  .hud-panel {
+    @apply relative px-6 py-3 bg-cyber-darker/90 border border-cyber-pink/50 backdrop-blur-sm;
+  }
+
+  .hud-bar {
+    @apply relative;
+  }
+
+  .hud-bar-glow {
+    @apply absolute -inset-0.5 bg-gradient-to-r from-cyber-pink via-cyber-purple to-cyber-blue opacity-75 blur-sm;
+  }
+
+  .hud-corner-tl {
+    @apply absolute -top-1 -left-1 w-2 h-2 border-t border-l border-cyber-pink;
+  }
+
+  .hud-corner-br {
+    @apply absolute -bottom-1 -right-1 w-2 h-2 border-b border-r border-cyber-blue;
+  }
+}
+
+/* ============================================
+   菜单样式
+   ============================================ */
+
+@layer components {
+  .menu-bg {
+    @apply bg-cyber-darker/80 backdrop-blur-md;
+  }
+
+  .menu-panel {
+    @apply relative p-5 bg-cyber-darker/90 border border-cyber-blue/30;
+  }
+
+  .menu-title {
+    @apply text-cyber-pink font-cyber text-sm tracking-widest uppercase mb-4 flex items-center gap-2;
+  }
+
+  .menu-item {
+    @apply flex justify-between items-center border-b border-cyber-purple/20 pb-2;
+  }
+
+  .menu-item-label {
+    @apply text-cyber-blue/70 flex items-center gap-2;
+  }
+
+  .menu-item-value {
+    @apply text-cyber-yellow tracking-wider;
+  }
+}

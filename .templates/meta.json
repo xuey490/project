@@ -1,0 +1,34 @@
+{
+  "templates": [
+    {
+      "name": "web",
+      "name_cn": "网站",
+      "description": "General website application template, including front-end and back-end services",
+      "description_cn": "通用网站应用模板，包含前后端服务"
+    },
+    {
+      "name": "prototype",
+      "name_cn": "原型",
+      "description": "UI/UX prototype template, frontend-only with React + shadcn/ui, focused on rapid prototyping",
+      "description_cn": "UI/UX 原型模板，纯前端 React + shadcn/ui，专注快速原型设计"
+    },
+    {
+      "name": "game",
+      "name_cn": "游戏",
+      "description": "Game application, used to make beautiful web games",
+      "description_cn": "游戏应用，用于制作精美的网页游戏"
+    },
+    {
+      "name": "ppt",
+      "name_cn": "ppt",
+      "description": "PPT presentation template",
+      "description_cn": "用于制作 PPT 演示文稿"
+    },
+    {
+      "name": "miniprogram",
+      "name_cn": "小程序",
+      "description": "Cross-platform miniprogram template with Taro framework, supporting WeChat, Alipay, and more",
+      "description_cn": "跨平台小程序模板，基于 Taro 框架，支持微信、支付宝等多端"
+    }
+  ]
+}

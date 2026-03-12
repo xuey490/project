@@ -1,0 +1,137 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PPT Global Style Configuration",
+  "description": "PPT 全局样式配置的标准格式定义",
+  "type": "object",
+  "required": [
+    "colorScheme",
+    "primaryColor",
+    "accentColor1",
+    "accentColor2",
+    "neutralColor",
+    "backgroundColor",
+    "fontTitle",
+    "fontBody",
+    "fontSizeH1",
+    "fontSizeH2",
+    "fontSizeH3",
+    "fontSizeBody"
+  ],
+  "properties": {
+    "colorScheme": {
+      "type": "string",
+      "description": "配色方案名称",
+      "examples": ["极简商务风格", "现代科技风格", "优雅学术风格"]
+    },
+    "primaryColor": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$",
+      "description": "主色（HEX 格式）"
+    },
+    "accentColor1": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$",
+      "description": "辅助色1（HEX 格式）"
+    },
+    "accentColor2": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$",
+      "description": "辅助色2（HEX 格式）"
+    },
+    "neutralColor": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$",
+      "description": "中性色（HEX 格式）"
+    },
+    "backgroundColor": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$",
+      "description": "背景色（HEX 格式，用于所有页面的默认背景）",
+      "examples": ["#FFFFFF", "#F5F5F5", "#1A1A1A"]
+    },
+    "backgroundImage": {
+      "type": "string",
+      "description": "背景图片路径（可选，如果设置则覆盖 backgroundColor。支持纯色、渐变、纹理图片）",
+      "examples": [
+        "images/background.png",
+        "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+        "url('images/texture.png')"
+      ]
+    },
+    "fontTitle": {
+      "type": "string",
+      "description": "标题字体",
+      "examples": ["Noto Sans SC Bold", "Montserrat Bold"]
+    },
+    "fontBody": {
+      "type": "string",
+      "description": "正文字体",
+      "examples": ["Noto Sans SC Regular", "Inter Regular"]
+    },
+    "fontSizeH1": {
+      "type": "string",
+      "pattern": "^\\d+px$",
+      "description": "一级标题字号（如 48px）"
+    },
+    "fontSizeH2": {
+      "type": "string",
+      "pattern": "^\\d+px$",
+      "description": "二级标题字号（如 36px）"
+    },
+    "fontSizeH3": {
+      "type": "string",
+      "pattern": "^\\d+px$",
+      "description": "三级标题字号（如 28px）"
+    },
+    "fontSizeBody": {
+      "type": "string",
+      "pattern": "^\\d+px$",
+      "description": "正文字号（如 20px）"
+    }
+  },
+  "examples": [
+    {
+      "colorScheme": "现代科技风格",
+      "primaryColor": "#4285F4",
+      "accentColor1": "#34A853",
+      "accentColor2": "#FBBC04",
+      "neutralColor": "#5F6368",
+      "backgroundColor": "#FFFFFF",
+      "fontTitle": "Montserrat Bold",
+      "fontBody": "Inter Regular",
+      "fontSizeH1": "48px",
+      "fontSizeH2": "36px",
+      "fontSizeH3": "28px",
+      "fontSizeBody": "20px"
+    },
+    {
+      "colorScheme": "极简商务风格",
+      "primaryColor": "#1A1A1A",
+      "accentColor1": "#666666",
+      "accentColor2": "#999999",
+      "neutralColor": "#CCCCCC",
+      "backgroundColor": "#FFFFFF",
+      "backgroundImage": "linear-gradient(180deg, #FFFFFF 0%, #F5F5F5 100%)",
+      "fontTitle": "Noto Sans SC Bold",
+      "fontBody": "Noto Sans SC Regular",
+      "fontSizeH1": "52px",
+      "fontSizeH2": "40px",
+      "fontSizeH3": "32px",
+      "fontSizeBody": "22px"
+    },
+    {
+      "colorScheme": "优雅学术风格",
+      "primaryColor": "#2C3E50",
+      "accentColor1": "#3498DB",
+      "accentColor2": "#E74C3C",
+      "neutralColor": "#7F8C8D",
+      "backgroundColor": "#ECF0F1",
+      "fontTitle": "Georgia Bold",
+      "fontBody": "Georgia Regular",
+      "fontSizeH1": "48px",
+      "fontSizeH2": "36px",
+      "fontSizeH3": "28px",
+      "fontSizeBody": "20px"
+    }
+  ]
+}
