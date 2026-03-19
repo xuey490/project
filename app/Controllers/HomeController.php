@@ -9,11 +9,12 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 use Symfony\Component\HttpFoundation\Response;
+use Framework\Attributes\Route;
 
-class Home 
+class HomeController 
 {
 
-	
+	#[Route(path: '/api/home', methods: ['GET'], name: 'home.index')]
 	public function index():Response
 	{
 
