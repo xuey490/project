@@ -111,57 +111,110 @@ final class SchemaWarmup
         return array_values(array_unique($classes));
     }
 
-    /**
-     * 预热单个模型
-     *
-     * @param string $modelClass
-     */
-    protected static function warmupModel(string $modelClass): void
-    {
-        // 支持动态别名 BaseModel
-        if (!is_subclass_of($modelClass, Model::class) &&
-            !is_subclass_of($modelClass, \Framework\Utils\BaseModel::class)
-        ) {
-            return;
-        }
 
-        /** @var Model $model */
-        $model = new $modelClass();
-		
-        $resolver = Model::getConnectionResolver();
-        if (!$resolver) {
-            throw new RuntimeException('Eloquent ConnectionResolver not initialized');
-        }
-
-        // 获取连接
-        $connection = $model->getConnectionName() ?? $resolver->getDefaultConnection();
-        $conn = $resolver->connection($connection);
-        $schema = $conn->getSchemaBuilder();
-
-        // 获取逻辑表名（不带前缀，SchemaBuilder 会自动加前缀）
-        $table = $model->getTable();
-
-        // 注册到 SchemaRegistry
-        SchemaRegistry::register(
-            $table,
-            $schema->getColumnListing($table),
-            self::loadIndexes($conn, $table),
-            self::resolveAuditFields($modelClass)
-        );
+	
+/**
+ * 预热单个模型
+ *
+ * @param string $modelClass
+ */
+protected static function warmupModel(string $modelClass): void
+{
+    // 支持动态别名 BaseModel
+    if (!is_subclass_of($modelClass, Model::class) &&
+        !is_subclass_of($modelClass, \Framework\Utils\BaseModel::class)
+    ) {
+        return;
     }
 
-    /**
-     * 加载表索引（演示示例，可根据实际情况扩展）
-     *
-     * @param \Illuminate\Database\Connection $conn
-     * @param string $table
-     * @return array
-     */
-    protected static function loadIndexes($conn, string $table): array
-    {
-        $indexes = $conn->select("SHOW INDEX FROM `{$conn->getTablePrefix()}{$table}`");
+    /** @var Model $model */
+    $model = new $modelClass();
+	
+    $resolver = Model::getConnectionResolver();
+    if (!$resolver) {
+        throw new RuntimeException('Eloquent ConnectionResolver not initialized');
+    }
+
+    // 获取连接
+    $connection = $model->getConnectionName() ?? $resolver->getDefaultConnection();
+    $conn = $resolver->connection($connection);
+    $schema = $conn->getSchemaBuilder();
+
+    // 获取逻辑表名（不带前缀）
+    $table = $model->getTable();
+    // 拼接完整表名（前缀+表名）
+    $fullTableName = $conn->getTablePrefix() . $table;
+
+    // 核心修复：用原生SQL查询当前数据库的所有表名（替代不存在的getAllTables）
+    $allTables = [];
+    try {
+        // MySQL 原生查询：获取当前数据库的所有表名
+        $tablesResult = $conn->select("SHOW TABLES");
+        // 解析查询结果（适配MySQL返回格式：数组/对象）
+        foreach ($tablesResult as $item) {
+            if (is_object($item)) {
+                // 提取对象中的表名字段（字段名格式：Tables_in_数据库名）
+                $field = 'Tables_in_' . $conn->getDatabaseName();
+                $allTables[] = $item->$field;
+            } elseif (is_array($item)) {
+                // 数组格式直接取第一个值
+                $allTables[] = reset($item);
+            }
+        }
+    } catch (\Exception $e) {
+        // 数据库连接失败/无权限时，直接返回（避免阻断启动）
+        return;
+    }
+
+    // 判断表是否存在，不存在则跳过注册
+    if (!in_array($fullTableName, $allTables) && !in_array($table, $allTables)) {
+        return;
+    }
+				
+    // 仅表存在时执行注册
+    SchemaRegistry::register(
+        $table,
+        $schema->getColumnListing($table),
+        self::loadIndexes($conn, $table),
+        self::resolveAuditFields($modelClass)
+    );
+}
+
+/**
+ * 加载表索引（增加表存在性判断）
+ *
+ * @param \Illuminate\Database\Connection $conn
+ * @param string $table
+ * @return array
+ */
+protected static function loadIndexes($conn, string $table): array
+{
+    $fullTableName = $conn->getTablePrefix() . $table;
+    // 先查询所有表，判断目标表是否存在
+    try {
+        $tablesResult = $conn->select("SHOW TABLES");
+        $allTables = [];
+        foreach ($tablesResult as $item) {
+            $field = 'Tables_in_' . $conn->getDatabaseName();
+            $allTables[] = is_object($item) ? $item->$field : reset($item);
+        }
+    } catch (\Exception $e) {
+        return [];
+    }
+
+    // 表不存在则返回空索引
+    if (!in_array($fullTableName, $allTables) && !in_array($table, $allTables)) {
+        return [];
+    }
+
+    // 表存在时执行索引查询
+    try {
+        $indexes = $conn->select("SHOW INDEX FROM `{$fullTableName}`");
         return $indexes ?: [];
+    } catch (\Exception $e) {
+        return [];
     }
+}
 
     /**
      * 获取审计字段（演示示例，可根据 BaseModel 约定）
