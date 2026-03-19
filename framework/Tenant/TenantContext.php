@@ -1,26 +1,48 @@
 <?php
+
 declare(strict_types=1);
+
+/**
+ * This file is part of FssPHP Framework.
+ *
+ * @link     https://github.com/xuey490/project
+ * @license  https://github.com/xuey490/project/blob/main/LICENSE
+ *
+ * @Filename: TenantContext.php
+ * @Date: 2026-03-19
+ * @Developer: xuey863toy
+ * @Email: xuey863toy@gmail.com
+ */
 
 namespace Framework\Tenant;
 
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
+
 /**
- * 租户上下文管理器.
+ * 租户上下文管理器（Symfony Request 版本）
  *
- * 该类提供全局的租户隔离上下文，使用静态方法管理当前请求的租户信息。
- * 支持多租户场景下的数据隔离和权限控制。
+ * 该类提供基于 Symfony Request 的租户隔离上下文管理，
+ * 使用 Request 属性存储租户信息，避免 Workerman 常驻进程下的静态变量污染问题。
  *
  * 主要功能：
  * - 设置和获取当前租户 ID
  * - 控制是否启用租户隔离
  * - 提供忽略租户隔离的临时作用域执行
- * - 限制批量操作的最大影响行数
+ * - 支持从 JWT Token 或 Session 中解析租户ID
  *
  * 使用示例：
  * ```php
- * TenantContext::setTenantId(1001);    // 设置当前用户的租户
- * TenantContext::ignore();              // 超管模式：忽略租户隔离
- * TenantContext::restore();             // 恢复租户隔离
- * TenantContext::shouldApplyTenant();   // ORM 判断是否加租户条件
+ * // 在中间件中设置租户
+ * TenantContext::setTenantIdFromRequest($request, 1001);
+ *
+ * // 在模型中自动应用租户隔离
+ * TenantContext::shouldApplyTenant(); // 返回 true/false
+ *
+ * // 超管模式临时忽略隔离
+ * TenantContext::withIgnore(function() {
+ *     return User::all(); // 返回所有租户数据
+ * });
  * ```
  *
  * @package Framework\Tenant
@@ -28,150 +50,260 @@ namespace Framework\Tenant;
 final class TenantContext
 {
     /**
-     * 当前租户 ID（普通用户登录后设置）.
-     *
-     * @var int|null
+     * Request 属性键名 - 租户ID
      */
-    private static ?int $tenantId = null;
+    private const TENANT_ID_KEY = '_tenant_id';
 
     /**
-     * 是否忽略租户隔离标志（超管或系统操作时设置为 true）.
-     *
-     * @var bool
+     * Request 属性键名 - 忽略租户隔离
      */
-    private static bool $ignoreTenant = false;
+    private const IGNORE_TENANT_KEY = '_ignore_tenant';
 
     /**
-     * 单次操作最大影响行数限制，防止误操作导致大批量数据变更.
-     *
-     * @var int
+     * Request 属性键名 - 用户ID（用于JWT场景）
      */
-    private static int $maxAffectRows = 100;
+    private const USER_ID_KEY = '_user_id';
 
     /**
-     * 获取最大影响行数限制.
-     *
-     * @return int 最大影响行数
+     * RequestStack 实例
      */
-    public static function maxAffectRows(): int
+    private static ?RequestStack $requestStack = null;
+
+    /**
+     * 设置 RequestStack（在容器启动时调用）
+     *
+     * @param RequestStack $requestStack Symfony RequestStack
+     */
+    public static function setRequestStack(RequestStack $requestStack): void
     {
-        return self::$maxAffectRows;
+        self::$requestStack = $requestStack;
     }
 
     /**
-     * 设置最大影响行数限制.
+     * 获取当前 Request
      *
-     * 用于限制批量删除或更新操作的最大影响行数，防止误操作。
-     *
-     * @param int $limit 最大影响行数
-     *
-     * @return void
+     * @return Request|null 当前请求实例
      */
-    public static function setMaxAffectRows(int $limit): void
+    public static function getCurrentRequest(): ?Request
     {
-        self::$maxAffectRows = $limit;
+        if (self::$requestStack !== null) {
+            return self::$requestStack->getCurrentRequest();
+        }
+        return null;
     }
-	
+
     /**
-     * 设置当前租户 ID.
+     * 设置租户ID到当前 Request
      *
-     * 通常在用户登录成功后调用，用于后续的数据隔离查询。
-     *
-     * @param int|null $tenantId 租户 ID，传入 null 表示未登录或无租户
-     *
+     * @param int|null $tenantId 租户ID
      * @return void
      */
     public static function setTenantId(?int $tenantId): void
     {
-        self::$tenantId = $tenantId;
+        $request = self::getCurrentRequest();
+        if ($request !== null) {
+            $request->attributes->set(self::TENANT_ID_KEY, $tenantId);
+        }
     }
 
     /**
-     * 获取当前租户 ID.
+     * 设置租户ID到指定 Request（用于中间件）
      *
-     * @return int|null 当前租户 ID，未设置时返回 null
+     * @param Request $request Request 实例
+     * @param int|null $tenantId 租户ID
+     * @return void
+     */
+    public static function setTenantIdToRequest(Request $request, ?int $tenantId): void
+    {
+        $request->attributes->set(self::TENANT_ID_KEY, $tenantId);
+    }
+
+    /**
+     * 获取当前租户ID
+     *
+     * @return int|null 租户ID，未设置时返回 null
      */
     public static function getTenantId(): ?int
     {
-        return self::$tenantId;
+        $request = self::getCurrentRequest();
+        if ($request === null) {
+            return null;
+        }
+        return $request->attributes->get(self::TENANT_ID_KEY);
     }
 
     /**
-     * 判断是否应启用租户隔离.
+     * 从指定 Request 获取租户ID
      *
-     * 当租户 ID 不为空且未设置忽略标志时返回 true。
-     * ORM 层据此判断是否自动添加租户过滤条件。
-     *
-     * @return bool 需要启用租户隔离返回 true，否则返回 false
+     * @param Request $request Request 实例
+     * @return int|null 租户ID
      */
-    public static function shouldApplyTenant(): bool
+    public static function getTenantIdFromRequest(Request $request): ?int
     {
-        return !self::$ignoreTenant && self::$tenantId !== null;
+        return $request->attributes->get(self::TENANT_ID_KEY);
     }
 
     /**
-     * 忽略租户隔离（超管或系统操作模式）.
+     * 设置用户ID（用于JWT场景）
      *
-     * 调用后所有查询将不再添加租户过滤条件。
-     * 通常用于超管查看所有数据或系统级操作。
+     * @param int|null $userId 用户ID
+     * @return void
+     */
+    public static function setUserId(?int $userId): void
+    {
+        $request = self::getCurrentRequest();
+        if ($request !== null) {
+            $request->attributes->set(self::USER_ID_KEY, $userId);
+        }
+    }
+
+    /**
+     * 获取当前用户ID
+     *
+     * @return int|null 用户ID
+     */
+    public static function getUserId(): ?int
+    {
+        $request = self::getCurrentRequest();
+        if ($request === null) {
+            return null;
+        }
+        return $request->attributes->get(self::USER_ID_KEY);
+    }
+
+    /**
+     * 忽略租户隔离（超管模式）
      *
      * @return void
      */
     public static function ignore(): void
     {
-        self::$ignoreTenant = true;
+        $request = self::getCurrentRequest();
+        if ($request !== null) {
+            $request->attributes->set(self::IGNORE_TENANT_KEY, true);
+        }
     }
 
     /**
-     * 恢复租户隔离.
+     * 在指定 Request 上忽略租户隔离
      *
-     * 取消 ignore() 的效果，恢复正常的租户隔离机制。
+     * @param Request $request Request 实例
+     * @return void
+     */
+    public static function ignoreOnRequest(Request $request): void
+    {
+        $request->attributes->set(self::IGNORE_TENANT_KEY, true);
+    }
+
+    /**
+     * 恢复租户隔离
      *
      * @return void
      */
     public static function restore(): void
     {
-        self::$ignoreTenant = false;
+        $request = self::getCurrentRequest();
+        if ($request !== null) {
+            $request->attributes->set(self::IGNORE_TENANT_KEY, false);
+        }
     }
 
     /**
-     * 检查当前是否处于忽略租户隔离状态.
+     * 检查当前是否处于忽略租户隔离状态
      *
-     * @return bool 正在忽略租户隔离返回 true，否则返回 false
+     * @return bool 正在忽略返回 true
      */
     public static function isIgnoring(): bool
     {
-        return self::$ignoreTenant;
+        $request = self::getCurrentRequest();
+        if ($request === null) {
+            return false;
+        }
+        return $request->attributes->get(self::IGNORE_TENANT_KEY, false);
     }
-	
+
     /**
-     * 在忽略租户隔离的作用域内安全执行回调函数.
+     * 判断是否应启用租户隔离
      *
-     * 执行期间临时忽略租户隔离，执行完成后自动恢复原状态。
-     * 使用 try-finally 确保状态始终被恢复。
+     * 当租户 ID 不为空且未设置忽略标志时返回 true
+     *
+     * @return bool 需要启用租户隔离返回 true
+     */
+    public static function shouldApplyTenant(): bool
+    {
+        $request = self::getCurrentRequest();
+        if ($request === null) {
+            return false;
+        }
+
+        $ignore = $request->attributes->get(self::IGNORE_TENANT_KEY, false);
+        $tenantId = $request->attributes->get(self::TENANT_ID_KEY);
+
+        return !$ignore && $tenantId !== null;
+    }
+
+    /**
+     * 在忽略租户隔离的作用域内安全执行回调函数
+     *
+     * 执行期间临时忽略租户隔离，执行完成后自动恢复原状态
+     * 使用 try-finally 确保状态始终被恢复
      *
      * @param callable $fn 要执行的回调函数
-     *
      * @return mixed 回调函数的返回值
      */
     public static function withIgnore(callable $fn)
     {
-        $prev = self::$ignoreTenant;
+        $request = self::getCurrentRequest();
+        if ($request === null) {
+            return $fn();
+        }
 
-        self::$ignoreTenant = true;
+        $prev = $request->attributes->get(self::IGNORE_TENANT_KEY, false);
+        $request->attributes->set(self::IGNORE_TENANT_KEY, true);
 
         try {
             return $fn();
         } finally {
-            self::$ignoreTenant = $prev;
+            $request->attributes->set(self::IGNORE_TENANT_KEY, $prev);
         }
     }
-	
-}
-/*
-TenantContext::setTenantId(1001);   // 当前登录用户的租户
-TenantContext::ignore();           // 超管模式
-TenantContext::restore();          // 恢复隔离
-TenantContext::shouldApplyTenant();// ORM 判断是否加租户条件
 
-*/
+    /**
+     * 获取最大影响行数限制
+     *
+     * 用于限制批量删除或更新操作的最大影响行数，防止误操作
+     *
+     * @return int 最大影响行数
+     */
+    public static function maxAffectRows(): int
+    {
+        return 100;
+    }
+
+    /**
+     * 清理当前请求的租户上下文
+     *
+     * 在请求结束时调用，清理 Request 中的租户相关属性
+     *
+     * @return void
+     */
+    public static function clear(): void
+    {
+        $request = self::getCurrentRequest();
+        if ($request !== null) {
+            $request->attributes->remove(self::TENANT_ID_KEY);
+            $request->attributes->remove(self::IGNORE_TENANT_KEY);
+            $request->attributes->remove(self::USER_ID_KEY);
+        }
+    }
+
+    /**
+     * 检查当前请求是否有租户上下文
+     *
+     * @return bool 有租户上下文返回 true
+     */
+    public static function hasContext(): bool
+    {
+        return self::getTenantId() !== null;
+    }
+}

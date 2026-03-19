@@ -1,5 +1,5 @@
 {
-  "name": "PHP权限管理系统",
-  "version_description": "添加字典、附件、监控、日志模块",
+  "name": "project",
+  "version_description": "Implement multi-tenant functionality",
   "preview_type": "pc"
 }

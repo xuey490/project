@@ -13,14 +13,17 @@ declare(strict_types=1);
 namespace App\Models;
 
 use Framework\Basic\BaseLaORMModel;
+use Framework\Tenant\TenantContext;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * SysUser 系统用户模型
  *
  * 用户表模型，包含用户基本信息、状态管理、角色关联等
+ * 支持多租户：用户可属于多个租户，在不同租户拥有不同角色
  *
  * @property int         $id             用户ID
  * @property string      $username       用户名
@@ -41,9 +44,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property \DateTime   $updated_at     更新时间
  * @property \DateTime   $deleted_at     删除时间
  *
- * @property-read SysRole[]   $roles      用户角色列表
- * @property-read SysMenu[]   $menus      用户个人菜单
- * @property-read SysDept     $dept       所属部门
+ * @property-read SysRole[]   $roles      用户角色列表（当前租户）
+ * @property-read SysMenu[]   $menus      用户个人菜单（当前租户）
+ * @property-read SysDept     $dept       所属部门（当前租户）
+ * @property-read SysTenant[] $tenants    用户所属的所有租户
  */
 class SysUser extends BaseLaORMModel
 {
@@ -129,18 +133,66 @@ class SysUser extends BaseLaORMModel
     }
 
     /**
-     * 用户拥有的角色 (多对多)
+     * 用户拥有的角色 (多对多) - 当前租户
      *
      * @return BelongsToMany
      */
     public function roles(): BelongsToMany
+    {
+        $tenantId = TenantContext::getTenantId();
+
+        return $this->belongsToMany(
+            SysRole::class,
+            'sys_user_role',
+            'user_id',
+            'role_id'
+        )
+        ->wherePivot('tenant_id', $tenantId ?? 0)
+        ->withTimestamps();
+    }
+
+    /**
+     * 获取指定租户的角色
+     *
+     * @param int $tenantId 租户ID
+     * @return BelongsToMany
+     */
+    public function rolesByTenant(int $tenantId): BelongsToMany
     {
         return $this->belongsToMany(
             SysRole::class,
             'sys_user_role',
             'user_id',
             'role_id'
-        )->withTimestamps();
+        )
+        ->wherePivot('tenant_id', $tenantId)
+        ->withTimestamps();
+    }
+
+    /**
+     * 用户所属的所有租户
+     *
+     * @return HasMany
+     */
+    public function tenantRelations(): HasMany
+    {
+        return $this->hasMany(SysUserTenant::class, 'user_id', 'id');
+    }
+
+    /**
+     * 用户所属的所有租户（通过关联表）
+     *
+     * @return BelongsToMany
+     */
+    public function tenants(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            SysTenant::class,
+            'sys_user_tenant',
+            'user_id',
+            'tenant_id'
+        )->withPivot('is_default', 'join_time')
+         ->withTimestamps();
     }
 
     /**
@@ -213,7 +265,7 @@ class SysUser extends BaseLaORMModel
     }
 
     /**
-     * 获取用户的所有角色编码
+     * 获取用户的所有角色编码（当前租户）
      *
      * @return array
      */
@@ -223,7 +275,7 @@ class SysUser extends BaseLaORMModel
     }
 
     /**
-     * 获取用户的所有角色ID
+     * 获取用户的所有角色ID（当前租户）
      *
      * @return array
      */
@@ -233,25 +285,93 @@ class SysUser extends BaseLaORMModel
     }
 
     /**
-     * 获取用户的合并菜单ID列表 (角色菜单 + 个人菜单)
+     * 获取用户在指定租户的角色编码
+     *
+     * @param int $tenantId 租户ID
+     * @return array
+     */
+    public function getRoleCodesByTenant(int $tenantId): array
+    {
+        return $this->rolesByTenant($tenantId)
+            ->where('status', SysRole::STATUS_ENABLED)
+            ->pluck('role_code')
+            ->toArray();
+    }
+
+    /**
+     * 获取用户在指定租户的角色ID
+     *
+     * @param int $tenantId 租户ID
+     * @return array
+     */
+    public function getRoleIdsByTenant(int $tenantId): array
+    {
+        return $this->rolesByTenant($tenantId)
+            ->where('status', SysRole::STATUS_ENABLED)
+            ->pluck('id')
+            ->toArray();
+    }
+
+    /**
+     * 获取用户可访问的所有租户ID
+     *
+     * @return array
+     */
+    public function getTenantIds(): array
+    {
+        return SysUserTenant::getTenantIdsByUser($this->id);
+    }
+
+    /**
+     * 获取用户的默认租户ID
+     *
+     * @return int|null
+     */
+    public function getDefaultTenantId(): ?int
+    {
+        return SysUserTenant::getDefaultTenantId($this->id);
+    }
+
+    /**
+     * 检查用户是否属于指定租户
+     *
+     * @param int $tenantId 租户ID
+     * @return bool
+     */
+    public function belongsToTenant(int $tenantId): bool
+    {
+        return SysUserTenant::isUserInTenant($this->id, $tenantId);
+    }
+
+    /**
+     * 获取用户的合并菜单ID列表 (角色菜单 + 个人菜单) - 当前租户
      *
      * @return array
      */
     public function getMergedMenuIds(): array
     {
-        // 超级管理员拥有所有菜单
+        $tenantId = TenantContext::getTenantId();
+
+        // 超级管理员拥有当前租户的所有菜单
         if ($this->isSuperAdmin()) {
-            return SysMenu::where('status', SysMenu::STATUS_ENABLED)
+            return SysMenu::where('tenant_id', $tenantId ?? 0)
+                ->where('status', SysMenu::STATUS_ENABLED)
                 ->pluck('id')
                 ->toArray();
         }
 
-        // 1. 获取角色菜单ID
+        // 1. 获取当前租户的角色菜单ID
         $roleIds = $this->getRoleIds();
-        $roleMenuIds = SysRoleMenu::whereIn('role_id', $roleIds)->pluck('menu_id')->toArray();
+        $roleMenuIds = SysRoleMenu::whereIn('role_id', $roleIds)
+            ->where('tenant_id', $tenantId ?? 0)
+            ->pluck('menu_id')
+            ->toArray();
 
-        // 2. 获取用户个人菜单ID
-        $userMenuIds = SysUserMenu::where('user_id', $this->id)->pluck('menu_id')->toArray();
+        // 2. 获取当前租户的用户个人菜单ID
+        $userMenuIds = SysUserMenu::where('user_id', $this->id)
+            ->where('tenant_id', $tenantId ?? 0)
+            ->pluck('menu_id')
+            ->toArray();
 
         // 3. 合并去重
         return array_unique(array_merge($roleMenuIds, $userMenuIds));
