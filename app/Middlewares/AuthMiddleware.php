@@ -6,6 +6,7 @@ namespace App\Middlewares;
 
 use Framework\Attributes\Auth;
 use Framework\Basic\BaseJsonResponse;
+use Framework\Tenant\TenantContext;
 use Framework\Utils\JwtFactory;
 use App\Models\SysUser;
 use Symfony\Component\HttpFoundation\Cookie;
@@ -34,7 +35,7 @@ class AuthMiddleware
         $attributes = $request->attributes->get('_attributes', []);
         /** @var Auth|null $auth */
         $auth = $attributes[Auth::class] ?? null;
-        
+
         $routeInfo = $request->attributes->get('_route');
 
         $legacyAuth = $request->attributes->get('_auth', false);
@@ -52,7 +53,7 @@ class AuthMiddleware
         if (! $accessToken) {
             return BaseJsonResponse::unauthorized('请先登录');
         }
-        
+
 
         /** @var JwtFactory $jwt */
         $jwt = app('jwt');
@@ -61,13 +62,16 @@ class AuthMiddleware
             // 1️⃣ 严格校验 access token
             $parsed = $jwt->parseForAccess($accessToken);
             $claims = $parsed->claims();
-            
 
             $uid  = (int) $claims->get('uid');
             $role = $claims->get('role') ?? 'user';
+            $tenantId = (int) ($claims->get('tenant_id') ?? 0);
             $exp  = $claims->get('exp')->getTimestamp();
 
-            // 2️⃣ 角色校验
+            // 2️⃣ 设置租户上下文（多租户支持）- 直接设置到 Request 避免 RequestStack 依赖
+            TenantContext::setTenantIdToRequest($request, $tenantId > 0 ? $tenantId : null);
+
+            // 3️⃣ 角色校验
             $routeRoles = $request->attributes->get('_roles');
             if (!is_array($routeRoles) && is_array($routeInfo) && isset($routeInfo['__meta_flat']['_roles']) && is_array($routeInfo['__meta_flat']['_roles'])) {
                 $routeRoles = $routeInfo['__meta_flat']['_roles'];
@@ -79,42 +83,48 @@ class AuthMiddleware
                 return BaseJsonResponse::error('无权限访问！', 403);
             }
 
-            // 3️⃣ 自动续期（失败不影响当前请求）
+            // 4️⃣ 自动续期（失败不影响当前请求）
             $remaining = $exp - time();
             if ($remaining < $this->refreshThreshold) {
                 $this->tryRefresh($request, $jwt, $uid);
             }
-            
 
-            // 4️⃣ 注入用户上下文
+            // 5️⃣ 注入用户上下文
             $request->attributes->set('user', [
-                'id'   => $uid,
-                'role' => $role,
+                'id'        => $uid,
+                'role'      => $role,
+                'tenant_id' => $tenantId,
             ]);
 
             $request->attributes->set('user_claims', $claims->all());
 
+            // 6️⃣ 验证用户状态（使用数据库字段：status 和 deleted_at）
             $currentUser = SysUser::with(['dept', 'roles', 'roles.depts', 'roles.menus'])->find($uid);
             if ($currentUser) {
-                $enabled = (int) ($currentUser->enabled ?? 1);
-                $delFlag = (string) ($currentUser->del_flag ?? '0');
-                if ($enabled === 0 || $delFlag === '2') {
-                    return BaseJsonResponse::unauthorized('账号已禁用或已删除');
+                // 检查用户是否被禁用（status = 0 表示禁用）
+                if ($currentUser->isDisabled()) {
+                    return BaseJsonResponse::unauthorized('账号已被禁用');
                 }
+
+                // 检查用户是否被软删除
+                if ($currentUser->trashed()) {
+                    return BaseJsonResponse::unauthorized('账号已被删除');
+                }
+
                 $request->attributes->set('current_user', $currentUser);
+            } else {
+                return BaseJsonResponse::unauthorized('用户不存在');
             }
 
         } catch (\Throwable $e) {
             return BaseJsonResponse::unauthorized('登录已过期或无效');
         }
 
-        // 5️⃣ 执行后续逻辑
-        
+        // 7️⃣ 执行后续逻辑
         $response = $next($request);
-        
+
         $this->writeCookiesIfNeeded($request, $response);
-        
-        // 6️⃣ 如果有新 token，写回 Cookie
+
         return $response;
     }
 

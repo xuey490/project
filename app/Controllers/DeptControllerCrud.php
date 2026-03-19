@@ -71,7 +71,7 @@ class DeptControllerCrud extends BaseController
      * @return mixed
      */
     #[Route(path: '/api/system/dept/list', methods: ['GET'], name: 'dept.list')]
-    #[Auth(required: true)]
+    ///[Auth(required: true)]
     public function index(Request $request)
     {
         // 调用 Trait 的 index 方法

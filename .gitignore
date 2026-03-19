@@ -23,3 +23,4 @@ watch.php
 workerman.log
 framework/Casbin/Permissionx.php
 framework/Casbin/Watcher/Redis.php
+.codebuddy/skills/ppt-implement/scripts/logs/post-slide.log

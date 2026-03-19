@@ -48,6 +48,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read SysMenu[]   $menus      用户个人菜单（当前租户）
  * @property-read SysDept     $dept       所属部门（当前租户）
  * @property-read SysTenant[] $tenants    用户所属的所有租户
+ * @property-read SysPost[]   $posts      用户拥有的岗位
  */
 class SysUser extends BaseLaORMModel
 {
@@ -208,6 +209,21 @@ class SysUser extends BaseLaORMModel
             'user_id',
             'menu_id'
         )->withTimestamps();
+    }
+
+    /**
+     * 用户拥有的岗位 (多对多)
+     *
+     * @return BelongsToMany
+     */
+    public function posts(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            SysPost::class,
+            'sys_user_post',
+            'user_id',
+            'post_id'
+        );
     }
 
     // ==================== 业务方法 ====================

@@ -17,6 +17,8 @@ use App\Models\Article;
 use Framework\Basic\BaseController;
 use Framework\Basic\BaseJsonResponse;
 use Framework\Tenant\TenantContext;
+use Framework\Attributes\Route;
+use Framework\Attributes\Auth;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
 
@@ -89,6 +91,8 @@ class ArticleController extends BaseController
      * @param Request $request
      * @return BaseJsonResponse
      */
+    #[Route(path: '/api/article/list', methods: ['GET'], name: 'article.list')]
+    #[Auth(required: true)]
     public function index(Request $request): BaseJsonResponse
     {
         // 查询参数
@@ -121,6 +125,8 @@ class ArticleController extends BaseController
      * @param int $id 文章ID
      * @return BaseJsonResponse
      */
+    #[Route(path: '/api/article/detail/{id}', methods: ['GET'], name: 'article.detail')]
+    #[Auth(required: true)]
     public function show(Request $request): BaseJsonResponse
     {
         $userId = $this->getCurrentUserId($request);
@@ -150,6 +156,8 @@ class ArticleController extends BaseController
      * @param Request $request
      * @return BaseJsonResponse
      */
+    #[Route(path: '/api/article/create', methods: ['POST'], name: 'article.create')]
+    #[Auth(required: true)]
     public function store(Request $request): BaseJsonResponse
     {
         $userId = $this->getCurrentUserId($request);
@@ -182,6 +190,8 @@ class ArticleController extends BaseController
      * @param int $id 文章ID
      * @return BaseJsonResponse
      */
+    #[Route(path: '/api/article/update/{id}', methods: ['PUT'], name: 'article.update')]
+    #[Auth(required: true)]
     public function update(Request $request): BaseJsonResponse
     {
         $userId = $this->getCurrentUserId($request);
@@ -222,6 +232,8 @@ class ArticleController extends BaseController
      * @param int $id 文章ID
      * @return BaseJsonResponse
      */
+    #[Route(path: '/api/article/delete/{id}', methods: ['DELETE'], name: 'article.delete')]
+    #[Auth(required: true)]
     public function destroy(Request $request): BaseJsonResponse
     {
         $userId = $this->getCurrentUserId($request);
@@ -250,6 +262,8 @@ class ArticleController extends BaseController
      * @param int $id 文章ID
      * @return BaseJsonResponse
      */
+    #[Route(path: '/api/article/publish/{id}', methods: ['PUT'], name: 'article.publish')]
+    #[Auth(required: true)]
     public function publish(Request $request): BaseJsonResponse
     {
         $userId = $this->getCurrentUserId($request);
@@ -274,6 +288,8 @@ class ArticleController extends BaseController
      * @param Request $request
      * @return BaseJsonResponse
      */
+    #[Route(path: '/api/article/offline/{id}', methods: ['PUT'], name: 'article.offline')]
+    #[Auth(required: true)]
     public function offline(Request $request): BaseJsonResponse
     {
         $id = (int) $request->attributes->get('id');
@@ -300,6 +316,8 @@ class ArticleController extends BaseController
      * @param Request $request
      * @return BaseJsonResponse
      */
+    #[Route(path: '/api/article/batch-publish', methods: ['POST'], name: 'article.batchPublish')]
+    #[Auth(required: true)]
     public function batchPublish(Request $request): BaseJsonResponse
     {
         $ids = $this->input('ids', []);
@@ -318,6 +336,8 @@ class ArticleController extends BaseController
      * @param Request $request
      * @return BaseJsonResponse
      */
+    #[Route(path: '/api/article/batch-offline', methods: ['POST'], name: 'article.batchOffline')]
+    #[Auth(required: true)]
     public function batchOffline(Request $request): BaseJsonResponse
     {
         $ids = $this->input('ids', []);
@@ -336,6 +356,8 @@ class ArticleController extends BaseController
      * @param Request $request
      * @return BaseJsonResponse
      */
+    #[Route(path: '/api/article/batch-delete', methods: ['POST'], name: 'article.batchDelete')]
+    #[Auth(required: true)]
     public function batchDelete(Request $request): BaseJsonResponse
     {
         $ids = $this->input('ids', []);
@@ -356,6 +378,8 @@ class ArticleController extends BaseController
      * @param Request $request
      * @return BaseJsonResponse
      */
+    #[Route(path: '/api/article/statistics', methods: ['GET'], name: 'article.statistics')]
+    #[Auth(required: true)]
     public function statistics(Request $request): BaseJsonResponse
     {
         $stats = $this->articleService->getDashboardStatistics();
@@ -368,6 +392,8 @@ class ArticleController extends BaseController
      * @param Request $request
      * @return BaseJsonResponse
      */
+    #[Route(path: '/api/article/data-scope-options', methods: ['GET'], name: 'article.dataScopeOptions')]
+    #[Auth(required: true)]
     public function dataScopeOptions(Request $request): BaseJsonResponse
     {
         $options = $this->articleService->getDataScopeOptions();
