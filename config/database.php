@@ -23,7 +23,7 @@ return [
             //Illuminate\Database host必须指定
 			//'host'     			 =>  '127.0.0.1',  
             // 数据库名
-            'database'           =>  'oa',
+            'database'           =>  'fssoa',
             // 用户名
             'username'           =>  'root',
             // 密码
@@ -31,7 +31,7 @@ return [
             // 端口
             'hostport'           =>  '3306',
             // 数据库表前缀
-            'prefix'             =>  'oa_',
+            'prefix'             =>  '',
             // 数据库连接参数
             'params'          => [],
             // 数据库编码默认采用utf8mb4

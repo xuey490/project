@@ -581,9 +581,9 @@ final class Framework
                     'message'     => 'An unexpected error occurred. Please try again later. 程序发生错误，请稍后再试！',
                 ]);
             }
-        } catch (Throwable $e2) {
-            $this->logError('Failed to render exception view: ' . $e2->getMessage());
-            $content = 'Server Error~';
+        //} catch (Throwable $e2) {
+        //    $this->logError('Failed to render exception view: ' . $e2->getMessage());
+        //    $content = 'Server Error~';
         }
 
         return new Response($content, $statusCode);

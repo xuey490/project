@@ -24,7 +24,7 @@ return [
             // 数据库设置	
             'database' => [
                 'connection' => 'mysql',
-                'rules_table' => 'oa_casbin_rules',
+                'rules_table' => 'casbin_rule',
                 'rules_name' => null
             ],
 			/*

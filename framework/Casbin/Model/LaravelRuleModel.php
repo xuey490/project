@@ -17,6 +17,7 @@ namespace Framework\Casbin\Model;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Capsule\Manager as Capsule;
+use Framework\Basic\BaseLaORMModel;
 
 /**
  * LaravelRuleModel - Laravel 框架 Casbin 规则模型
@@ -106,7 +107,7 @@ class LaravelRuleModel extends Model
 
         // ---------- 3. 设置表名 ----------
         $tableName = $this->getConfig('database.rules_table', 'casbin_rules');
-
+		#dump($tableName);
         if (!is_string($tableName) || trim($tableName) === '') {
             $tableName = 'casbin_rules';
         }

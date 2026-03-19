@@ -16,8 +16,9 @@ declare(strict_types=1);
 
 namespace Framework\Container;
 
-use Framework\Container\Compiler\AttributeInjectionPass; // Import custom compiler pass for attribute-based injection
-use Framework\DI\AttributeInjector; // Import attribute injector for manual dependency injection
+use ArrayAccess; // Import ArrayAccess for facade compatibility
+use Framework\Container\Compiler\AttributeInjectionPass;
+use Framework\DI\AttributeInjector;
 use ReflectionClass;
 use ReflectionException;
 use ReflectionNamedType;
@@ -48,7 +49,7 @@ use Symfony\Component\Dotenv\Dotenv;
  *
  * @package Framework\Container
  */
-class Container implements SymfonyContainerInterface
+class Container implements SymfonyContainerInterface, ArrayAccess
 {
     /**
      * 生产环境编译缓存文件路径
@@ -216,7 +217,7 @@ class Container implements SymfonyContainerInterface
         if (self::$container === null) {
             self::init();
         }
-        return self::$container; // @phpstan-ignore-line
+        return self::$container;
     }
 
     /**
@@ -307,7 +308,6 @@ class Container implements SymfonyContainerInterface
             // 对于通过 make() 创建的对象（未在 services.php 中注册）是必需的
             // 注入标记为 #[Inject] 属性的依赖
             AttributeInjector::inject($instance);
-
             return $instance;
 
         } catch (ReflectionException $e) {
@@ -338,11 +338,8 @@ class Container implements SymfonyContainerInterface
 
         // 动态服务注册仅在可变的 ContainerBuilder 上支持
         if (! self::$container instanceof ContainerBuilder) {
-            throw new RuntimeException(
-                'Cannot register service. Current container is not a modifiable ContainerBuilder instance. It may have been compiled or loaded from cache.'
-            );
+            throw new RuntimeException('Cannot register service. Current container is not a modifiable ContainerBuilder instance.');
         }
-
         $containerBuilder = $this->getBuilder();
 
         // 防止修改已编译的容器
@@ -380,13 +377,10 @@ class Container implements SymfonyContainerInterface
         if (self::$container === null) {
             throw new RuntimeException('Container has not been initialized.');
         }
-
         if (! self::$container instanceof ContainerBuilder) {
             throw new RuntimeException('Current container does not support dynamic service registration.');
         }
-
         $containerBuilder = $this->getBuilder();
-
         if ($containerBuilder->isCompiled()) {
             throw new RuntimeException('Container has already been compiled, cannot register new services.');
         }
@@ -418,13 +412,10 @@ class Container implements SymfonyContainerInterface
         if (self::$container === null) {
             throw new RuntimeException('Container has not been initialized.');
         }
-
         if (! self::$container instanceof ContainerBuilder) {
             throw new RuntimeException('Current container does not support dynamic service registration.');
         }
-
         $containerBuilder = self::$container;
-
         if ($containerBuilder->isCompiled()) {
             throw new RuntimeException('Container has already been compiled, cannot register new services.');
         }
@@ -509,13 +500,10 @@ class Container implements SymfonyContainerInterface
         if (self::$container === null) {
             throw new RuntimeException('Container has not been initialized.');
         }
-
         if (! self::$container instanceof ContainerBuilder) {
             throw new RuntimeException('Current container does not support dynamic service registration.');
         }
-
         $containerBuilder = self::$container;
-
         if ($containerBuilder->isCompiled()) {
             throw new RuntimeException('Container has already been compiled, cannot register new services.');
         }
@@ -547,13 +535,10 @@ class Container implements SymfonyContainerInterface
         if (self::$container === null) {
             throw new RuntimeException('Container has not been initialized.');
         }
-
         if (! self::$container instanceof ContainerBuilder) {
             throw new RuntimeException('Current container does not support dynamic service registration.');
         }
-
         $containerBuilder = self::$container;
-
         if ($containerBuilder->isCompiled()) {
             throw new RuntimeException('Container has already been compiled, cannot register new services.');
         }
@@ -676,7 +661,6 @@ class Container implements SymfonyContainerInterface
         if (self::$container === null) {
             throw new RuntimeException('Container has not been initialized.');
         }
-
         self::$container->setParameter($name, $value);
     }
 

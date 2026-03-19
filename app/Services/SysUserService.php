@@ -18,8 +18,6 @@ use App\Models\SysUserMenu;
 use App\Dao\SysUserDao;
 use App\Services\Casbin\CasbinService;
 use Framework\Basic\BaseService;
-use Framework\Basic\BaseJsonResponse;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 /**
@@ -58,8 +56,8 @@ class SysUserService extends BaseService
      *
      * @param string $username 用户名
      * @param string $password 密码
-     * @param string $ip       登录IP
-     * @return array|null 成功返回用户信息和token，失败返回null
+     * @param string $ip       登录 IP
+     * @return array|null 成功返回用户信息和 token，失败返回 null
      */
     public function login(string $username, string $password, string $ip = ''): ?array
     {
@@ -154,9 +152,10 @@ class SysUserService extends BaseService
         }
 
         $total = $query->count();
+        // 优化：使用 Eloquent 标准的 skip/take 方法
         $list = $query->orderBy('id', 'desc')
-            ->offset(($page - 1) * $limit)
-            ->limit($limit)
+            ->skip(($page - 1) * $limit)
+            ->take($limit)
             ->get()
             ->toArray();
 
@@ -176,7 +175,7 @@ class SysUserService extends BaseService
     /**
      * 获取用户详情
      *
-     * @param int $userId 用户ID
+     * @param int $userId 用户 ID
      * @return array|null
      */
     public function getDetail(int $userId): ?array
@@ -203,7 +202,7 @@ class SysUserService extends BaseService
      * 创建用户
      *
      * @param array $data     用户数据
-     * @param int   $operator 操作人ID
+     * @param int   $operator 操作人 ID
      * @return SysUser|null
      */
     public function create(array $data, int $operator = 0): ?SysUser
@@ -250,9 +249,9 @@ class SysUserService extends BaseService
     /**
      * 更新用户
      *
-     * @param int   $userId   用户ID
+     * @param int   $userId   用户 ID
      * @param array $data     用户数据
-     * @param int   $operator 操作人ID
+     * @param int   $operator 操作人 ID
      * @return bool
      */
     public function update(int $userId, array $data, int $operator = 0): bool
@@ -310,7 +309,7 @@ class SysUserService extends BaseService
     /**
      * 删除用户
      *
-     * @param int $userId 用户ID
+     * @param int $userId 用户 ID
      * @return bool
      */
     public function delete(int $userId): bool
@@ -338,7 +337,7 @@ class SysUserService extends BaseService
     /**
      * 更新用户状态
      *
-     * @param int $userId 用户ID
+     * @param int $userId 用户 ID
      * @param int $status 状态
      * @return bool
      */
@@ -350,7 +349,7 @@ class SysUserService extends BaseService
     /**
      * 重置密码
      *
-     * @param int    $userId   用户ID
+     * @param int    $userId   用户 ID
      * @param string $password 新密码
      * @return bool
      */
@@ -368,7 +367,7 @@ class SysUserService extends BaseService
     /**
      * 修改密码
      *
-     * @param int    $userId      用户ID
+     * @param int    $userId      用户 ID
      * @param string $oldPassword 旧密码
      * @param string $newPassword 新密码
      * @return bool
