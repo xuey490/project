@@ -24,9 +24,27 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigura
 
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 
+/**
+ * JWT 服务提供者
+ *
+ * 负责注册和管理框架的 JWT（JSON Web Token）认证服务。
+ * 主要功能包括：
+ * - 注册 JwtFactory 服务，提供 JWT 令牌的生成和验证功能
+ * - 支持用户身份认证和授权
+ */
 final class JwtServiceProvider implements ServiceProviderInterface
 {
-    // public function __invoke(ContainerConfigurator $configurator): void
+    /**
+     * 注册 JWT 服务到依赖注入容器
+     *
+     * 注册以下服务：
+     * - jwt：JwtFactory 服务实例，提供 JWT 令牌操作
+     *
+     * 该服务使用自动装配（autowire）功能，自动注入所需依赖。
+     *
+     * @param ContainerConfigurator $configurator 容器配置器，用于注册服务定义
+     * @return void
+     */
     public function register(ContainerConfigurator $configurator): void
     {
         $services = $configurator->services();
@@ -53,7 +71,14 @@ final class JwtServiceProvider implements ServiceProviderInterface
 		*/
     }
 
+    /**
+     * 启动 JWT 服务
+     *
+     * 该方法在服务注册后调用，用于执行额外的初始化操作。
+     * 当前实现为空，可根据需要添加启动逻辑。
+     *
+     * @param ContainerInterface $container 依赖注入容器实例
+     * @return void
+     */
     public function boot(ContainerInterface $container): void
-    # public function boot(ContainerConfigurator $container): void
-    {}
 }

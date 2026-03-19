@@ -20,8 +20,32 @@ use Illuminate\Database\Eloquent\Model;
 use Framework\Basic\Scopes\LaTenantScope;
 use Framework\Tenant\TenantContext;
 
+/**
+ * Laravel 多租户隔离 Trait
+ * 
+ * 该 Trait 为 Laravel Eloquent 模型提供多租户数据隔离功能。
+ * 通过全局作用域自动为查询添加租户条件，并在创建记录时自动填充租户ID。
+ * 
+ * 主要功能：
+ * - 自动添加租户查询条件（读、改、删）
+ * - 创建时自动写入租户ID
+ * - 支持超管模式忽略租户隔离
+ * 
+ * 使用方式：在需要多租户隔离的模型中 use 此 Trait。
+ * 
+ * @package Framework\Basic\Traits
+ */
 trait LaBelongsToTenant
 {
+    /**
+     * Trait 引导方法
+     * 
+     * 在模型启动时自动调用，完成以下操作：
+     * 1. 注册全局租户作用域（用于读、改、删操作的数据隔离）
+     * 2. 绑定 creating 事件（用于新增时自动填充租户ID）
+     * 
+     * @return void
+     */
     public static function bootLaBelongsToTenant()
     {
         // 1. 添加全局作用域（读、改、删限制）
@@ -39,50 +63,41 @@ trait LaBelongsToTenant
     }
 	
     // ==================================================
-    // 对齐你最初 TP8 / 旧版接口的“超管模式”
+    // 超管模式相关方法（简化版，直接使用 TenantContext）
     // ==================================================
 
     /**
-     * 开启超管模式（仅影响当前请求上下文）
-     * 用法：
-     *   Custom::ignoreTenant()->find(1)
-     */
-    public static function ignoreTenant(): self
-    {
-        TenantContext::ignore();
-        return new static();
-    }
-
-    /**
-     * 恢复租户隔离
-     */
-    public static function restoreTenant(): void
-    {
-        TenantContext::restore();
-    }
-
-    /**
-     * 推荐方式：作用域安全调用
-     */
-    public static function withIgnoreTenant(callable $fn)
-    {
-        return TenantContext::withIgnore($fn);
-    }
-
-    /**
-     * 允许临时忽略租户限制（例如超级管理员后台查看所有数据）
+     * 移除全局租户作用域
+     *
+     * 允许临时忽略租户限制（例如超级管理员后台查看所有数据）。
+     * 这是最常用的方式，直接移除全局作用域。
+     *
+     * 用法示例：
+     *   User::withoutTenancy()->get(); // 获取所有租户的用户
+     *
+     * @return \Illuminate\Database\Eloquent\Builder
      */
     public static function withoutTenancy()
     {
         return static::withoutGlobalScope(LaTenantScope::class);
     }
-	
+
     /**
-     * 兼容你旧的 withoutTenancy()
+     * 在闭包内临时忽略租户隔离（安全作用域方式）
+     *
+     * 推荐使用的临时超管访问方式，在闭包执行完毕后自动恢复租户隔离。
+     * 这是 TenantContext::withIgnore() 的便捷包装。
+     *
+     * 用法示例：
+     *   User::withIgnoreTenant(function() {
+     *       return User::all(); // 返回所有租户数据
+     *   });
+     *
+     * @param callable $fn 需要在忽略租户隔离下执行的闭包
+     * @return mixed 闭包的返回值
      */
-    public static function withoutTenancy_1()
+    public static function withIgnoreTenant(callable $fn)
     {
-        TenantContext::ignore();
-        return static::query();
+        return TenantContext::withIgnore($fn);
     }
 }

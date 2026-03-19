@@ -30,12 +30,40 @@ namespace Framework\Utils;
 
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * JSON 响应工具类
+ *
+ * 提供统一的 JSON 响应格式，遵循 BaseJsonResponse 接口规范：
+ * {
+ *     "code": 0,      // 0 成功, 1 失败或自定义
+ *     "msg": "...",   // 提示信息
+ *     "data": { ... } // 业务数据
+ * }
+ *
+ * 支持长整型自动转字符串，避免 JavaScript 精度丢失问题。
+ *
+ * @package Framework\Utils
+ */
 class Json
 {
+    /**
+     * 默认 HTTP 状态码
+     *
+     * @var int
+     */
     private static int $defaultHttpCode = 200;
 
     /**
      * 核心构造方法
+     *
+     * 构建 JSON 响应对象的基础方法，返回 Symfony Response 对象。
+     *
+     * @param int        $code     业务状态码
+     * @param string     $msg      提示信息
+     * @param array|null $data     业务数据
+     * @param int|null   $httpCode HTTP 状态码，默认 200
+     *
+     * @return Response Symfony Response 对象
      */
     public static function make(int $code, string $msg, ?array $data = null, ?int $httpCode = null): Response
     {
@@ -56,9 +84,15 @@ class Json
     }
 
     /**
-     * 业务成功
-     * $msg 可选提示信息
-     * $data 可选数据
+     * 业务成功响应
+     *
+     * 返回业务成功的 JSON 响应，自动将长整型数字转换为字符串。
+     *
+     * @param mixed    $data     业务数据，可以是数组或对象
+     * @param string   $msg      提示信息，默认为 'success'
+     * @param int|null $httpCode HTTP 状态码，默认 200
+     *
+     * @return Response Symfony Response 对象
      */
     public static function success(mixed $data = [], string $msg = 'success', ?int $httpCode = 200): Response
     {

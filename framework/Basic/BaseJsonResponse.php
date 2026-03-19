@@ -8,7 +8,7 @@ declare(strict_types=1);
  * @link     https://github.com/xuey490/project
  * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
- * @Filename: %filename%
+ * @Filename: BaseJsonResponse.php
  * @Date: 2025-11-24
  * @Developer: xuey863toy
  * @Email: xuey863toy@gmail.com
@@ -18,19 +18,37 @@ namespace Framework\Basic;
 
 use Symfony\Component\HttpFoundation\JsonResponse;
 
-/*
-{
-  "code": 0,        // 0 = 成功，非 0 = 业务失败
-  "msg": "ok",
-  "data": {}
-}
-
-*/
-
+/**
+ * BaseJsonResponse - JSON 响应封装类
+ *
+ * 提供统一的 JSON 响应格式，便于前端处理：
+ *
+ * 成功响应格式：
+ * {
+ *   "code": 0,        // 0 表示成功
+ *   "msg": "ok",
+ *   "data": {}
+ * }
+ *
+ * 失败响应格式：
+ * {
+ *   "code": 1,        // 非 0 表示业务失败
+ *   "msg": "error",
+ *   "data": {}
+ * }
+ *
+ * @package Framework\Basic
+ */
 class BaseJsonResponse extends JsonResponse
 {
     /**
-     * 业务成功
+     * 返回业务成功响应
+     *
+     * HTTP 状态码为 200，业务码为 0。
+     *
+     * @param mixed $data 响应数据
+     * @param string $msg 响应消息，默认 'ok'
+     * @return static JSON 响应实例
      */
     public static function success(
         mixed $data = [],
@@ -44,7 +62,15 @@ class BaseJsonResponse extends JsonResponse
     }
 
     /**
-     * 业务失败（仍然是 200）
+     * 返回业务失败响应
+     *
+     * HTTP 状态码为 200，业务码为非 0。
+     * 用于业务逻辑验证失败等场景。
+     *
+     * @param string $msg 错误消息
+     * @param mixed $data 附加数据
+     * @param int $code 业务错误码，默认 1
+     * @return static JSON 响应实例
      */
     public static function fail(
         string $msg = 'fail',
@@ -52,14 +78,21 @@ class BaseJsonResponse extends JsonResponse
         int $code = 1
     ): static {
         return new static([
-            'code' => $code, // 业务错误码（非 0）
+            'code' => $code,
             'msg'  => $msg,
             'data' => $data,
         ], self::HTTP_OK);
     }
 
     /**
-     * HTTP 异常（权限 / 系统）
+     * 返回 HTTP 错误响应
+     *
+     * 用于服务器错误、权限不足等 HTTP 层面错误。
+     *
+     * @param string $msg 错误消息
+     * @param int $httpStatus HTTP 状态码，默认 500
+     * @param int $code 业务错误码，默认 1
+     * @return static JSON 响应实例
      */
     public static function error(
         string $msg,
@@ -74,7 +107,12 @@ class BaseJsonResponse extends JsonResponse
     }
 
     /**
-     * 未认证（JWT 失效 / 未登录）
+     * 返回未认证响应
+     *
+     * 用于 JWT 失效或未登录场景。
+     *
+     * @param string $msg 错误消息，默认 'Unauthenticated'
+     * @return static JSON 响应实例
      */
     public static function unauthorized(
         string $msg = 'Unauthenticated'
@@ -87,7 +125,12 @@ class BaseJsonResponse extends JsonResponse
     }
 
     /**
-     * CSRF 校验失败
+     * 返回 CSRF 校验失败响应
+     *
+     * 用于 CSRF Token 不匹配场景。
+     *
+     * @param string $msg 错误消息，默认 'CSRF token mismatch'
+     * @return static JSON 响应实例
      */
     public static function csrfExpired(
         string $msg = 'CSRF token mismatch'

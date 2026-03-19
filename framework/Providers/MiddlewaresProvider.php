@@ -36,9 +36,46 @@ use Symfony\Component\DependencyInjection\Reference;
 
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 
+/**
+ * 中间件服务提供者
+ *
+ * 负责注册框架的各类中间件服务，提供请求处理管道的核心组件。
+ * 主要功能包括：
+ * - 注册 HTTP 方法覆盖中间件
+ * - 注册跨域资源共享（CORS）中间件
+ * - 注册上下文初始化中间件
+ * - 注册 CSRF 令牌生成和保护中间件
+ * - 注册 Cookie 同意提示中间件
+ * - 注册熔断器中间件
+ * - 注册 IP 黑名单中间件
+ * - 注册 XSS 过滤中间件
+ * - 注册请求限流中间件
+ * - 注册 Referer 检查中间件
+ * - 注册调试中间件
+ */
 final class MiddlewaresProvider implements ServiceProviderInterface
 {
-    // public function __invoke(ContainerConfigurator $configurator): void
+    /**
+     * 注册中间件服务到依赖注入容器
+     *
+     * 注册以下中间件服务：
+     * - MethodOverrideMiddleware：HTTP 方法覆盖中间件
+     * - CorsMiddleware：跨域资源共享中间件
+     * - ContextInitMiddleware：上下文初始化中间件
+     * - CsrfTokenGenerateMiddleware：CSRF 令牌生成中间件
+     * - CookieConsentMiddleware：Cookie 同意提示中间件
+     * - CircuitBreakerMiddleware：熔断器中间件
+     * - IpBlockMiddleware：IP 黑名单中间件
+     * - XssFilterMiddleware：XSS 过滤中间件
+     * - RateLimitMiddleware：请求限流中间件（根据配置动态注册）
+     * - CsrfTokenManager：CSRF 令牌管理器
+     * - CsrfProtectionMiddleware：CSRF 保护中间件（根据配置动态注册）
+     * - RefererCheckMiddleware：Referer 检查中间件（根据配置动态注册）
+     * - DebugMiddleware：调试中间件
+     *
+     * @param ContainerConfigurator $configurator 容器配置器，用于注册服务定义
+     * @return void
+     */
     public function register(ContainerConfigurator $configurator): void
     {
         $services = $configurator->services();
@@ -148,5 +185,14 @@ final class MiddlewaresProvider implements ServiceProviderInterface
             ->public();
     }
 
+    /**
+     * 启动中间件服务
+     *
+     * 该方法在服务注册后调用，用于执行额外的初始化操作。
+     * 当前实现为空，可根据需要添加启动逻辑。
+     *
+     * @param ContainerInterface $container 依赖注入容器实例
+     * @return void
+     */
     public function boot(ContainerInterface $container): void {}
 }

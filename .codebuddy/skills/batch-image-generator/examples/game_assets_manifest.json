@@ -1,0 +1,148 @@
+{
+  "config": {
+    "style": "Q版卡通风格，可爱萌系，大头小身比例2:1，圆润轮廓无尖角，粗黑色描边2-3px，大眼睛占脸部30%，高饱和度暖色调，柔和光影，扁平插画风格，游戏美术资源",
+    "default_size": "1024x1024",
+    "default_quality": "high",
+    "temp_dir": "./temp",
+    "skills_dir": ".codebuddy/skills"
+  },
+  "assets": [
+    {
+      "_comment": "============ 角色 - 小熊猫 ============",
+      "id": "animal_panda_01",
+      "type": "mother",
+      "prompt": "可爱的Q版小熊猫，正面视角，大圆头，红棕色毛皮，白色脸颊，蓬松条纹尾巴，天真表情，圆溜溜大眼睛，isolated on solid white background, full body shot, game sprite, centered",
+      "output": "images/characters/animal_panda_01.png",
+      "remove_bg": true
+    },
+    {
+      "id": "animal_panda_02",
+      "type": "variant",
+      "mother_id": "animal_panda_01",
+      "edit_prompt": "same cute Q-version red panda, same pose, same composition, eyes closed, blinking, peaceful expression, everything else identical",
+      "output": "images/characters/animal_panda_02.png",
+      "strength": 0.5,
+      "remove_bg": true
+    },
+    {
+      "_comment": "============ 角色 - 小兔子 ============",
+      "id": "animal_rabbit_01",
+      "type": "mother",
+      "prompt": "可爱的Q版小兔子，正面视角，大圆头，长耳朵竖起，白色和粉色毛皮，蓬松短尾巴，呆萌表情，粉红色大眼睛，isolated on solid white background, full body shot, game sprite, centered",
+      "output": "images/characters/animal_rabbit_01.png",
+      "remove_bg": true
+    },
+    {
+      "id": "animal_rabbit_02",
+      "type": "variant",
+      "mother_id": "animal_rabbit_01",
+      "edit_prompt": "same cute Q-version rabbit, same pose, same composition, eyes closed, blinking, peaceful expression, everything else identical",
+      "output": "images/characters/animal_rabbit_02.png",
+      "strength": 0.5,
+      "remove_bg": true
+    },
+    {
+      "_comment": "============ 道具 ============",
+      "id": "powerup_bomb",
+      "type": "mother",
+      "prompt": "卡通炸弹图标，黑色圆形炸弹，红色导火索冒火花，Q版可爱风格，isolated on solid white background, game icon, centered, simple design",
+      "output": "images/powerups/powerup_bomb.png",
+      "size": "512x512",
+      "remove_bg": true
+    },
+    {
+      "id": "powerup_rocket_h",
+      "type": "mother",
+      "prompt": "卡通火箭图标，流线型横向火箭，红色和蓝色配色，尾部火焰装饰，Q版可爱风格，pointing right, isolated on solid white background, game icon, centered",
+      "output": "images/powerups/powerup_rocket_h.png",
+      "size": "512x512",
+      "remove_bg": true
+    },
+    {
+      "id": "powerup_rainbow",
+      "type": "mother",
+      "prompt": "魔法彩虹球，七彩渐变球体，红橙黄绿蓝靛紫光谱，闪亮质感，Q版可爱风格，isolated on solid white background, game icon, centered, magical orb",
+      "output": "images/powerups/powerup_rainbow.png",
+      "size": "512x512",
+      "remove_bg": true
+    },
+    {
+      "_comment": "============ 背景（不去背景）============",
+      "id": "bg_sky",
+      "type": "mother",
+      "prompt": "梦幻天空背景，淡蓝到白色渐变，柔和白云飘浮，温暖阳光氛围，平面插画风格，wide view, flat 2d background, no characters, seamless looping texture",
+      "output": "images/environments/bg_sky.png",
+      "size": "1408x640",
+      "remove_bg": false
+    },
+    {
+      "id": "bg_mountains",
+      "type": "mother",
+      "prompt": "远山森林剪影，深绿色层叠山峦，扁平侧视图，简约轮廓，平面插画风格，wide parallax layer, flat 2d side view, no characters",
+      "output": "images/environments/bg_mountains.png",
+      "size": "1408x640",
+      "remove_bg": false
+    },
+    {
+      "_comment": "============ UI ============",
+      "id": "ui_button_normal",
+      "type": "mother",
+      "prompt": "木质游戏按钮，温暖棕色，圆角矩形，木纹质感，立体感边缘，空白中心区域，game UI button, empty center space, isolated on solid white background, 9-slice compatible",
+      "output": "images/ui/ui_button_normal.png",
+      "size": "512x256",
+      "remove_bg": true
+    },
+    {
+      "id": "ui_button_pressed",
+      "type": "variant",
+      "mother_id": "ui_button_normal",
+      "edit_prompt": "same button design, pressed down state, slightly darker, 3D sunken effect, shadow adjusted, everything else identical",
+      "output": "images/ui/ui_button_pressed.png",
+      "strength": 0.4,
+      "remove_bg": true
+    },
+    {
+      "id": "icon_star_gold",
+      "type": "mother",
+      "prompt": "金色星星图标，五角星形状，闪亮金黄色，立体质感，game UI icon, golden star, isolated on solid white background",
+      "output": "images/ui/icon_star_gold.png",
+      "size": "256x256",
+      "remove_bg": true
+    },
+    {
+      "id": "icon_star_silver",
+      "type": "variant",
+      "mother_id": "icon_star_gold",
+      "edit_prompt": "same star shape, silver color instead of gold, metallic silver texture, everything else identical",
+      "output": "images/ui/icon_star_silver.png",
+      "strength": 0.5,
+      "remove_bg": true
+    },
+    {
+      "id": "icon_star_gray",
+      "type": "variant",
+      "mother_id": "icon_star_gold",
+      "edit_prompt": "same star shape, dark gray color, dull non-shiny texture, locked/inactive appearance, everything else identical",
+      "output": "images/ui/icon_star_gray.png",
+      "strength": 0.5,
+      "remove_bg": true
+    },
+    {
+      "_comment": "============ VFX 粒子（黑色背景）============",
+      "id": "particle_star",
+      "type": "mother",
+      "prompt": "game asset, 2d sprite, vfx, single golden five-pointed star particle, bright yellow glow, cartoon style, simple shape, centered, isolated on solid black background, strong contrast, clean edges",
+      "output": "images/effects/particle_star.png",
+      "size": "512x512",
+      "remove_bg": false
+    },
+    {
+      "id": "particle_sparkle",
+      "type": "mother",
+      "prompt": "game asset, 2d sprite, vfx, tiny sparkle particle, bright white light dot, starburst shape, cartoon style, centered, isolated on solid black background, strong contrast, clean edges",
+      "output": "images/effects/particle_sparkle.png",
+      "size": "512x512",
+      "remove_bg": false
+    }
+  ]
+}

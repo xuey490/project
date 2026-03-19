@@ -1,0 +1,14 @@
+{
+  "name": "genie-tools",
+  "version": "1.0.0",
+  "description": "Genie code generation tools: route parser and style compiler",
+  "type": "module",
+  "bin": {
+    "parse-routes": "./parse-routes",
+    "compile-styles": "./compile-styles"
+  },
+  "scripts": {
+    "parse": "node parse-routes",
+    "compile": "node compile-styles"
+  }
+}

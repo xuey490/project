@@ -1,0 +1,136 @@
+{
+  "presets": {
+    "pixel_art": {
+      "description": "像素画标准去底",
+      "tolerance": 20,
+      "seeds": "0,0",
+      "use_case": "适用于像素画、精灵图等边缘清晰的图像",
+      "example_command": "python remove_background.py sprite.png -t 20"
+    },
+    "high_precision": {
+      "description": "高精度去底",
+      "tolerance": 10,
+      "seeds": "0,0",
+      "use_case": "适用于背景色单一、要求精确边缘的图像",
+      "example_command": "python remove_background.py icon.png -t 10"
+    },
+    "soft_edges": {
+      "description": "柔和边缘去底",
+      "tolerance": 35,
+      "seeds": "0,0",
+      "use_case": "适用于有轻微渐变或抗锯齿的图像",
+      "example_command": "python remove_background.py character.png -t 35"
+    },
+    "complex_background": {
+      "description": "复杂背景去底",
+      "tolerance": 25,
+      "seeds": "0,0;0,199;199,0;199,199",
+      "use_case": "适用于背景有多种颜色或渐变的图像",
+      "example_command": "python remove_background.py complex.png -t 25 -s '0,0;0,199;199,0;199,199'"
+    },
+    "scanned_artwork": {
+      "description": "扫描图稿去底",
+      "tolerance": 40,
+      "seeds": "10,10",
+      "use_case": "适用于扫描的手绘图、草图等有噪点的图像",
+      "example_command": "python remove_background.py scan.jpg -t 40 -s '10,10'"
+    },
+    "game_sprites": {
+      "description": "游戏精灵去底",
+      "tolerance": 22,
+      "seeds": "0,0",
+      "use_case": "适用于游戏角色、道具等精灵图像",
+      "example_command": "python remove_background.py game_sprite.png -t 22"
+    },
+    "ui_elements": {
+      "description": "UI元素去底",
+      "tolerance": 15,
+      "seeds": "0,0",
+      "use_case": "适用于按钮、图标等UI界面元素",
+      "example_command": "python remove_background.py button.png -t 15"
+    },
+    "batch_processing": {
+      "description": "批量处理模式",
+      "tolerance": 25,
+      "seeds": "0,0",
+      "use_case": "适用于大量相似图像的批量处理",
+      "example_command": "python remove_background.py '*.png' -b output_dir -t 25"
+    }
+  },
+  "troubleshooting": {
+    "object_parts_removed": {
+      "problem": "物体内部被误删除",
+      "cause": "容差值过高，物体内部颜色与背景相似",
+      "solution": "降低tolerance参数",
+      "suggested_tolerance": "5-15",
+      "example": "python remove_background.py image.png -t 10"
+    },
+    "background_not_fully_removed": {
+      "problem": "背景没有完全去除",
+      "cause": "容差值过低或种子点位置不当",
+      "solution": "增加tolerance或使用多个种子点",
+      "suggested_tolerance": "30-50",
+      "example": "python remove_background.py image.png -t 35 -s '0,0;100,100'"
+    },
+    "jagged_edges": {
+      "problem": "边缘出现锯齿",
+      "cause": "原图质量问题或容差设置不当",
+      "solution": "使用更高质量原图或调整容差",
+      "suggested_tolerance": "20-30",
+      "example": "python remove_background.py image.png -t 25"
+    },
+    "multiple_background_colors": {
+      "problem": "背景有多种颜色",
+      "cause": "单个种子点无法覆盖所有背景色",
+      "solution": "使用多个种子点分别处理不同背景色",
+      "example": "python remove_background.py image.png -s '0,0;0,199;199,0;199,199'"
+    }
+  },
+  "batch_workflows": {
+    "game_development": {
+      "name": "游戏开发工作流",
+      "steps": [
+        "python remove_background.py 'character_*.png' -b characters_transparent -t 22",
+        "python remove_background.py 'item_*.png' -b items_transparent -t 20",
+        "python remove_background.py 'ui_*.png' -b ui_transparent -t 15"
+      ],
+      "description": "游戏资源批量去底处理"
+    },
+    "icon_processing": {
+      "name": "图标批量处理",
+      "steps": [
+        "python remove_background.py '*.jpg' --preview",
+        "python remove_background.py 'icon_*.jpg' -b icons_png -t 18"
+      ],
+      "description": "图标集合批量去底和格式转换"
+    },
+    "artwork_digitization": {
+      "name": "艺术作品数字化",
+      "steps": [
+        "python remove_background.py 'scan_*.jpg' -b digital_art -t 40 -s '10,10'",
+        "# 手动检查质量",
+        "# 对特殊文件单独调整参数"
+      ],
+      "description": "扫描艺术作品的数字化处理"
+    }
+  },
+  "quality_guidelines": {
+    "input_requirements": {
+      "background": "背景色相对均匀，与主体有明显对比",
+      "resolution": "无特殊要求，但高分辨率效果更好",
+      "format": "支持PNG、JPG、BMP等常见格式",
+      "contrast": "主体与背景有足够的颜色差异"
+    },
+    "parameter_selection": {
+      "low_tolerance": "5-15，适用于高对比度、背景单一的图像",
+      "medium_tolerance": "20-35，适用于大多数像素画和简单图像",
+      "high_tolerance": "40-60，适用于有渐变或噪点的复杂背景"
+    },
+    "output_quality": {
+      "format": "PNG格式保持透明度",
+      "naming": "自动添加_transparent后缀",
+      "directory": "批量处理时自动创建输出目录",
+      "backup": "不覆盖原始文件，确保数据安全"
+    }
+  }
+}
