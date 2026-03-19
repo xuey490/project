@@ -37,7 +37,7 @@ class BaseJsonResponse extends JsonResponse
         string $msg = 'ok'
     ): static {
         return new static([
-            'code' => 0,
+            'code' => 0, // 确保成功状态码为 0
             'msg'  => $msg,
             'data' => $data,
         ], self::HTTP_OK);
@@ -80,7 +80,7 @@ class BaseJsonResponse extends JsonResponse
         string $msg = 'Unauthenticated'
     ): static {
         return new static([
-            'code' => 1,
+            'code' => 401,
             'msg'  => $msg,
             'data' => [],
         ], self::HTTP_UNAUTHORIZED);
@@ -93,7 +93,7 @@ class BaseJsonResponse extends JsonResponse
         string $msg = 'CSRF token mismatch'
     ): static {
         return new static([
-            'code' => 1,
+            'code' => 403,
             'msg'  => $msg,
             'data' => [],
         ], self::HTTP_FORBIDDEN);

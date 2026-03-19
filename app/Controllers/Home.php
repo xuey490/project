@@ -185,7 +185,7 @@ class Home
 		#dump(app('log'));
 		
 		//$this->logger->info('hello World!');
-		Permission::addPolicy('user1', 'resource1', 'read');
+		Permission::addPolicy('user2', 'resource1', 'read');
 		//Permission::addPolicy('user2', 'resource1', 'edit');
 		//Permission::addPermissionForUser('CEO', 'buy');
 		//Permission::deleteUser('user3');

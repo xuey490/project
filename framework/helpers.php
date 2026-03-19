@@ -31,12 +31,6 @@ use Twig\Error\SyntaxError;
 if (! function_exists('validate')) {
     /**
      * 生成验证对象
-     *
-     * @param array        $data          数据
-     * @param array|string $validate      验证器类名或者验证规则数组
-     * @param array        $message       错误提示信息
-     * @param bool         $batch         是否批量验证
-     * @param bool         $failException 是否抛出异常
      */
     function validate(array $data, array|string $validate = '', array $message = [], bool $batch = false, bool $failException = true): bool
     {
@@ -57,50 +51,60 @@ if (! function_exists('validate')) {
     }
 }
 
-/**
- * 开发辅助函数.
- */
-function callHello(string $name): string
-{
-    return "Hello from a global function, {$name}!";
+if (! function_exists('callHello')) {
+    /**
+     * 开发辅助函数.
+     */
+    function callHello(string $name): string
+    {
+        return "Hello from a global function, {$name}!";
+    }
 }
 
-/**
- * 自定义模板函数：返回欢迎信息.
- */
-function tpTemplateHello(string $name): string
-{
-    return "Hello, {$name}! 这是自定义模板函数的返回值";
+if (! function_exists('tpTemplateHello')) {
+    /**
+     * 自定义模板函数：返回欢迎信息.
+     */
+    function tpTemplateHello(string $name): string
+    {
+        return "Hello, {$name}! 这是自定义模板函数的返回值";
+    }
 }
 
-/**
- * 自定义模板函数：格式化时间.
- */
-function tpTemplateFormatDate(int $timestamp, string $format = 'Y-m-d H:i:s'): string
-{
-    return date($format, $timestamp);
+if (! function_exists('tpTemplateFormatDate')) {
+    /**
+     * 自定义模板函数：格式化时间.
+     */
+    function tpTemplateFormatDate(int $timestamp, string $format = 'Y-m-d H:i:s'): string
+    {
+        return date($format, $timestamp);
+    }
 }
 
-/**
- * ThinTemplate 自动渲染中间件 CSRF token.
- */
-function WebCsrfField(): string
-{
-    $token = app(CsrfTokenManager::class)->getToken('default');
-    $field = '_token';
-    return sprintf(
-        '<input type="hidden" name="%s" value="%s">',
-        htmlspecialchars($field, ENT_QUOTES, 'UTF-8'),
-        htmlspecialchars($token, ENT_QUOTES, 'UTF-8')
-    );
+if (! function_exists('WebCsrfField')) {
+    /**
+     * ThinTemplate 自动渲染中间件 CSRF token.
+     */
+    function WebCsrfField(): string
+    {
+        $token = app(CsrfTokenManager::class)->getToken('default');
+        $field = '_token';
+        return sprintf(
+            '<input type="hidden" name="%s" value="%s">',
+            htmlspecialchars($field, ENT_QUOTES, 'UTF-8'),
+            htmlspecialchars($token, ENT_QUOTES, 'UTF-8')
+        );
+    }
 }
 
-/**
- * 返回 API 用的 CSRF Token 值.
- */
-function APICsrfField(): string
-{
-    return app(CsrfTokenManager::class)->getToken('default');
+if (! function_exists('APICsrfField')) {
+    /**
+     * 返回 API 用的 CSRF Token 值.
+     */
+    function APICsrfField(): string
+    {
+        return app(CsrfTokenManager::class)->getToken('default');
+    }
 }
 
 if (! function_exists('redirectToRoute')) {
@@ -126,10 +130,6 @@ if (! function_exists('redirectToRoute')) {
 if (! function_exists('app')) {
     /**
      * 获取容器或解析服务
-     *
-     * @param  null|string               $id     服务ID
-     * @param  array                     $params 可选构造参数
-     * @return ContainerInterface|object
      */
     function app(?string $id = null, ?array $params = []): mixed
     {
@@ -151,42 +151,46 @@ if (! function_exists('getService')) {
     }
 }
 
-/**
- * 各路径辅助函数.
- */
-function base_path(string $path = ''): string
-{
-    return dirname(__DIR__) . ($path !== '' ? '/' . $path : '');
+if (! function_exists('base_path')) {
+    /**
+     * 各路径辅助函数.
+     */
+    function base_path(string $path = ''): string
+    {
+        return dirname(__DIR__) . ($path !== '' ? '/' . $path : '');
+    }
 }
 
-function storage_path(string $path = ''): string
-{
-    return base_path('storage') . ($path !== '' ? '/' . $path : '');
+if (! function_exists('storage_path')) {
+    function storage_path(string $path = ''): string
+    {
+        return base_path('storage') . ($path !== '' ? '/' . $path : '');
+    }
 }
 
-function config_path(string $path = ''): string
-{
-    return base_path('config') . ($path !== '' ? '/' . $path : '');
+if (! function_exists('config_path')) {
+    function config_path(string $path = ''): string
+    {
+        return base_path('config') . ($path !== '' ? '/' . $path : '');
+    }
 }
 
-function database_path(string $path = ''): string
-{
-    return base_path('database') . ($path !== '' ? '/' . $path : '');
+if (! function_exists('database_path')) {
+    function database_path(string $path = ''): string
+    {
+        return base_path('database') . ($path !== '' ? '/' . $path : '');
+    }
 }
 
-function app_path(string $path = ''): string
-{
-    return base_path('app') . ($path !== '' ? '/' . $path : '');
+if (! function_exists('app_path')) {
+    function app_path(string $path = ''): string
+    {
+        return base_path('app') . ($path !== '' ? '/' . $path : '');
+    }
 }
 
 /*
  * 简单缓存助手函数
- *
- * 用法：
- *   caches('foo', 'bar');       // 设置
- *   caches('foo');              // 获取
- *   caches('foo', null);        // 删除
- *   caches();                   // 返回默认实例
  */
 if (! function_exists('caches')) {
     function caches(?string $key = null, mixed $value = '__GET__', ?int $ttl = null): mixed
@@ -284,30 +288,38 @@ if (! function_exists('config')) {
     }
 }
 
-/**
- * 生成 UUID 和请求 ID.
- */
-function generateUuid(): string
-{
-    return time() . '-' . substr(Uuid::uuid4()->toString(), 0, 16);
+if (! function_exists('generateUuid')) {
+    /**
+     * 生成 UUID 和请求 ID.
+     */
+    function generateUuid(): string
+    {
+        return time() . '-' . substr(Uuid::uuid4()->toString(), 0, 16);
+    }
 }
 
-function generateRequestId(): string
-{
-    return 'req-' . substr(Uuid::uuid4()->toString(), 0, 8);
+if (! function_exists('generateRequestId')) {
+    function generateRequestId(): string
+    {
+        return 'req-' . substr(Uuid::uuid4()->toString(), 0, 8);
+    }
 }
 
-/**
- * 翻译服务.
- */
-function trans(string $key, array $parameters = []): string
-{
-    return app('translator')->trans($key, $parameters);
+if (! function_exists('trans')) {
+    /**
+     * 翻译服务.
+     */
+    function trans(string $key, array $parameters = []): string
+    {
+        return app('translator')->trans($key, $parameters);
+    }
 }
 
-function current_locale(): string
-{
-    return app('translator')->getLocale();
+if (! function_exists('current_locale')) {
+    function current_locale(): string
+    {
+        return app('translator')->getLocale();
+    }
 }
 
 /*
@@ -389,15 +401,17 @@ if (! function_exists('cache_clear')) {
     }
 }
 
-function get_cache_instance(): ?object
-{
-    static $cache = null;
+if (! function_exists('get_cache_instance')) {
+    function get_cache_instance(): ?object
+    {
+        static $cache = null;
 
-    if ($cache === null) {
-        $cache = Container::getInstance()->get('sf_cache');
+        if ($cache === null) {
+            $cache = Container::getInstance()->get('sf_cache');
+        }
+
+        return $cache;
     }
-
-    return $cache;
 }
 
 /*
@@ -419,14 +433,16 @@ if (! function_exists('ThinkValidate')) {
     }
 }
 
-/**
- * Think 模板渲染.
- */
-function ThinkView(string $templateName, array $data = []): string
-{
-    $template = app('thinkTemp');
-    $template->assign($data);
-    return $template->fetch($templateName);
+if (! function_exists('ThinkView')) {
+    /**
+     * Think 模板渲染.
+     */
+    function ThinkView(string $templateName, array $data = []): string
+    {
+        $template = app('thinkTemp');
+        $template->assign($data);
+        return $template->fetch($templateName);
+    }
 }
 
 /*
@@ -450,10 +466,12 @@ if (! function_exists('renders')) {
     }
 }
 
-/**
- * 事件分发函数.
- */
-function EventDispatch(object $event): object
-{
-    return app(Dispatcher::class)->dispatch($event);
+if (! function_exists('EventDispatch')) {
+    /**
+     * 事件分发函数.
+     */
+    function EventDispatch(object $event): object
+    {
+        return app(Dispatcher::class)->dispatch($event);
+    }
 }

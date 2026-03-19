@@ -15,6 +15,8 @@ return [
         'token_name' => '_token',
         'except' => [
             '/api/*',
+            '/admin/*',
+            '/Admin/*',
             '/webhook/*',
             '/payment/notify'
         ],
@@ -34,6 +36,8 @@ return [
         'allowed_schemes' => ['http', 'https'],
         'except' => [
             '/api/*',
+            '/admin/*',
+            '/Admin/*',
             '/payment/*'
         ],
         'strict' => false, // false = 允许空 Referer（如隐私模式）
@@ -47,6 +51,8 @@ return [
 		'period'	=> 60,  //60秒
         'except' => [
             '/api/*',
+            '/admin/*',
+            '/Admin/*',
             '/webhook/*',
             '/payment/notify'
         ],		

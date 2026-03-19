@@ -44,8 +44,8 @@ class MiddlewareDispatcher
         #CircuitBreakerMiddleware::class, //熔断中间件，正式环境使用，开发环境直接溢出错误堆栈
         IpBlockMiddleware::class,
         XssFilterMiddleware::class,
-        CsrfProtectionMiddleware::class,
-        RefererCheckMiddleware::class,
+        #CsrfProtectionMiddleware::class,
+        #RefererCheckMiddleware::class,
         CookieConsentMiddleware::class,
         DebugMiddleware::class,
         // 添加日志、CORS、熔断器、限流器，xss、 ip block、Debug等全局中间件

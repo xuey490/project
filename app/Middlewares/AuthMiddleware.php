@@ -7,6 +7,7 @@ namespace App\Middlewares;
 use Framework\Attributes\Auth;
 use Framework\Basic\BaseJsonResponse;
 use Framework\Utils\JwtFactory;
+use App\Models\SysUser;
 use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -21,16 +22,27 @@ class AuthMiddleware
 
     public function handle(Request $request, callable $next): Response
     {
+        if (strtoupper((string) $request->getMethod()) === 'OPTIONS') {
+            return $next($request);
+        }
+
+        if ($this->isWhitelisted($request)) {
+            return $next($request);
+        }
+
         /** @var array<class-string,object> $attributes */
         $attributes = $request->attributes->get('_attributes', []);
         /** @var Auth|null $auth */
         $auth = $attributes[Auth::class] ?? null;
-		
-		$routeInfo = $request->attributes->get('_route');        
-		#dump($routeInfo['params']['_roles']);
+        
+        $routeInfo = $request->attributes->get('_route');
 
-		$legacyAuth = $request->attributes->get('_auth', false);
-		$needAuth   = ($auth && $auth->required) || $legacyAuth === true;
+        $legacyAuth = $request->attributes->get('_auth', false);
+        $needAuth   = ($auth && $auth->required) || $legacyAuth === true;
+
+        if (! $needAuth && $this->isAdminRequest($request, $routeInfo)) {
+            $needAuth = true;
+        }
 
         if (! $needAuth) {
             return $next($request);
@@ -38,9 +50,9 @@ class AuthMiddleware
 
         $accessToken = $this->extractAccessToken($request);
         if (! $accessToken) {
-            return $this->unauthorized('请先登录');
+            return BaseJsonResponse::unauthorized('请先登录');
         }
-		
+        
 
         /** @var JwtFactory $jwt */
         $jwt = app('jwt');
@@ -49,16 +61,22 @@ class AuthMiddleware
             // 1️⃣ 严格校验 access token
             $parsed = $jwt->parseForAccess($accessToken);
             $claims = $parsed->claims();
-			
+            
 
             $uid  = (int) $claims->get('uid');
             $role = $claims->get('role') ?? 'user';
             $exp  = $claims->get('exp')->getTimestamp();
 
             // 2️⃣ 角色校验
-            if ((! empty($auth?->roles) && ! in_array($role, $auth->roles, true))  
-				||  (!empty($routeInfo['params']['_roles']) && ! in_array($role, $routeInfo['params']['_roles'], true)) ) {
-                return $this->forbidden('无权限访问！');
+            $routeRoles = $request->attributes->get('_roles');
+            if (!is_array($routeRoles) && is_array($routeInfo) && isset($routeInfo['__meta_flat']['_roles']) && is_array($routeInfo['__meta_flat']['_roles'])) {
+                $routeRoles = $routeInfo['__meta_flat']['_roles'];
+            }
+            $routeRoles = is_array($routeRoles) ? $routeRoles : [];
+
+            if ((! empty($auth?->roles) && ! in_array($role, $auth->roles, true))
+                || (! empty($routeRoles) && ! in_array($role, $routeRoles, true))) {
+                return BaseJsonResponse::error('无权限访问！', 403);
             }
 
             // 3️⃣ 自动续期（失败不影响当前请求）
@@ -66,7 +84,7 @@ class AuthMiddleware
             if ($remaining < $this->refreshThreshold) {
                 $this->tryRefresh($request, $jwt, $uid);
             }
-			
+            
 
             // 4️⃣ 注入用户上下文
             $request->attributes->set('user', [
@@ -76,19 +94,26 @@ class AuthMiddleware
 
             $request->attributes->set('user_claims', $claims->all());
 
+            $currentUser = SysUser::with(['dept', 'roles', 'roles.depts', 'roles.menus'])->find($uid);
+            if ($currentUser) {
+                $enabled = (int) ($currentUser->enabled ?? 1);
+                $delFlag = (string) ($currentUser->del_flag ?? '0');
+                if ($enabled === 0 || $delFlag === '2') {
+                    return BaseJsonResponse::unauthorized('账号已禁用或已删除');
+                }
+                $request->attributes->set('current_user', $currentUser);
+            }
+
         } catch (\Throwable $e) {
-			dump($e->getMessage());
-            return $this->unauthorized('登录已过期或无效');
+            return BaseJsonResponse::unauthorized('登录已过期或无效');
         }
 
         // 5️⃣ 执行后续逻辑
         
-		$response = $next($request);
-		
-		$this->writeCookiesIfNeeded($request, $response);
-		
-		//dd($response->headers->getCookies());
-
+        $response = $next($request);
+        
+        $this->writeCookiesIfNeeded($request, $response);
+        
         // 6️⃣ 如果有新 token，写回 Cookie
         return $response;
     }
@@ -102,7 +127,6 @@ class AuthMiddleware
         if (! $refreshToken) {
             return;
         }
-		#dump($refreshToken);
 
         // 避免同一请求内重复 refresh
         if ($request->attributes->get('_refresh_attempted')) {
@@ -123,8 +147,6 @@ class AuthMiddleware
 
         } catch (\Throwable $e) {
             // 静默失败：并发 / 已被使用 / 过期
-			
-			#dump('Refresh Error: ' . $e->getMessage());
         }
     }
 
@@ -133,11 +155,11 @@ class AuthMiddleware
      */
     protected function writeCookiesIfNeeded(Request $request, Response $response): Response
     {
-		
-		$isHttps = $request->isSecure();
+        
+        $isHttps = $request->isSecure();
 
-		$sameSite = $isHttps ? 'Strict' : 'Lax';
-		
+        $sameSite = $isHttps ? 'Strict' : 'Lax';
+        
         if ($request->attributes->has('_new_access_token')) {
             $access = $request->attributes->get('_new_access_token');
 
@@ -187,22 +209,40 @@ class AuthMiddleware
         return $request->cookies->get('access_token');
     }
 
-    private function unauthorized(string $msg): Response
+    protected function isAdminRequest(Request $request, mixed $routeInfo): bool
     {
-        return new Response(json_encode([
-            'error' => 'unauthorized',
-            'message' => $msg,
-            'code' => 401,
-        ]), 401, ['Content-Type' => 'application/json']);
+        // 简单判定：Controller 命名空间 或者 路径前缀
+        $controller = $request->attributes->get('_controller');
+        if (is_string($controller) && str_starts_with($controller, 'App\\Controllers\\Admin\\')) {
+            return true;
+        }
+        
+        $path = $request->getPathInfo();
+        if (str_starts_with($path, '/system/')) {
+            return true;
+        }
+
+        return false;
     }
-	
-	
-    private function forbidden(string $msg): Response
+
+    protected function isWhitelisted(Request $request): bool
     {
-        return new Response(json_encode([
-            'error' => 'unauthorized',
-            'message' => $msg,
-            'code' => 403,
-        ]), 403, ['Content-Type' => 'application/json']);
+        $path = (string) $request->getPathInfo();
+        $method = strtoupper((string) $request->getMethod());
+
+        if ($method === 'OPTIONS') {
+            return true;
+        }
+
+        if (in_array($path, ['/system/login', '/system/logout', '/login', '/logout'])) {
+            return true;
+        }
+
+        $controller = $request->attributes->get('_controller');
+        if (is_string($controller) && str_contains($controller, 'Auth::login')) {
+            return true;
+        }
+
+        return false;
     }
 }

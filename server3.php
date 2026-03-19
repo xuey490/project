@@ -248,7 +248,7 @@ function isDatabaseConnected(?string $connection = null): bool
  | 启动 Workerman Worker
  |------------------------------------------------------------
  */
-$httpWorker = new Worker('http://0.0.0.0:8080');
+$httpWorker = new Worker('http://0.0.0.0:8000');
 $httpWorker->count = 4;
 $framework = null;
 
