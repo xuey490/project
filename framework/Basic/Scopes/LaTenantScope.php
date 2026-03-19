@@ -17,18 +17,33 @@ use Framework\Tenant\TenantContext;
  * 确保多租户环境下的数据隔离。
  *
  * 使用方式：
- * 在模型中注册全局作用域：
- * protected static function booted() {
- *     static::addGlobalScope(new LaTenantScope());
- * }
+ * 1. 在模型中 use LaBelongsToTenant trait（推荐）：
+ *    class User extends Model {
+ *        use \Framework\Basic\Traits\LaBelongsToTenant;
+ *    }
+ *
+ * 2. 或手动注册全局作用域：
+ *    protected static function booted() {
+ *        static::addGlobalScope(new LaTenantScope());
+ *    }
  *
  * 临时跳过租户隔离：
- * Model::withoutTenancy()->get();
+ * - Model::withoutTenancy()->get();           // 移除作用域
+ * - Model::withIgnoreTenant(fn() => ...);     // 安全作用域方式
+ * - TenantContext::withIgnore(fn() => ...);   // 直接使用上下文
  *
  * @package Framework\Basic\Scopes
  */
 class LaTenantScope implements Scope
 {
+    /**
+     * 已检查的模型字段缓存
+     * 避免重复检查模型是否有 tenant_id 字段
+     *
+     * @var array<class-string<Model>, bool>
+     */
+    private static array $checkedModels = [];
+
     /**
      * 应用租户隔离作用域
      *
@@ -40,7 +55,7 @@ class LaTenantScope implements Scope
      * @param Model $model 模型实例
      * @return void
      */
-    public function apply(Builder $builder, Model $model)
+    public function apply(Builder $builder, Model $model): void
     {
         // 如果当前处于"忽略租户"状态，直接放行
         if (!TenantContext::shouldApplyTenant()) {
@@ -52,39 +67,95 @@ class LaTenantScope implements Scope
         if ($tenantId === null) {
             return;
         }
-		
-        //$tenantId = function_exists('getCurrentTenantId') ? \getCurrentTenantId() : null;
 
-		#dump($model->getFields());
-        // 只有获取到租户ID，且当前没有请求移除租户限制时才生效
-        if ($tenantId && !isset($model->tenant_id) && in_array('tenant_id' , $model->getFields()) ) {
-            // 使用 qualiftyColumn 防止联表字段冲突 (输出 table.tenant_id)
-            $column = $model->qualifyColumn('tenant_id');
-			/*
-			$column = property_exists($model, 'tenantColumn')
-				? $model->tenantColumn
-				: 'tenant_id';
-			*/
-            $builder->where($column , '=', $tenantId);
+        // 检查模型是否有 tenant_id 字段（使用缓存）
+        $modelClass = get_class($model);
+        if (!isset(self::$checkedModels[$modelClass])) {
+            self::$checkedModels[$modelClass] = $this->hasTenantColumn($model);
         }
+
+        if (!self::$checkedModels[$modelClass]) {
+            return;
+        }
+
+        // 获取租户字段名（支持自定义）
+        $column = $this->getTenantColumn($model);
+
+        // 应用租户条件
+        $builder->where($column, '=', $tenantId);
     }
 
-
     /**
-     * 扩展查询构建器，增加 withoutTenancy 方法
-     *
-     * 允许在特定查询中临时跳过租户隔离限制。
-     *
-     * 使用示例：
-     * User::withoutTenancy()->get(); // 获取所有用户，不限制租户
+     * 扩展查询构建器，增加租户相关方法
      *
      * @param Builder $builder Eloquent 查询构建器
      * @return void
      */
-    public function extend(Builder $builder)
+    public function extend(Builder $builder): void
     {
+        // 移除全局租户作用域
         $builder->macro('withoutTenancy', function (Builder $builder) {
             return $builder->withoutGlobalScope($this);
         });
+
+        // 为特定租户查询（超管使用）
+        $builder->macro('forTenant', function (Builder $builder, int $tenantId) {
+            return $builder->withoutGlobalScope($this)
+                ->where($builder->getModel()->qualifyColumn('tenant_id'), '=', $tenantId);
+        });
+
+        // 查询所有租户的数据（超管使用，保留作用域但忽略上下文）
+        $builder->macro('allTenants', function (Builder $builder) {
+            return TenantContext::withIgnore(function () use ($builder) {
+                return $builder;
+            });
+        });
+    }
+
+    /**
+     * 检查模型是否有租户字段
+     *
+     * @param Model $model 模型实例
+     * @return bool 有租户字段返回 true
+     */
+    private function hasTenantColumn(Model $model): bool
+    {
+        try {
+            $fields = $model->getFields();
+            return in_array('tenant_id', $fields, true);
+        } catch (\Throwable $e) {
+            // 如果无法获取字段，默认启用租户隔离（安全优先）
+            return true;
+        }
+    }
+
+    /**
+     * 获取租户字段名
+     *
+     * 支持模型通过 $tenantColumn 属性自定义字段名
+     *
+     * @param Model $model 模型实例
+     * @return string 完整的字段名（如：users.tenant_id）
+     */
+    private function getTenantColumn(Model $model): string
+    {
+        // 支持模型自定义字段名
+        if (property_exists($model, 'tenantColumn')) {
+            return $model->qualifyColumn($model->tenantColumn);
+        }
+
+        return $model->qualifyColumn('tenant_id');
+    }
+
+    /**
+     * 清理模型缓存
+     *
+     * 在模型结构变更后调用，清除字段检查缓存
+     *
+     * @return void
+     */
+    public static function clearCache(): void
+    {
+        self::$checkedModels = [];
     }
 }
