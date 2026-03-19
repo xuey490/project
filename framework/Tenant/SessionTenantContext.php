@@ -16,19 +16,18 @@ declare(strict_types=1);
 
 namespace Framework\Tenant;
 
-use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Session\SessionInterface;
 
 /**
  * Session/Cookie 租户上下文管理器
  *
- * 提供基于 Symfony Session 的租户信息管理能力，支持：
+ * 基于现有的 app('session') 服务，提供租户信息管理能力。
+ * 兼容现有 Session 实现（Redis 存储），支持：
  * - 将租户ID存储在 Session 中
  * - 支持 Cookie 持久化
- * - 与 Symfony 的 Session 机制完全兼容
+ * - 与现有的 Session 机制完全兼容
  *
- * 适用于传统 Web 应用，租户信息存储在服务端 Session 中，
- * 通过 Cookie 中的 Session ID 关联。
+ * 使用 app('session') 快捷方法访问 Session
  *
  * Session 数据结构：
  * ```
@@ -37,6 +36,7 @@ use Symfony\Component\HttpFoundation\Session\SessionInterface;
  *     'tenant_id' => 2001,        // 当前租户ID
  *     'user_id' => 1001,          // 当前用户ID
  *     'login_time' => 1234567890, // 登录时间
+ *     'tenants' => [...],         // 用户可访问的租户列表
  *   ]
  * ]
  * ```
@@ -71,32 +71,21 @@ final class SessionTenantContext
     private const TENANTS_KEY = 'tenants';
 
     /**
-     * RequestStack 实例
-     */
-    private static ?RequestStack $requestStack = null;
-
-    /**
-     * 设置 RequestStack
+     * 获取 Session 实例
      *
-     * @param RequestStack $requestStack Symfony RequestStack
-     */
-    public static function setRequestStack(RequestStack $requestStack): void
-    {
-        self::$requestStack = $requestStack;
-    }
-
-    /**
-     * 获取当前 Session
+     * 使用 app('session') 获取当前 Session
      *
      * @return SessionInterface|null Session 实例
      */
     public static function getSession(): ?SessionInterface
     {
-        if (self::$requestStack !== null) {
-            $request = self::$requestStack->getCurrentRequest();
-            if ($request !== null && $request->hasSession()) {
-                return $request->getSession();
+        try {
+            $session = app('session');
+            if ($session instanceof SessionInterface) {
+                return $session;
             }
+        } catch (\Throwable $e) {
+            // Session 未启动或不可用
         }
         return null;
     }
@@ -208,7 +197,11 @@ final class SessionTenantContext
         $hasAccess = false;
 
         foreach ($tenants as $tenant) {
-            if ($tenant['id'] === $tenantId) {
+            if (is_array($tenant) && ($tenant['id'] ?? null) === $tenantId) {
+                $hasAccess = true;
+                break;
+            }
+            if (is_int($tenant) && $tenant === $tenantId) {
                 $hasAccess = true;
                 break;
             }
@@ -269,6 +262,8 @@ final class SessionTenantContext
     /**
      * 获取 Session 剩余有效时间
      *
+     * 基于 Redis TTL 计算
+     *
      * @return int 剩余秒数，无 Session 返回 0
      */
     public static function getSessionRemainingTime(): int
@@ -278,18 +273,16 @@ final class SessionTenantContext
             return 0;
         }
 
-        // Symfony Session 的元数据包含有过期时间
-        if (method_exists($session, 'getMetadataBag')) {
-            $metadata = $session->getMetadataBag();
-            if ($metadata) {
-                $created = $metadata->getCreated();
-                $lifetime = $metadata->getLifetime();
-                $remaining = $created + $lifetime - time();
-                return max(0, $remaining);
-            }
+        // 尝试获取 Redis 中的 TTL
+        try {
+            $redis = app('redis.client');
+            $sessionId = $session->getId();
+            $ttl = $redis->ttl('session:' . $sessionId);
+            return $ttl > 0 ? $ttl : 0;
+        } catch (\Throwable $e) {
+            // 无法获取 TTL，返回 0
+            return 0;
         }
-
-        return 0;
     }
 
     /**
@@ -374,5 +367,29 @@ final class SessionTenantContext
         if ($userId !== null) {
             TenantContext::setUserId($userId);
         }
+    }
+
+    /**
+     * 延长 Session 有效期
+     *
+     * 通过重新设置 Session 数据来延长 Redis 中的 TTL
+     *
+     * @return bool 成功返回 true
+     */
+    public static function extendSession(): bool
+    {
+        $session = self::getSession();
+        if ($session === null) {
+            return false;
+        }
+
+        // 重新设置数据，触发 Redis 更新 TTL
+        $data = $session->get(self::SESSION_NAMESPACE, []);
+        if (!empty($data)) {
+            $session->set(self::SESSION_NAMESPACE, $data);
+            return true;
+        }
+
+        return false;
     }
 }
