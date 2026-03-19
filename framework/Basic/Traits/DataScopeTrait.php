@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+namespace Framework\Basic\Traits;
+
 /**
  * 数据权限隔离 Trait
  *

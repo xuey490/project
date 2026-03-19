@@ -528,6 +528,7 @@ final class Framework
         return new Response($content, Response::HTTP_NOT_FOUND);
     }
 
+
     /**
      * 处理异常.
      */
@@ -543,7 +544,6 @@ final class Framework
                 $statusCode = $code;
             }
         }
-
 
         // 准备模板所需的所有变量（直接传递具体值，不依赖模板函数）
         $templateVars = [
@@ -581,9 +581,11 @@ final class Framework
                     'message'     => 'An unexpected error occurred. Please try again later. 程序发生错误，请稍后再试！',
                 ]);
             }
-        //} catch (Throwable $e2) {
-        //    $this->logError('Failed to render exception view: ' . $e2->getMessage());
-        //    $content = 'Server Error~';
+        } catch (Throwable $e2) {
+            // 记录渲染模板失败的错误日志
+            $this->logError('Failed to render exception view: ' . $e2->getMessage());
+            // 兜底返回简单的错误文本，避免二次报错
+            $content = 'Server Error~';
         }
 
         return new Response($content, $statusCode);

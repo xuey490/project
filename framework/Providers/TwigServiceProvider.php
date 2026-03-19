@@ -29,35 +29,12 @@ use Twig\Loader\FilesystemLoader;
 
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 
-/**
- * Twig 模板服务提供者
- *
- * 负责注册和管理框架的 Twig 模板引擎服务。
- * 主要功能包括：
- * - 注册 FilesystemLoader 服务，加载模板文件
- * - 注册 AppTwigExtension 扩展，提供自定义 Twig 函数
- * - 注册 Markdown 服务，支持 Markdown 渲染
- * - 注册 MarkdownExtension 扩展，在 Twig 中使用 Markdown
- * - 注册 Twig Environment 服务，提供模板渲染功能
- */
+/*
+* 注册twig全局服务
+*/
 final class TwigServiceProvider implements ServiceProviderInterface
 {
-    /**
-     * 注册 Twig 模板服务到依赖注入容器
-     *
-     * 注册以下服务：
-     * - FilesystemLoader：Twig 文件系统加载器
-     * - AppTwigExtension：自定义 Twig 扩展（含 CSRF 令牌生成功能）
-     * - CommonMarkCoreExtension：Markdown 核心扩展
-     * - Environment（CommonMark）：Markdown 解析环境
-     * - MarkdownConverter：Markdown 转换器
-     * - MarkdownExtension：Markdown Twig 扩展
-     * - Environment（Twig）：Twig 模板引擎环境
-     * - view：Twig 服务别名
-     *
-     * @param ContainerConfigurator $configurator 容器配置器，用于注册服务定义
-     * @return void
-     */
+    // public function __invoke(ContainerConfigurator $configurator): void
     public function register(ContainerConfigurator $configurator): void
     {
         $services = $configurator->services();
@@ -125,14 +102,7 @@ final class TwigServiceProvider implements ServiceProviderInterface
         $services->alias('view', Environment::class)->public();
     }
 
-    /**
-     * 启动 Twig 模板服务
-     *
-     * 该方法在服务注册后调用，用于执行额外的初始化操作。
-     * 当前实现为空，可根据需要添加启动逻辑。
-     *
-     * @param ContainerInterface $container 依赖注入容器实例
-     * @return void
-     */
     public function boot(ContainerInterface $container): void
+    # public function boot(ContainerConfigurator $container): void
+    {}
 }

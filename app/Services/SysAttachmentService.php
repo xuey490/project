@@ -396,6 +396,7 @@ class SysAttachmentService extends BaseService
     protected function formatFileSize(int $size): string
     {
         $units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        $i = 0;
 
         for ($i = 0; $size > 1024 && $i < count($units) - 1; $i++) {
             $size /= 1024;

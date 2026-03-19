@@ -137,13 +137,13 @@ class MenuController extends BaseController
      * 获取菜单详情
      *
      * @param Request $request 请求对象
-     * @param int     $id      菜单ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/menu/detail/{id}', methods: ['GET'], name: 'menu.detail')]
     #[Auth(required: true)]
-    public function detail(Request $request, int $id): BaseJsonResponse
+    public function detail(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $result = $this->menuService->getDetail($id);
 
         if (!$result) {
@@ -199,13 +199,14 @@ class MenuController extends BaseController
      * 更新菜单
      *
      * @param Request $request 请求对象
-     * @param int     $id      菜单ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/menu/update/{id}', methods: ['PUT'], name: 'menu.update')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function update(Request $request, int $id): BaseJsonResponse
+    public function update(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
+        
         $data = [
             'parent_id' => $this->input('parent_id') !== '' ? (int)$this->input('parent_id') : null,
             'menu_name' => $this->input('menu_name', ''),
@@ -240,13 +241,13 @@ class MenuController extends BaseController
      * 删除菜单
      *
      * @param Request $request 请求对象
-     * @param int     $id      菜单ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/menu/delete/{id}', methods: ['DELETE'], name: 'menu.delete')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function delete(Request $request, int $id): BaseJsonResponse
+    public function delete(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         try {
             $this->menuService->delete($id);
             return $this->success([], '删除成功');
@@ -259,13 +260,13 @@ class MenuController extends BaseController
      * 更新菜单状态
      *
      * @param Request $request 请求对象
-     * @param int     $id      菜单ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/menu/status/{id}', methods: ['PUT'], name: 'menu.status')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function updateStatus(Request $request, int $id): BaseJsonResponse
+    public function updateStatus(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $status = (int)$this->input('status', 1);
 
         $result = $this->menuService->updateStatus($id, $status);

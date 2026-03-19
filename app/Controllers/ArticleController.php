@@ -121,9 +121,11 @@ class ArticleController extends BaseController
      * @param int $id 文章ID
      * @return BaseJsonResponse
      */
-    public function show(Request $request, int $id): BaseJsonResponse
+    public function show(Request $request): BaseJsonResponse
     {
         $userId = $this->getCurrentUserId($request);
+		
+		$id = intval($this->input('id', ''));
 
         // 检查权限
         if (!$this->articleService->checkPermission($id, $userId, 'view')) {
@@ -180,9 +182,11 @@ class ArticleController extends BaseController
      * @param int $id 文章ID
      * @return BaseJsonResponse
      */
-    public function update(Request $request, int $id): BaseJsonResponse
+    public function update(Request $request): BaseJsonResponse
     {
         $userId = $this->getCurrentUserId($request);
+		
+		$id = intval($this->input('id', ''));
 
         // 检查权限
         if (!$this->articleService->checkPermission($id, $userId, 'edit')) {
@@ -218,9 +222,11 @@ class ArticleController extends BaseController
      * @param int $id 文章ID
      * @return BaseJsonResponse
      */
-    public function destroy(Request $request, int $id): BaseJsonResponse
+    public function destroy(Request $request): BaseJsonResponse
     {
         $userId = $this->getCurrentUserId($request);
+		
+		$id = intval($this->input('id', ''));
 
         // 检查权限
         if (!$this->articleService->checkPermission($id, $userId, 'delete')) {
@@ -244,10 +250,11 @@ class ArticleController extends BaseController
      * @param int $id 文章ID
      * @return BaseJsonResponse
      */
-    public function publish(Request $request, int $id): BaseJsonResponse
+    public function publish(Request $request): BaseJsonResponse
     {
         $userId = $this->getCurrentUserId($request);
 
+		$id = intval($this->input('id', ''));
         // 检查权限
         if (!$this->articleService->checkPermission($id, $userId, 'edit')) {
             return $this->fail('无权发布该文章', 403);
@@ -265,11 +272,11 @@ class ArticleController extends BaseController
      * 下架文章
      *
      * @param Request $request
-     * @param int $id 文章ID
      * @return BaseJsonResponse
      */
-    public function offline(Request $request, int $id): BaseJsonResponse
+    public function offline(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $userId = $this->getCurrentUserId($request);
 
         // 检查权限

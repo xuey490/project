@@ -80,13 +80,13 @@ class DeptController extends BaseController
      * 获取部门详情
      *
      * @param Request $request 请求对象
-     * @param int     $id      部门ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/dept/detail/{id}', methods: ['GET'], name: 'dept.detail')]
     #[Auth(required: true)]
-    public function detail(Request $request, int $id): BaseJsonResponse
+    public function detail(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $result = $this->deptService->getDetail($id);
 
         if (!$result) {
@@ -142,13 +142,14 @@ class DeptController extends BaseController
      * 更新部门
      *
      * @param Request $request 请求对象
-     * @param int     $id      部门ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/dept/update/{id}', methods: ['PUT'], name: 'dept.update')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function update(Request $request, int $id): BaseJsonResponse
+    public function update(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
+        
         $data = [
             'parent_id' => $this->input('parent_id') !== '' ? (int)$this->input('parent_id') : null,
             'dept_name' => $this->input('dept_name', ''),
@@ -179,13 +180,13 @@ class DeptController extends BaseController
      * 删除部门
      *
      * @param Request $request 请求对象
-     * @param int     $id      部门ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/dept/delete/{id}', methods: ['DELETE'], name: 'dept.delete')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function delete(Request $request, int $id): BaseJsonResponse
+    public function delete(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         try {
             $this->deptService->delete($id);
             return $this->success([], '删除成功');
@@ -198,13 +199,13 @@ class DeptController extends BaseController
      * 更新部门状态
      *
      * @param Request $request 请求对象
-     * @param int     $id      部门ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/dept/status/{id}', methods: ['PUT'], name: 'dept.status')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function updateStatus(Request $request, int $id): BaseJsonResponse
+    public function updateStatus(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $status = (int)$this->input('status', 1);
 
         $result = $this->deptService->updateStatus($id, $status);
@@ -218,13 +219,13 @@ class DeptController extends BaseController
      * 获取所有子部门ID
      *
      * @param Request $request 请求对象
-     * @param int     $id      部门ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/dept/children/{id}', methods: ['GET'], name: 'dept.children')]
     #[Auth(required: true)]
-    public function getChildren(Request $request, int $id): BaseJsonResponse
+    public function getChildren(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $result = $this->deptService->getAllChildIds($id);
 
         return $this->success($result);

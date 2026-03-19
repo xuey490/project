@@ -5,6 +5,7 @@ namespace App\Services;
 
 use App\Models\Admin;
 use App\Models\Asset;
+use App\Models\Menu;
 
 class AuthService
 {

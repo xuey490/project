@@ -355,6 +355,7 @@ class DatabaseMaintainService extends BaseService
         }
 
         $units = ['KB', 'MB', 'GB', 'TB'];
+        $i = 0;
 
         for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
             $bytes /= 1024;
