@@ -1,5 +1,5 @@
 {
   "name": "project",
-  "version_description": "Optimize tenant scope with caching",
+  "version_description": "Implement data scope permission feature",
   "preview_type": "pc"
 }
