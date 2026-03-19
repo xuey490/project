@@ -44,6 +44,23 @@ use Framework\Tenant\TenantContext;
  *
  * @package Framework\Basic\Scopes
  */
+// 基础使用（自动隔离）
+// User::all(); // SELECT * FROM users WHERE tenant_id = 1001
+
+// 超管查看特定租户
+// User::forTenant(1002)->get();
+
+// 超管查看所有租户
+// User::allTenants()->get();
+
+// 临时忽略隔离
+// User::withoutTenancy()->get();
+
+// 自定义租户字段的模型
+//class CustomModel extends Model {
+//    protected string $tenantColumn = 'company_id';
+//}
+
 class LaTenantScope implements Scope
 {
     /**
