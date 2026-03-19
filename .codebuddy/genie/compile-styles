@@ -1,0 +1,1365 @@
+#!/usr/bin/env node
+
+import * as fs from 'fs';
+import * as path from 'path';
+
+const VERSION = '1.0.0';
+
+const HELP_TEXT = `
+compile-styles v${VERSION}
+
+Compile CSS variables from index.css to style-guide.html
+
+Usage:
+  compile-styles --repo-root <path>
+  compile-styles -i <input> -o <output>
+  compile-styles -h, --help
+  compile-styles -v, --version
+
+Options:
+  -r, --repo-root <path>  Project root directory. Reads docs/project.json to
+                          determine project type and auto-configure paths.
+                          Currently supports: web
+                            - web: input=frontend/src/index.css, 
+                                   output=docs/design/default.style-guide.html
+  -i, --input <path>      Path to index.css file
+  -o, --output <path>     Path to output style-guide.html file
+  -t, --template <path>   Path to template HTML file (optional)
+  -h, --help              Show this help message
+  -v, --version           Show version
+
+Note: Either --repo-root OR both --input and --output are required.
+
+Example:
+  compile-styles --repo-root /path/to/project
+  compile-styles -r .
+  compile-styles -i ./src/index.css -o ./docs/design/style-guide.html
+`;
+
+/**
+ * Parse command line arguments
+ */
+function parseArgs(args) {
+  const result = {
+    input: null,
+    output: null,
+    template: null,
+    repoRoot: null,
+    help: false,
+    version: false
+  };
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    
+    if (arg === '-h' || arg === '--help') {
+      result.help = true;
+    } else if (arg === '-v' || arg === '--version') {
+      result.version = true;
+    } else if (arg === '-i' || arg === '--input') {
+      result.input = args[++i];
+    } else if (arg === '-o' || arg === '--output') {
+      result.output = args[++i];
+    } else if (arg === '-t' || arg === '--template') {
+      result.template = args[++i];
+    } else if (arg === '-r' || arg === '--repo-root') {
+      result.repoRoot = args[++i];
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Project type configurations
+ * Maps project_type to input/output paths relative to repo root
+ */
+const PROJECT_TYPE_CONFIG = {
+  web: {
+    input: 'frontend/src/index.css',
+    output: 'docs/design/default.style-guide.html'
+  },
+  miniprogram: {
+    input: 'frontend/src/app.scss',
+    output: 'docs/design/default.style-guide.html'
+  },
+  prototype: {
+    input: 'frontend/src/index.css',
+    output: 'docs/design/default.style-guide.html'
+  }
+};
+
+/**
+ * Resolve paths from --repo-root option
+ * Reads docs/project.json to determine project type
+ */
+function resolveFromRepoRoot(repoRoot) {
+  const resolvedRoot = path.resolve(repoRoot);
+  const projectJsonPath = path.join(resolvedRoot, 'docs', 'project.json');
+  
+  if (!fs.existsSync(projectJsonPath)) {
+    console.error(`Error: docs/project.json not found at ${projectJsonPath}`);
+    process.exit(1);
+  }
+  
+  let projectConfig;
+  try {
+    const content = fs.readFileSync(projectJsonPath, 'utf-8');
+    projectConfig = JSON.parse(content);
+  } catch (e) {
+    console.error(`Error: Failed to parse docs/project.json: ${e.message}`);
+    process.exit(1);
+  }
+  
+  const projectType = projectConfig.project_type;
+  
+  if (!projectType) {
+    console.error('Error: project_type not found in docs/project.json');
+    process.exit(1);
+  }
+  
+  const config = PROJECT_TYPE_CONFIG[projectType];
+  
+  if (!config) {
+    console.error(`Error: Unsupported project_type "${projectType}". Supported types: ${Object.keys(PROJECT_TYPE_CONFIG).join(', ')}`);
+    process.exit(1);
+  }
+  
+  console.log(`Detected project type: ${projectType}`);
+  
+  return {
+    input: path.join(resolvedRoot, config.input),
+    output: path.join(resolvedRoot, config.output)
+  };
+}
+
+/**
+ * Parse CSS variables from index.css content
+ * Extracts :root and .dark variables
+ */
+function parseCssVariables(cssContent) {
+  const variables = {
+    root: {},
+    dark: {}
+  };
+
+  // Parse :root variables
+  const rootMatch = cssContent.match(/:root\s*\{([^}]+)\}/s);
+  if (rootMatch) {
+    const rootContent = rootMatch[1];
+    const varMatches = rootContent.matchAll(/--([a-zA-Z0-9-]+)\s*:\s*([^;]+);/g);
+    for (const match of varMatches) {
+      variables.root[match[1]] = match[2].trim();
+    }
+  }
+
+  // Parse .dark variables
+  const darkMatch = cssContent.match(/\.dark\s*\{([^}]+)\}/s);
+  if (darkMatch) {
+    const darkContent = darkMatch[1];
+    const varMatches = darkContent.matchAll(/--([a-zA-Z0-9-]+)\s*:\s*([^;]+);/g);
+    for (const match of varMatches) {
+      variables.dark[match[1]] = match[2].trim();
+    }
+  }
+
+  return variables;
+}
+
+/**
+ * Parse SCSS variables from miniprogram app.scss
+ * Extracts color values and converts them to CSS variables format
+ */
+function parseScssVariables(scssContent) {
+  const variables = {
+    root: {},
+    dark: {}
+  };
+  
+  // Extract colors from common patterns in SCSS
+  // Look for color values in page, .container, etc.
+  
+  // Extract background-color from page
+  const pageBgMatch = scssContent.match(/page\s*\{[^}]*background-color\s*:\s*([^;]+);/s);
+  if (pageBgMatch) {
+    variables.root['background'] = pageBgMatch[1].trim();
+  }
+  
+  // Extract color from page (text color)
+  const pageColorMatch = scssContent.match(/page\s*\{[^}]*[^-]color\s*:\s*([^;]+);/s);
+  if (pageColorMatch) {
+    variables.root['foreground'] = pageColorMatch[1].trim();
+  }
+  
+  // Extract font-size from page
+  const fontSizeMatch = scssContent.match(/page\s*\{[^}]*font-size\s*:\s*([^;]+);/s);
+  if (fontSizeMatch) {
+    variables.root['font-size-body'] = fontSizeMatch[1].trim();
+  }
+  
+  // WeChat green as primary color for miniprogram
+  variables.root['primary'] = '#07C160';
+  variables.root['primary-foreground'] = '#ffffff';
+  
+  // Card background (typically white)
+  variables.root['card'] = '#ffffff';
+  variables.root['card-foreground'] = '#333333';
+  
+  // Muted colors
+  variables.root['muted'] = '#f5f5f5';
+  variables.root['muted-foreground'] = '#666666';
+  
+  // Border
+  variables.root['border'] = '#e5e5e5';
+  
+  // Functional colors
+  variables.root['success'] = '#07C160';
+  variables.root['warning'] = '#FFC107';
+  variables.root['destructive'] = '#FA5151';
+  variables.root['info'] = '#10AEFF';
+  
+  // Radius
+  variables.root['radius'] = '8px';
+  
+  return variables;
+}
+
+/**
+ * Generate CSS variables block for style-guide.html
+ */
+function generateCssVariablesBlock(variables) {
+  let css = '';
+  
+  // Generate :root block
+  css += '    :root {\n';
+  
+  // Group variables by category
+  const categories = {
+    'radius': ['radius', 'radius-sm', 'radius-md', 'radius-lg', 'radius-xl', 'radius-full'],
+    'background': ['background', 'foreground'],
+    'card': ['card', 'card-foreground'],
+    'popover': ['popover', 'popover-foreground'],
+    'primary': ['primary', 'primary-foreground'],
+    'secondary': ['secondary', 'secondary-foreground'],
+    'muted': ['muted', 'muted-foreground'],
+    'accent': ['accent', 'accent-foreground'],
+    'destructive': ['destructive'],
+    'border': ['border', 'input', 'ring'],
+    'functional': ['success', 'success-foreground', 'warning', 'warning-foreground', 'info', 'info-foreground'],
+    'theme': ['theme-red', 'theme-green', 'theme-gold', 'theme-blue'],
+    'chart': ['chart-1', 'chart-2', 'chart-3', 'chart-4', 'chart-5'],
+    'sidebar': ['sidebar', 'sidebar-foreground', 'sidebar-primary', 'sidebar-primary-foreground', 'sidebar-accent', 'sidebar-accent-foreground', 'sidebar-border', 'sidebar-ring'],
+    'hero': ['hero', 'hero-foreground']
+  };
+
+  const categoryComments = {
+    'radius': '/* === 圆角基准值 === */',
+    'background': '/* === 背景颜色 === */',
+    'card': '/* === 卡片 === */',
+    'popover': '/* === 弹出层 === */',
+    'primary': '/* === 主色调 === */',
+    'secondary': '/* === 次要色 === */',
+    'muted': '/* === 柔和色 === */',
+    'accent': '/* === 强调色 === */',
+    'destructive': '/* === 危险/错误色 === */',
+    'border': '/* === 边框和输入框 === */',
+    'functional': '/* === 功能颜色 === */',
+    'theme': '/* === 主题特色颜色 === */',
+    'chart': '/* === 图表颜色 === */',
+    'sidebar': '/* === 侧边栏 === */',
+    'hero': '/* === Hero 区域 === */'
+  };
+
+  // Track which variables have been output
+  const outputVars = new Set();
+
+  for (const [category, varNames] of Object.entries(categories)) {
+    const categoryVars = varNames.filter(name => variables.root[name] !== undefined);
+    if (categoryVars.length > 0) {
+      css += `      ${categoryComments[category]}\n`;
+      for (const name of categoryVars) {
+        css += `      --${name}: ${variables.root[name]};\n`;
+        outputVars.add(name);
+      }
+      css += '\n';
+    }
+  }
+
+  // Output any remaining variables not in categories
+  const remainingVars = Object.keys(variables.root).filter(name => !outputVars.has(name));
+  if (remainingVars.length > 0) {
+    css += '      /* === 其他变量 === */\n';
+    for (const name of remainingVars) {
+      css += `      --${name}: ${variables.root[name]};\n`;
+    }
+    css += '\n';
+  }
+
+  css += '    }\n';
+
+  // Generate .dark block
+  css += '\n    /* ==================== Dark Mode === */\n';
+  css += '    .dark {\n';
+
+  outputVars.clear();
+
+  for (const [category, varNames] of Object.entries(categories)) {
+    const categoryVars = varNames.filter(name => variables.dark[name] !== undefined);
+    if (categoryVars.length > 0) {
+      css += `      ${categoryComments[category]}\n`;
+      for (const name of categoryVars) {
+        css += `      --${name}: ${variables.dark[name]};\n`;
+        outputVars.add(name);
+      }
+      css += '\n';
+    }
+  }
+
+  // Output any remaining dark variables
+  const remainingDarkVars = Object.keys(variables.dark).filter(name => !outputVars.has(name));
+  if (remainingDarkVars.length > 0) {
+    css += '      /* === 其他变量 === */\n';
+    for (const name of remainingDarkVars) {
+      css += `      --${name}: ${variables.dark[name]};\n`;
+    }
+    css += '\n';
+  }
+
+  css += '    }';
+
+  return css;
+}
+
+/**
+ * Generate the complete style-guide.html content
+ */
+function generateStyleGuideHtml(variables) {
+  const cssVariablesBlock = generateCssVariablesBlock(variables);
+  
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modern Design System - Contemporary UI Specification</title>
+  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+  <style>
+    /* ==================== CSS Variables - 从 index.css 编译生成 ==================== */
+${cssVariablesBlock}
+
+    /* ==================== 扩展变量 (style-guide 专用) ==================== */
+    :root {
+      /* === 字体 === */
+      --font-family: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      --font-size-display: 56px;
+      --font-size-headline: 32px;
+      --font-size-title: 24px;
+      --font-size-body: 16px;
+      --font-size-label: 14px;
+      --font-size-small: 12px;
+      --font-weight-semibold: 600;
+      --font-weight-medium: 500;
+      --font-weight-normal: 400;
+      --line-height: 1.5;
+
+      /* === 间距 === */
+      --spacing-xs: 8px;
+      --spacing-sm: 12px;
+      --spacing-md: 16px;
+      --spacing-lg: 24px;
+      --spacing-xl: 32px;
+      --spacing-2xl: 48px;
+
+      /* === 圆角扩展 (基于 --radius 计算) === */
+      --radius-sm: calc(var(--radius) - 4px);
+      --radius-md: calc(var(--radius) - 2px);
+      --radius-lg: var(--radius);
+      --radius-xl: calc(var(--radius) + 4px);
+      --radius-full: 9999px;
+
+      /* === 阴影 === */
+      --shadow-sm: 0 1px 3px oklch(0.205 0 0 / 0.08);
+      --shadow-md: 0 4px 12px oklch(0.205 0 0 / 0.10), 0 2px 4px oklch(0.205 0 0 / 0.06);
+      --shadow-lg: 0 8px 24px oklch(0.205 0 0 / 0.12), 0 4px 8px oklch(0.205 0 0 / 0.08);
+
+      /* === 边框宽度 === */
+      --border-width: 1px;
+
+      /* === Hero 渐变 === */
+      --hero-gradient: linear-gradient(135deg, var(--primary) 0%, oklch(0.145 0 0) 100%);
+
+      /* === Hero Badge === */
+      --hero-badge-bg: oklch(1 0 0 / 0.2);
+      --hero-badge-border: oklch(1 0 0 / 0.3);
+
+      /* === 卡片图片渐变 === */
+      --card-gradient: linear-gradient(135deg, var(--primary) 0%, var(--theme-green) 100%);
+
+      /* === 动画延迟 === */
+      --animation-delay-1: 0.5s;
+      --animation-delay-2: 1s;
+
+      /* === Hero 内容样式 === */
+      --hero-subtitle-size: 18px;
+      --hero-subtitle-opacity: 0.95;
+      --hero-icon-size-lg: 32px;
+      --hero-icon-size-md: 28px;
+      --hero-icon-size-sm: 24px;
+
+      /* === 卡片尺寸 === */
+      --card-image-height: 180px;
+
+      /* === 色块尺寸 === */
+      --color-swatch-size: 64px;
+      --color-preview-size: 32px;
+      --func-swatch-size: 48px;
+
+      /* === 图标尺寸 === */
+      --icon-wrapper-size: 40px;
+      --icon-size: 24px;
+      --icon-button-size: 48px;
+      --icon-button-icon-size: 20px;
+
+      /* === Hero Border Radius === */
+      --hero-radius: 24px;
+
+      /* === 色块圆角 === */
+      --color-preview-radius: 6px;
+    }
+
+    .dark {
+      /* === 阴影 (深色模式) === */
+      --shadow-sm: 0 1px 3px oklch(0 0 0 / 0.2);
+      --shadow-md: 0 4px 12px oklch(0 0 0 / 0.3), 0 2px 4px oklch(0 0 0 / 0.2);
+      --shadow-lg: 0 8px 24px oklch(0 0 0 / 0.4), 0 4px 8px oklch(0 0 0 / 0.3);
+
+      /* === Hero 渐变 (深色模式) === */
+      --hero-gradient: linear-gradient(135deg, var(--hero) 0%, oklch(0.205 0 0) 100%);
+
+      /* === 卡片图片渐变 (深色模式) === */
+      --card-gradient: linear-gradient(135deg, var(--theme-blue) 0%, var(--theme-green) 100%);
+    }
+
+    /* ==================== 基础样式 ==================== */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font-family);
+      background: var(--background);
+      color: var(--foreground);
+      line-height: var(--line-height);
+      padding: var(--spacing-xl);
+    }
+
+    /* ==================== 布局容器 ==================== */
+    .page-header {
+      background: var(--card);
+      padding: var(--spacing-md) var(--spacing-lg);
+      border-radius: var(--radius-lg);
+      margin-bottom: var(--spacing-xl);
+      display: flex;
+      gap: var(--spacing-md);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .tab {
+      padding: var(--spacing-xs) var(--spacing-md);
+      background: var(--secondary);
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: var(--font-size-label);
+      font-weight: var(--font-weight-medium);
+      color: var(--secondary-foreground);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab:first-child {
+      background: var(--primary);
+      color: var(--primary-foreground);
+    }
+
+    .hero {
+      background: var(--hero-gradient);
+      padding: var(--spacing-2xl) var(--spacing-xl);
+      border-radius: var(--hero-radius);
+      margin-bottom: var(--spacing-xl);
+      position: relative;
+      color: var(--hero-foreground);
+    }
+
+    .hero-badge {
+      position: absolute;
+      top: var(--spacing-lg);
+      right: var(--spacing-xl);
+      background: var(--hero-badge-bg);
+      backdrop-filter: blur(10px);
+      padding: var(--spacing-sm) var(--spacing-lg);
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-label);
+      color: var(--hero-foreground);
+      border: 1px solid var(--hero-badge-border);
+    }
+
+    .hero-title {
+      font-size: var(--font-size-display);
+      font-weight: 800;
+      color: var(--hero-foreground);
+      margin-bottom: var(--spacing-sm);
+      font-style: italic;
+      letter-spacing: -0.04em;
+      line-height: 1.1;
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--spacing-lg);
+      margin-bottom: var(--spacing-xl);
+      align-items: stretch;
+    }
+
+    .section {
+      background: var(--card);
+      padding: var(--spacing-lg);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+      border: var(--border-width) solid var(--border);
+    }
+
+    .section-title {
+      font-size: var(--font-size-title);
+      font-weight: 700;
+      color: var(--muted-foreground);
+      margin-bottom: var(--spacing-md);
+    }
+
+    /* ==================== Style Keywords 样式 ==================== */
+    .keyword-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--spacing-xs);
+    }
+
+    .keyword {
+      padding: var(--spacing-xs) var(--spacing-sm);
+      background: var(--muted);
+      border-radius: var(--radius-sm);
+      font-size: var(--font-size-small);
+      color: var(--foreground);
+      font-weight: var(--font-weight-medium);
+    }
+
+    /* ==================== Text 样式示例 ==================== */
+    .text-samples {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-md);
+    }
+
+    .text-display {
+      font-size: var(--font-size-display);
+      font-weight: 800;
+      color: var(--primary);
+      line-height: 1.1;
+      letter-spacing: -0.04em;
+    }
+
+    .text-headline {
+      font-size: var(--font-size-headline);
+      font-weight: 700;
+      color: var(--foreground);
+      line-height: 1.2;
+      letter-spacing: -0.03em;
+    }
+
+    .text-title {
+      font-size: var(--font-size-title);
+      font-weight: 700;
+      color: var(--foreground);
+      line-height: 1.3;
+      letter-spacing: -0.02em;
+    }
+
+    .text-body {
+      font-size: var(--font-size-body);
+      font-weight: var(--font-weight-normal);
+      color: var(--foreground);
+      line-height: var(--line-height);
+    }
+
+    .text-label-lg {
+      font-size: var(--font-size-label);
+      font-weight: var(--font-weight-normal);
+      color: var(--muted-foreground);
+      line-height: var(--line-height);
+    }
+
+    .text-label-sm {
+      font-size: var(--font-size-small);
+      font-weight: var(--font-weight-normal);
+      color: var(--muted-foreground);
+      line-height: var(--line-height);
+    }
+
+    /* ==================== Colors 颜色样式 ==================== */
+    .color-row {
+      display: flex;
+      gap: var(--spacing-sm);
+      margin-bottom: var(--spacing-md);
+    }
+
+    .color-label {
+      font-size: var(--font-size-small);
+      color: var(--muted-foreground);
+      margin-bottom: var(--spacing-xs);
+      font-weight: var(--font-weight-semibold);
+    }
+
+    .color-swatch {
+      width: var(--color-swatch-size);
+      height: var(--color-swatch-size);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .primary-1 {
+      background: var(--primary);
+    }
+
+    .primary-2 {
+      background: var(--accent);
+    }
+
+    .primary-3 {
+      background: var(--secondary);
+    }
+
+    .page-background {
+      background: var(--background);
+    }
+
+    .container-background {
+      background: var(--card);
+    }
+
+    .section-background {
+      background: var(--muted);
+    }
+
+    .bg-color-row {
+      display: flex;
+      gap: var(--spacing-sm);
+      margin-bottom: var(--spacing-sm);
+      font-size: var(--font-size-small);
+      color: var(--muted-foreground);
+      align-items: center;
+    }
+
+    .bg-color-swatch {
+      width: 120px;
+      height: 48px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--font-size-small);
+      font-weight: var(--font-weight-medium);
+      color: var(--foreground);
+      box-shadow: inset 0 0 0 1px var(--border);
+    }
+
+    .bg-swatch-page {
+      background: var(--background);
+    }
+
+    .bg-swatch-container {
+      background: var(--card);
+    }
+
+    .bg-swatch-section {
+      background: var(--muted);
+    }
+
+    .functional-row {
+      display: flex;
+      gap: var(--spacing-sm);
+    }
+
+    .func-swatch {
+      width: var(--func-swatch-size);
+      height: var(--func-swatch-size);
+      border-radius: var(--radius-full);
+    }
+
+    .success {
+      background: var(--success);
+    }
+
+    .error {
+      background: var(--destructive);
+    }
+
+    .warning {
+      background: var(--warning);
+    }
+
+    .info {
+      background: var(--info);
+    }
+
+    /* ==================== Icons 图标样式 ==================== */
+    .icon-row {
+      display: flex;
+      gap: var(--spacing-md);
+      align-items: center;
+    }
+
+    .icon-wrapper {
+      width: var(--icon-wrapper-size);
+      height: var(--icon-wrapper-size);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted-foreground);
+      font-size: var(--icon-size);
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .icon-wrapper:hover {
+      color: var(--primary);
+      transform: scale(1.1);
+    }
+
+    /* ==================== Component Showcases 组件展示 ==================== */
+    .component-group {
+      margin-bottom: var(--spacing-lg);
+    }
+
+    .component-label {
+      font-size: var(--font-size-small);
+      color: var(--muted-foreground);
+      margin-bottom: var(--spacing-sm);
+      font-weight: var(--font-weight-semibold);
+    }
+
+    /* Buttons */
+    .button-row {
+      display: flex;
+      gap: var(--spacing-sm);
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .btn-primary {
+      padding: var(--spacing-sm) var(--spacing-lg);
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-body);
+      font-weight: var(--font-weight-semibold);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .btn-primary:active {
+      transform: scale(0.98);
+    }
+
+    .btn-secondary {
+      padding: var(--spacing-sm) var(--spacing-lg);
+      background: var(--card);
+      color: var(--primary);
+      border: var(--border-width) solid var(--primary);
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-body);
+      font-weight: var(--font-weight-semibold);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-secondary:hover {
+      background: var(--muted);
+    }
+
+    .btn-secondary:active {
+      transform: scale(0.98);
+    }
+
+    .btn-icon {
+      width: var(--icon-button-size);
+      height: var(--icon-button-size);
+      background: var(--primary);
+      border: none;
+      border-radius: var(--radius-full);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-icon:hover {
+      box-shadow: var(--shadow-lg);
+      transform: scale(1.05);
+    }
+
+    .btn-icon:active {
+      transform: scale(0.95);
+    }
+
+    /* Tags & Labels */
+    .tag-row {
+      display: flex;
+      gap: var(--spacing-sm);
+      flex-wrap: wrap;
+    }
+
+    .tag {
+      padding: var(--spacing-xs) var(--spacing-md);
+      border-radius: var(--radius-sm);
+      font-size: var(--font-size-small);
+      font-weight: var(--font-weight-semibold);
+    }
+
+    .tag-active {
+      background: var(--primary);
+      color: var(--primary-foreground);
+    }
+
+    .tag-featured {
+      background: var(--warning);
+      color: var(--warning-foreground);
+    }
+
+    .tag-success {
+      background: var(--success);
+      color: var(--success-foreground);
+    }
+
+    /* Form Elements */
+    .form-group {
+      margin-bottom: var(--spacing-md);
+    }
+
+    .form-input {
+      width: 100%;
+      padding: var(--spacing-sm) var(--spacing-md);
+      background: var(--input);
+      border: var(--border-width) solid var(--border);
+      border-radius: var(--radius-md);
+      font-size: var(--font-size-body);
+      font-family: var(--font-family);
+      color: var(--foreground);
+      transition: border-color 0.2s;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--ring);
+    }
+
+    .form-input::placeholder {
+      color: var(--muted-foreground);
+    }
+
+    /* Card */
+    .card {
+      background: var(--card);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow-sm);
+      border: var(--border-width) solid var(--border);
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .card:hover {
+      box-shadow: var(--shadow-lg);
+      transform: scale(1.02);
+    }
+
+    .card-image {
+      width: 100%;
+      height: var(--card-image-height);
+      object-fit: cover;
+      background: var(--card-gradient);
+    }
+
+    .card-content {
+      padding: var(--spacing-md);
+    }
+
+    .card-title {
+      font-size: var(--font-size-body);
+      font-weight: var(--font-weight-semibold);
+      color: var(--card-foreground);
+      margin-bottom: var(--spacing-xs);
+    }
+
+    .card-description {
+      font-size: var(--font-size-label);
+      color: var(--muted-foreground);
+      line-height: var(--line-height);
+    }
+
+    .input-label {
+      font-size: var(--font-size-small);
+      color: var(--muted-foreground);
+      margin-bottom: var(--spacing-xs);
+      display: block;
+      font-weight: var(--font-weight-medium);
+    }
+
+    /* Navigation Tabs */
+    .nav-tabs {
+      display: flex;
+      gap: var(--spacing-xs);
+      margin-bottom: var(--spacing-md);
+    }
+
+    .nav-tab {
+      padding: var(--spacing-sm) var(--spacing-md);
+      background: transparent;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: var(--font-size-label);
+      font-weight: var(--font-weight-medium);
+      color: var(--muted-foreground);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .nav-tab.active {
+      background: var(--primary);
+      color: var(--primary-foreground);
+    }
+
+    .nav-tab:not(.active):hover {
+      background: var(--muted);
+      color: var(--foreground);
+    }
+
+    /* Hero Animations */
+    @keyframes sparkle {
+
+      0%,
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      50% {
+        opacity: 0.6;
+        transform: scale(1.1);
+      }
+    }
+
+    .sparkle {
+      animation: sparkle 2s ease-in-out infinite;
+    }
+
+    .sparkle-delayed-1 {
+      animation: sparkle 2s ease-in-out infinite;
+      animation-delay: var(--animation-delay-1);
+    }
+
+    .sparkle-delayed-2 {
+      animation: sparkle 2s ease-in-out infinite;
+      animation-delay: var(--animation-delay-2);
+    }
+
+    /* === Hero 内容样式 === */
+    .hero-subtitle {
+      font-size: var(--hero-subtitle-size);
+      opacity: var(--hero-subtitle-opacity);
+    }
+
+    .hero-decorations {
+      margin-top: var(--spacing-lg);
+      display: flex;
+      gap: var(--spacing-sm);
+      align-items: center;
+    }
+
+    .hero-icon-gold-lg {
+      font-size: var(--hero-icon-size-lg);
+      color: var(--theme-gold);
+    }
+
+    .hero-icon-white-md {
+      font-size: var(--hero-icon-size-md);
+      color: var(--hero-foreground);
+    }
+
+    .hero-icon-gold-sm {
+      font-size: var(--hero-icon-size-sm);
+      color: var(--theme-gold);
+    }
+
+    /* === Section 间距 === */
+    .section-mt {
+      margin-top: var(--spacing-lg);
+    }
+
+    /* === 主题图标颜色 === */
+    .icon-theme-red {
+      color: var(--theme-red);
+    }
+
+    .icon-theme-green {
+      color: var(--theme-green);
+    }
+
+    .icon-theme-gold {
+      color: var(--theme-gold);
+    }
+
+    .icon-theme-blue {
+      color: var(--theme-blue);
+    }
+
+    /* === Icon Button Icon === */
+    .btn-icon-inner {
+      font-size: var(--icon-button-icon-size);
+      color: var(--primary-foreground);
+    }
+
+    /* === Color Label 间距 === */
+    .color-label-mt {
+      margin-top: var(--spacing-md);
+    }
+
+    /* ==================== 响应式布局 ==================== */
+    @media (max-width: 1024px) {
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ==================== 深色模式切换按钮 ==================== */
+    .theme-toggle {
+      position: fixed;
+      top: var(--spacing-lg);
+      right: var(--spacing-lg);
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-full);
+      background: var(--card);
+      border: var(--border-width) solid var(--border);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: var(--foreground);
+      box-shadow: var(--shadow-md);
+      transition: all 0.2s;
+      z-index: 1000;
+    }
+
+    .theme-toggle:hover {
+      transform: scale(1.1);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .theme-toggle .icon-sun {
+      display: block;
+    }
+
+    .theme-toggle .icon-moon {
+      display: none;
+    }
+
+    .dark .theme-toggle .icon-sun {
+      display: none;
+    }
+
+    .dark .theme-toggle .icon-moon {
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Theme Toggle Button -->
+  <button class="theme-toggle" onclick="document.documentElement.classList.toggle('dark')" title="Toggle dark mode">
+    <iconify-icon icon="lucide:sun" class="icon-sun"></iconify-icon>
+    <iconify-icon icon="lucide:moon" class="icon-moon"></iconify-icon>
+  </button>
+
+  <!-- Hero Section -->
+  <div class="hero">
+    <div class="hero-badge">Mobile H5</div>
+    <h1 class="hero-title">Modern Design</h1>
+    <p class="hero-subtitle">Contemporary & Elegant Design System</p>
+    <div class="hero-decorations">
+      <iconify-icon icon="lucide:palette" class="sparkle hero-icon-gold-lg"></iconify-icon>
+      <iconify-icon icon="lucide:layout" class="sparkle-delayed-1 hero-icon-white-md"></iconify-icon>
+      <iconify-icon icon="lucide:sparkles" class="sparkle-delayed-2 hero-icon-gold-sm"></iconify-icon>
+    </div>
+  </div>
+
+  <!-- Main Content Grid -->
+  <div class="content-grid">
+    <!-- Text Samples -->
+    <div class="section">
+      <h2 class="section-title">Text</h2>
+      <div class="text-samples">
+        <div class="text-display">Display<br>Large</div>
+        <div class="text-headline">Headline Large</div>
+        <div class="text-title">Title Medium</div>
+        <div class="text-body">Body Medium</div>
+        <div class="text-label-lg">Label Large</div>
+        <div class="text-label-sm">Label Small</div>
+      </div>
+    </div>
+
+    <!-- Middle Column: Colors & Icons -->
+    <div style="display: flex; flex-direction: column;">
+      <!-- Colors -->
+      <div class="section">
+        <h2 class="section-title">Colors</h2>
+
+        <div class="color-label">Primary colors</div>
+        <div class="color-row">
+          <div class="color-swatch primary-1"></div>
+          <div class="color-swatch primary-2"></div>
+          <div class="color-swatch primary-3"></div>
+        </div>
+
+        <div class="color-label color-label-mt">Background colors</div>
+        <div class="bg-color-row">
+          <div class="bg-color-swatch bg-swatch-page">Page</div>
+          <span>Page background</span>
+        </div>
+        <div class="bg-color-row">
+          <div class="bg-color-swatch bg-swatch-container">Container</div>
+          <span>Container background</span>
+        </div>
+        <div class="bg-color-row">
+          <div class="bg-color-swatch bg-swatch-section">Section</div>
+          <span>Section background</span>
+        </div>
+
+        <div class="color-label color-label-mt">Functional colors</div>
+        <div class="functional-row">
+          <div class="func-swatch error"></div>
+          <div class="func-swatch warning"></div>
+          <div class="func-swatch success"></div>
+          <div class="func-swatch info"></div>
+        </div>
+      </div>
+
+      <!-- Icons -->
+      <div class="section section-mt" style="flex: 1;">
+        <h2 class="section-title">Icons</h2>
+        <div class="icon-row">
+          <div class="icon-wrapper">
+            <iconify-icon icon="lucide:home"></iconify-icon>
+          </div>
+          <div class="icon-wrapper">
+            <iconify-icon icon="lucide:search"></iconify-icon>
+          </div>
+          <div class="icon-wrapper">
+            <iconify-icon icon="lucide:heart"></iconify-icon>
+          </div>
+          <div class="icon-wrapper">
+            <iconify-icon icon="lucide:user"></iconify-icon>
+          </div>
+          <div class="icon-wrapper">
+            <iconify-icon icon="lucide:settings"></iconify-icon>
+          </div>
+        </div>
+        <div class="color-label section-mt">Theme icons</div>
+        <div class="icon-row">
+          <div class="icon-wrapper icon-theme-red">
+            <iconify-icon icon="lucide:heart"></iconify-icon>
+          </div>
+          <div class="icon-wrapper icon-theme-green">
+            <iconify-icon icon="lucide:check-circle"></iconify-icon>
+          </div>
+          <div class="icon-wrapper icon-theme-gold">
+            <iconify-icon icon="lucide:star"></iconify-icon>
+          </div>
+          <div class="icon-wrapper icon-theme-blue">
+            <iconify-icon icon="lucide:info"></iconify-icon>
+          </div>
+          <div class="icon-wrapper icon-theme-gold">
+            <iconify-icon icon="lucide:award"></iconify-icon>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Component Showcases -->
+    <div class="section">
+      <h2 class="section-title">Component showcases</h2>
+
+      <!-- Buttons -->
+      <div class="component-group">
+        <div class="component-label">Buttons</div>
+        <div class="button-row">
+          <button class="btn-primary">立即开始</button>
+          <button class="btn-secondary">了解更多</button>
+          <button class="btn-icon">
+            <iconify-icon icon="lucide:plus" class="btn-icon-inner"></iconify-icon>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tags & Labels -->
+      <div class="component-group">
+        <div class="component-label">Tags & Labels</div>
+        <div class="tag-row">
+          <span class="tag tag-active">已选中</span>
+          <span class="tag tag-featured">热门推荐</span>
+          <span class="tag tag-success">成功</span>
+        </div>
+      </div>
+
+      <!-- Form Elements -->
+      <div class="component-group">
+        <div class="component-label">Form Elements</div>
+        <div class="form-group">
+          <input type="text" class="form-input" placeholder="请输入您的姓名..." />
+        </div>
+      </div>
+
+      <!-- Card -->
+      <div class="component-group">
+        <div class="component-label">Card</div>
+        <div class="card">
+          <div class="card-image"></div>
+          <div class="card-content">
+            <div class="card-title">产品设计流程</div>
+            <div class="card-description">三步轻松完成你的专属设计方案...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+
+</html>
+`;
+}
+
+const args = parseArgs(process.argv.slice(2));
+
+if (args.help) {
+  console.log(HELP_TEXT);
+  process.exit(0);
+}
+
+if (args.version) {
+  console.log(VERSION);
+  process.exit(0);
+}
+
+// Resolve input/output paths
+let INPUT_FILE, OUTPUT_FILE;
+
+if (args.repoRoot) {
+  // Use --repo-root to auto-detect paths
+  const paths = resolveFromRepoRoot(args.repoRoot);
+  INPUT_FILE = paths.input;
+  OUTPUT_FILE = paths.output;
+} else if (args.input && args.output) {
+  // Use explicit --input and --output
+  INPUT_FILE = path.resolve(args.input);
+  OUTPUT_FILE = path.resolve(args.output);
+} else {
+  console.error('Error: Either --repo-root OR both --input and --output are required\n');
+  console.log(HELP_TEXT);
+  process.exit(1);
+}
+
+const OUTPUT_DIR = path.dirname(OUTPUT_FILE);
+
+/**
+ * Main function
+ */
+function main() {
+  // Check if input file exists
+  if (!fs.existsSync(INPUT_FILE)) {
+    console.error(`Error: Input file not found at ${INPUT_FILE}`);
+    process.exit(1);
+  }
+  
+  console.log(`Compiling styles from: ${INPUT_FILE}`);
+  
+  // Read CSS/SCSS file
+  const cssContent = fs.readFileSync(INPUT_FILE, 'utf-8');
+  
+  // Parse variables based on file type
+  let variables;
+  if (INPUT_FILE.endsWith('.scss')) {
+    // Miniprogram SCSS file
+    variables = parseScssVariables(cssContent);
+    console.log('Detected SCSS file, using miniprogram style parsing');
+  } else {
+    // Web CSS file with CSS variables
+    variables = parseCssVariables(cssContent);
+  }
+  
+  const rootVarCount = Object.keys(variables.root).length;
+  const darkVarCount = Object.keys(variables.dark).length;
+  
+  if (rootVarCount === 0 && !INPUT_FILE.endsWith('.scss')) {
+    // Only warn for CSS files, SCSS files use different variable format
+    console.warn('Warning: No :root variables found in CSS file');
+  }
+  
+  console.log(`Found ${rootVarCount} :root variables, ${darkVarCount} .dark variables`);
+  
+  // Generate HTML
+  const htmlContent = generateStyleGuideHtml(variables);
+  
+  // Ensure output directory exists
+  if (!fs.existsSync(OUTPUT_DIR)) {
+    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+  }
+  
+  // Write output
+  fs.writeFileSync(OUTPUT_FILE, htmlContent);
+  
+  console.log(`Successfully generated ${OUTPUT_FILE}`);
+  
+  // Print summary of variables
+  console.log('\nCompiled variables:');
+  console.log('  :root variables:');
+  const rootCategories = ['primary', 'background', 'foreground', 'card', 'muted', 'accent', 'destructive', 'success', 'warning', 'info'];
+  for (const cat of rootCategories) {
+    if (variables.root[cat]) {
+      console.log(`    --${cat}: ${variables.root[cat]}`);
+    }
+  }
+  if (darkVarCount > 0) {
+    console.log('  .dark variables:');
+    for (const cat of rootCategories) {
+      if (variables.dark[cat]) {
+        console.log(`    --${cat}: ${variables.dark[cat]}`);
+      }
+    }
+  }
+}
+
+main();

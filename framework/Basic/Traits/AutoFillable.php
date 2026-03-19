@@ -19,11 +19,39 @@ namespace Framework\Basic\Traits;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Cache;
 
+/**
+ * 自动填充字段 Trait
+ *
+ * 为 Eloquent 模型提供自动计算 fillable 字段的功能。
+ * 通过读取数据库表结构，自动将所有字段（除黑名单外）设置为可批量填充字段，
+ * 减少手动维护 $fillable 属性的工作量。
+ *
+ * 主要特性：
+ * - 自动读取数据库表字段列表
+ * - 支持字段黑名单机制，排除敏感字段
+ * - 使用缓存提高性能，避免重复查询表结构
+ * - 支持模型级别自定义黑名单
+ *
+ * 使用方式：
+ * class User extends Model {
+ *     use AutoFillable;
+ *
+ *     // 可选：定义模型特有的黑名单字段
+ *     protected $guarded_fields = ['password', 'remember_token'];
+ * }
+ *
+ * @package Framework\Basic\Traits
+ */
 trait AutoFillable
 {
     /**
-     * Eloquent 会在构造函数中自动调用 initialize{TraitName} 方法
-     * 这是设置 fillable 的最佳时机
+     * 初始化自动填充字段
+     *
+     * Eloquent 会在构造函数中自动调用 initialize{TraitName} 方法，
+     * 这是设置 fillable 的最佳时机。只有当 fillable 为空时才自动设置，
+     * 允许在模型中手动覆盖。
+     *
+     * @return void
      */
     public function initializeAutoFillable()
     {
@@ -34,7 +62,19 @@ trait AutoFillable
     }
 
     /**
-     * 获取经过计算的 fillable 字段
+     * 获取经过计算的 fillable 字段列表
+     *
+     * 从数据库读取表的所有字段，排除黑名单字段后返回可填充字段数组。
+     * 结果会被缓存 24 小时以提高性能。
+     *
+     * 黑名单字段包括：
+     * - id: 主键
+     * - created_at: 创建时间（自动管理）
+     * - updated_at: 更新时间（自动管理）
+     * - deleted_at: 软删除时间（自动管理）
+     * - tenant_id: 租户ID（系统自动填充）
+     *
+     * @return array 可批量填充的字段名数组
      */
     protected function getCalculatedFillable(): array
     {

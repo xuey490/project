@@ -1,0 +1,560 @@
+#!/usr/bin/env node
+
+import { parse } from './vendor/@babel/parser/lib/index.js';
+import * as fs from 'fs';
+import * as path from 'path';
+
+const VERSION = '1.0.0';
+
+const HELP_TEXT = `
+parse-routes v${VERSION}
+
+Parse React Router routes from App.tsx and generate pages.json
+
+Usage:
+  parse-routes --repo-root <path>
+  parse-routes -i <input> -o <output>
+  parse-routes -h, --help
+  parse-routes -v, --version
+
+Options:
+  -r, --repo-root <path>  Project root directory. Reads docs/project.json to
+                          determine project type and auto-configure paths.
+                          For known types (e.g., web), parses routes from source.
+                          For other types, generates a fixed single-page output.
+                            - web: input=frontend/src/App.tsx, output=docs/pages.json
+                            - other: output=docs/pages.json (fixed single page)
+  -i, --input <path>      Path to App.tsx file
+  -o, --output <path>     Path to output pages.json file
+  -h, --help              Show this help message
+  -v, --version           Show version
+
+Note: Either --repo-root OR both --input and --output are required.
+
+Route Attributes:
+  path                    -> url
+  data-genie-key          -> pageKey
+  data-genie-title        -> title
+
+Example:
+  parse-routes --repo-root /path/to/project
+  parse-routes -r .
+  parse-routes -i ./src/App.tsx -o ./docs/pages.json
+`;
+
+/**
+ * Parse command line arguments
+ */
+function parseArgs(args) {
+  const result = {
+    input: null,
+    output: null,
+    repoRoot: null,
+    help: false,
+    version: false
+  };
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    
+    if (arg === '-h' || arg === '--help') {
+      result.help = true;
+    } else if (arg === '-v' || arg === '--version') {
+      result.version = true;
+    } else if (arg === '-i' || arg === '--input') {
+      result.input = args[++i];
+    } else if (arg === '-o' || arg === '--output') {
+      result.output = args[++i];
+    } else if (arg === '-r' || arg === '--repo-root') {
+      result.repoRoot = args[++i];
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Project type configurations
+ * Maps project_type to input/output paths relative to repo root
+ */
+/**
+ * Project type configurations
+ * Maps project_type to input/output paths relative to repo root
+ * Types not listed here will use default single-page output
+ */
+const PROJECT_TYPE_CONFIG = {
+  web: {
+    input: 'frontend/src/App.tsx',
+    output: 'docs/pages.json'
+  },
+  miniprogram: {
+    input: 'frontend/src/app.config.ts',
+    output: 'docs/pages.json'
+  },
+  prototype: {
+    input: 'frontend/src/App.tsx',
+    output: 'docs/pages.json'
+  }
+};
+
+// Default output path for project types not in PROJECT_TYPE_CONFIG
+const DEFAULT_OUTPUT = 'docs/pages.json';
+
+/**
+ * Resolve paths from --repo-root option
+ * Reads docs/project.json to determine project type
+ */
+function resolveFromRepoRoot(repoRoot) {
+  const resolvedRoot = path.resolve(repoRoot);
+  const projectJsonPath = path.join(resolvedRoot, 'docs', 'project.json');
+  
+  if (!fs.existsSync(projectJsonPath)) {
+    console.error(`Error: docs/project.json not found at ${projectJsonPath}`);
+    process.exit(1);
+  }
+  
+  let projectConfig;
+  try {
+    const content = fs.readFileSync(projectJsonPath, 'utf-8');
+    projectConfig = JSON.parse(content);
+  } catch (e) {
+    console.error(`Error: Failed to parse docs/project.json: ${e.message}`);
+    process.exit(1);
+  }
+  
+  const projectType = projectConfig.project_type;
+  
+  if (!projectType) {
+    console.error('Error: project_type not found in docs/project.json');
+    process.exit(1);
+  }
+  
+  const config = PROJECT_TYPE_CONFIG[projectType];
+
+  console.log(`Detected project type: ${projectType}`);
+  
+  // If no specific config, use default (single-page output)
+  if (!config) {
+    console.log(`No specific config for "${projectType}", using default single-page output`);
+    return {
+      input: null,
+      output: path.join(resolvedRoot, DEFAULT_OUTPUT),
+      projectType: projectType
+    };
+  }
+
+  return {
+    input: config.input ? path.join(resolvedRoot, config.input) : null,
+    output: path.join(resolvedRoot, config.output),
+    projectType: projectType
+  };
+}
+
+const args = parseArgs(process.argv.slice(2));
+
+if (args.help) {
+  console.log(HELP_TEXT);
+  process.exit(0);
+}
+
+if (args.version) {
+  console.log(VERSION);
+  process.exit(0);
+}
+
+// Resolve input/output paths
+let APP_FILE, OUTPUT_FILE, PROJECT_TYPE;
+
+if (args.repoRoot) {
+  // Use --repo-root to auto-detect paths
+  const paths = resolveFromRepoRoot(args.repoRoot);
+  APP_FILE = paths.input;
+  OUTPUT_FILE = paths.output;
+  PROJECT_TYPE = paths.projectType;
+} else if (args.input && args.output) {
+  // Use explicit --input and --output
+  APP_FILE = path.resolve(args.input);
+  OUTPUT_FILE = path.resolve(args.output);
+  PROJECT_TYPE = null;
+} else {
+  console.error('Error: Either --repo-root OR both --input and --output are required\n');
+  console.log(HELP_TEXT);
+  process.exit(1);
+}
+
+const OUTPUT_DIR = path.dirname(OUTPUT_FILE);
+
+/**
+ * Generate fixed pages.json for single-page project types (e.g., game)
+ * Uses projectType as both pageKey and title
+ */
+function generateFixedPages(projectType, outputFile, outputDir) {
+  const pages = [
+    {
+      pageKey: projectType,
+      title: projectType,
+      url: '/'
+    }
+  ];
+
+  // Ensure output directory exists
+  if (!fs.existsSync(outputDir)) {
+    fs.mkdirSync(outputDir, { recursive: true });
+  }
+
+  // Write output
+  fs.writeFileSync(outputFile, JSON.stringify(pages, null, 2) + '\n');
+
+  console.log(`Successfully generated ${outputFile}`);
+  console.log(`Generated fixed page for project type "${projectType}":`);
+  console.log(`  - / -> ${projectType} (${projectType})`);
+}
+
+// Handle single-page project types (input is null)
+if (APP_FILE === null && PROJECT_TYPE) {
+  // Skip route parsing for ppt projects - no pages.json needed
+  if (PROJECT_TYPE === 'ppt') {
+    console.log('PPT project detected, skipping route parsing');
+    process.exit(0);
+  }
+  generateFixedPages(PROJECT_TYPE, OUTPUT_FILE, OUTPUT_DIR);
+  process.exit(0);
+}
+
+/**
+ * Extract attribute value from JSX attribute
+ */
+function getAttributeValue(attr) {
+  if (!attr || !attr.value) return null;
+  
+  // String literal: path="/"
+  if (attr.value.type === 'StringLiteral') {
+    return attr.value.value;
+  }
+  
+  // JSX Expression: path={"/home"}
+  if (attr.value.type === 'JSXExpressionContainer') {
+    const expr = attr.value.expression;
+    if (expr.type === 'StringLiteral') {
+      return expr.value;
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Extract component name from element prop
+ * e.g., element={<Index />} -> "Index"
+ */
+function getElementComponentName(attr) {
+  if (!attr || !attr.value) return null;
+  
+  if (attr.value.type === 'JSXExpressionContainer') {
+    const expr = attr.value.expression;
+    if (expr.type === 'JSXElement') {
+      const openingElement = expr.openingElement;
+      if (openingElement.name.type === 'JSXIdentifier') {
+        return openingElement.name.name;
+      }
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Parse a single Route element and extract route info
+ */
+function parseRouteElement(jsxElement) {
+  const openingElement = jsxElement.openingElement;
+  
+  // Check if it's a Route element
+  if (openingElement.name.type !== 'JSXIdentifier' || 
+      openingElement.name.name !== 'Route') {
+    return null;
+  }
+  
+  const attributes = openingElement.attributes;
+  const routeInfo = {};
+  
+  for (const attr of attributes) {
+    if (attr.type !== 'JSXAttribute') continue;
+    
+    const attrName = attr.name.type === 'JSXIdentifier' 
+      ? attr.name.name 
+      : attr.name.name.name; // For namespaced names like data-*
+    
+    // Handle data-* attributes
+    if (attr.name.type === 'JSXNamespacedName') {
+      const namespace = attr.name.namespace.name;
+      const name = attr.name.name.name;
+      const fullName = `${namespace}-${name}`;
+      routeInfo[fullName] = getAttributeValue(attr);
+    } else {
+      switch (attrName) {
+        case 'path':
+          routeInfo.path = getAttributeValue(attr);
+          break;
+        case 'element':
+          routeInfo.component = getElementComponentName(attr);
+          break;
+        case 'data-genie-key':
+          routeInfo['data-genie-key'] = getAttributeValue(attr);
+          break;
+        case 'data-genie-title':
+          routeInfo['data-genie-title'] = getAttributeValue(attr);
+          break;
+        default:
+          // Capture any other data-* attributes
+          if (attrName.startsWith('data-')) {
+            routeInfo[attrName] = getAttributeValue(attr);
+          }
+      }
+    }
+  }
+  
+  return routeInfo;
+}
+
+/**
+ * Join parent path and child path to form full path
+ * Handles React Router path conventions:
+ * - Absolute paths (starting with /) are used as-is
+ * - Relative paths are joined with parent path
+ * - Index routes (no path or empty path) inherit parent path
+ */
+function joinPaths(parentPath, childPath) {
+  // No child path means index route, inherit parent path
+  if (!childPath || childPath === '') {
+    return parentPath;
+  }
+  
+  // Absolute path, use as-is
+  if (childPath.startsWith('/')) {
+    return childPath;
+  }
+  
+  // Relative path, join with parent
+  if (parentPath === '/') {
+    return '/' + childPath;
+  }
+  
+  return parentPath + '/' + childPath;
+}
+
+/**
+ * Recursively find all Route elements in AST
+ * @param {object} node - AST node to traverse
+ * @param {string} parentPath - Parent route path for nested routes
+ * @param {array} routes - Accumulated routes array
+ */
+function findRouteElements(node, parentPath = '', routes = []) {
+  if (!node) return routes;
+  
+  if (node.type === 'JSXElement') {
+    const routeInfo = parseRouteElement(node);
+    
+    if (routeInfo) {
+      // Calculate full path for this route
+      const fullPath = joinPaths(parentPath, routeInfo.path);
+      
+      // Only add routes that have a valid path (not layout-only routes without path)
+      if (routeInfo.path !== undefined) {
+        routes.push({
+          ...routeInfo,
+          path: fullPath
+        });
+      }
+      
+      // Check children with updated parent path
+      if (node.children) {
+        const newParentPath = fullPath || parentPath;
+        for (const child of node.children) {
+          findRouteElements(child, newParentPath, routes);
+        }
+      }
+    } else {
+      // Not a Route element, continue traversing children
+      if (node.children) {
+        for (const child of node.children) {
+          findRouteElements(child, parentPath, routes);
+        }
+      }
+    }
+  } else if (Array.isArray(node)) {
+    for (const child of node) {
+      findRouteElements(child, parentPath, routes);
+    }
+  } else if (typeof node === 'object') {
+    for (const key of Object.keys(node)) {
+      if (key !== 'loc' && key !== 'start' && key !== 'end') {
+        findRouteElements(node[key], parentPath, routes);
+      }
+    }
+  }
+  
+  return routes;
+}
+
+/**
+ * Generate a random 6-character alphanumeric string
+ */
+function randomKey() {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < 6; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
+/**
+ * Convert route info to output format
+ */
+function formatRoute(routeInfo) {
+  // Use data-genie-key as pageKey, fallback to random 6-char string
+  const pageKey = routeInfo['data-genie-key'] || randomKey();
+
+  // Use data-genie-title as title, fallback to path
+  const title = routeInfo['data-genie-title'] || routeInfo.path || '/';
+
+  return {
+    pageKey,
+    title,
+    url: routeInfo.path
+  };
+}
+
+/**
+ * Parse Taro miniprogram app.config.ts to extract pages
+ */
+function parseMiniprogramConfig(code) {
+  const pages = [];
+
+  // Parse pages array from defineAppConfig
+  // Match: pages: ['pages/index/index', 'pages/list/index']
+  const pagesMatch = code.match(/pages\s*:\s*\[([\s\S]*?)\]/);
+  if (pagesMatch) {
+    const pagesContent = pagesMatch[1];
+    // Extract page paths, handling both single and double quotes
+    const pageMatches = pagesContent.matchAll(/['"]([^'"]+)['"]/g);
+    for (const match of pageMatches) {
+      const pagePath = match[1];
+      // Convert 'pages/index/index' to page info
+      const parts = pagePath.split('/');
+      const pageName = parts[parts.length - 2] || parts[parts.length - 1]; // Get folder name
+      pages.push({
+        path: '/' + pagePath.replace(/\/index$/, ''),
+        pageName: pageName
+      });
+    }
+  }
+
+  // Parse tabBar to get titles
+  const tabBarMatch = code.match(/tabBar\s*:\s*\{[\s\S]*?list\s*:\s*\[([\s\S]*?)\]/);
+  const tabBarTitles = {};
+  if (tabBarMatch) {
+    const listContent = tabBarMatch[1];
+    // Match each tab item
+    const tabMatches = listContent.matchAll(/\{\s*pagePath\s*:\s*['"]([^'"]+)['"][\s\S]*?text\s*:\s*['"]([^'"]+)['"]/g);
+    for (const match of tabMatches) {
+      tabBarTitles[match[1]] = match[2];
+    }
+  }
+
+  // Parse window.navigationBarTitleText for default title
+  const defaultTitleMatch = code.match(/navigationBarTitleText\s*:\s*['"]([^'"]+)['"]/);
+  const defaultTitle = defaultTitleMatch ? defaultTitleMatch[1] : 'MiniProgram';
+
+  return pages.map(page => {
+    const fullPath = page.path.replace(/^\/pages/, '/pages') + '/index';
+    const tabTitle = tabBarTitles[fullPath.replace(/^\//, '')];
+
+    return {
+      pageKey: page.pageName,
+      title: tabTitle || defaultTitle,
+      url: page.path.replace(/^\/pages\//, '/').replace(/\/index$/, '') || '/'
+    };
+  });
+}
+
+/**
+ * Main function
+ */
+function main() {
+  // Skip route parsing for ppt projects - no pages.json needed
+  if (PROJECT_TYPE === 'ppt') {
+    console.log('PPT project detected, skipping route parsing');
+    process.exit(0);
+  }
+
+  // Check if input file exists
+  if (!fs.existsSync(APP_FILE)) {
+    console.error(`Error: Input file not found at ${APP_FILE}`);
+    process.exit(1);
+  }
+  
+  console.log(`Parsing routes from: ${APP_FILE}`);
+  
+  // Read the file
+  const code = fs.readFileSync(APP_FILE, 'utf-8');
+  
+  let pages;
+
+  // Check if this is a miniprogram config file
+  if (APP_FILE.endsWith('app.config.ts')) {
+    // Parse miniprogram config
+    pages = parseMiniprogramConfig(code);
+  } else {
+    // Parse React Router routes
+    const ast = parse(code, {
+      sourceType: 'module',
+      plugins: ['jsx', 'typescript']
+    });
+
+    // Find all Route elements
+    const routes = findRouteElements(ast);
+
+    if (routes.length === 0) {
+      console.warn('Warning: No routes found');
+    }
+
+    // Format routes for output
+    pages = routes
+      .filter(r => {
+        // Exclude catch-all routes (path contains *)
+        if (r.path && r.path.includes('*')) return false;
+        return true;
+      })
+      .map(formatRoute);
+  }
+
+  if (pages.length === 0) {
+    // Only warn for web projects, miniprogram may have empty pages during development
+    if (!APP_FILE.endsWith('app.config.ts')) {
+      console.warn('Warning: No routes found');
+    }
+  }
+  
+  // Sort: "/" first, then alphabetically by url
+  pages.sort((a, b) => {
+    if (a.url === '/') return -1;
+    if (b.url === '/') return 1;
+    return a.url.localeCompare(b.url);
+  });
+  
+  // Ensure output directory exists
+  if (!fs.existsSync(OUTPUT_DIR)) {
+    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+  }
+  
+  // Write output
+  fs.writeFileSync(OUTPUT_FILE, JSON.stringify(pages, null, 2) + '\n');
+  
+  console.log(`Successfully generated ${OUTPUT_FILE}`);
+  console.log(`Found ${pages.length} routes:`);
+  pages.forEach(p => console.log(`  - ${p.url} -> ${p.pageKey} (${p.title})`));
+}
+
+main();

@@ -19,10 +19,26 @@ namespace Framework\Core;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * 框架彩蛋类
+ *
+ * 该类提供了一些隐藏的框架功能，用于展示框架版本信息和开发团队。
+ * 这些彩蛋路由可以通过特定的URL访问触发。
+ *
+ * 彩蛋路由：
+ * - /version (GET): 显示框架版本信息
+ * - /team (GET): 显示开发团队信息
+ *
+ * @package Framework\Core
+ */
 class EasterEgg
 {
     /**
-     * 支持的语言文案.
+     * 支持的语言文案配置
+     *
+     * 包含中文和英文两种语言的文案，根据客户端语言自动选择。
+     *
+     * @var array<string, array<string, string>>
      */
     private static $messages = [
         'zh' => [
@@ -50,7 +66,11 @@ class EasterEgg
     ];
 
     /**
-     * 开发团队名单（可动态配置）.
+     * 开发团队名单配置
+     *
+     * 可以动态配置，用于展示开发团队信息。
+     *
+     * @var array<int, array<string, string>>
      */
     private static $team = [
         [
@@ -60,12 +80,28 @@ class EasterEgg
         ],
     ];
 
+    /**
+     * 版本彩蛋路由路径
+     *
+     * @var string
+     */
     private static $path = '/version';
 
+    /**
+     * 团队信息彩蛋路由路径
+     *
+     * @var string
+     */
     private static $TeamPath = '/team';
 
     /**
-     * 检查是否触发 版本彩蛋.
+     * 检查是否触发版本彩蛋
+     *
+     * 判断请求路径是否为版本信息路由，且请求方法为GET。
+     *
+     * @param Request $request HTTP请求对象
+     *
+     * @return bool 如果触发版本彩蛋返回true，否则返回false
      */
     public static function isTriggeredVersion(Request $request): bool
     {
@@ -73,7 +109,13 @@ class EasterEgg
     }
 
     /**
-     * 检查是否触发 团队名单彩蛋.
+     * 检查是否触发团队名单彩蛋
+     *
+     * 判断请求路径是否为团队信息路由，且请求方法为GET。
+     *
+     * @param Request $request HTTP请求对象
+     *
+     * @return bool 如果触发团队彩蛋返回true，否则返回false
      */
     public static function isTriggeredTeam(Request $request): bool
     {
@@ -81,7 +123,12 @@ class EasterEgg
     }
 
     /**
-     * 获取版本号页面（GET）.
+     * 获取版本号页面响应
+     *
+     * 生成包含框架版本信息的HTML响应页面。
+     * 根据客户端语言自动选择对应语言的文案。
+     *
+     * @return Response 包含版本信息的HTTP响应对象
      */
     public static function getResponse(): Response
     {
@@ -96,7 +143,7 @@ class EasterEgg
     <meta charset="UTF-8">
     <title>{$msg['title']}</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                background: #f7f9fc; color: #333; padding: 40px; text-align: center; }
         h1 { color: #2c3e50; }
         .tip { font-size: 0.9em; color: #7f8c8d; margin-top: 20px; }
@@ -116,7 +163,12 @@ HTML;
     }
 
     /**
-     * 获取开发团队页面（POST）.
+     * 获取开发团队页面响应
+     *
+     * 生成包含开发团队信息的HTML响应页面。
+     * 根据客户端语言自动选择对应语言的文案。
+     *
+     * @return Response 包含团队信息的HTTP响应对象
      */
     public static function getTeamResponse(): Response
     {
@@ -143,7 +195,7 @@ HTML;
     <meta charset="UTF-8">
     <title>{$msg['team_title']}</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                background: #f0f4f8; color: #2c3e50; padding: 40px; text-align: left; max-width: 600px; margin: auto; }
         h1 { color: #27ae60; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
         a { color: #3498db; text-decoration: none; }
@@ -165,7 +217,11 @@ HTML;
     }
 
     /**
-     * 返回 GET 彩蛋的路由标记.
+     * 返回GET彩蛋的路由标记
+     *
+     * 生成版本彩蛋路由的标记信息，用于路由匹配。
+     *
+     * @return array 包含控制器、方法、参数和中间件的路由标记数组
      */
     public static function getRouteMarker(): array
     {
@@ -178,7 +234,11 @@ HTML;
     }
 
     /**
-     * 返回 POST 彩蛋的路由标记.
+     * 返回POST彩蛋的路由标记
+     *
+     * 生成团队彩蛋路由的标记信息，用于路由匹配。
+     *
+     * @return array 包含控制器、方法、参数和中间件的路由标记数组
      */
     public static function getTeamRouteMarker(): array
     {
@@ -191,7 +251,12 @@ HTML;
     }
 
     /**
-     * 语言检测.
+     * 检测客户端语言
+     *
+     * 根据HTTP请求头中的Accept-Language检测客户端首选语言。
+     * 如果检测到的语言不在支持列表中，则默认返回英文。
+     *
+     * @return string 语言代码（'zh' 或 'en'）
      */
     private static function detectLanguage(): string
     {

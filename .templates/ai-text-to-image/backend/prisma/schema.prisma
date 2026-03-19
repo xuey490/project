@@ -1,0 +1,41 @@
+// Prisma Schema for Application
+// PostgreSQL database with TypeScript ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// 用户表 - ID 与 Supabase Auth 用户 ID 对应
+model User {
+  id        String   @id // Supabase user.id
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // 关联
+  images Image[]
+}
+
+// 生成的图片表
+model Image {
+  id          String   @id @default(uuid())
+  userId      String
+  url         String   @db.Text // base64 图片数据可能很大
+  prompt      String
+  aspectRatio String   @default("1:1")
+  quality     String   @default("medium")
+  style       String   @default("auto")
+  createdAt   DateTime @default(now())
+
+  // 关联
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}

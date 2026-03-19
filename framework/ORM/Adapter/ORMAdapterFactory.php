@@ -21,12 +21,23 @@ use Framework\ORM\Exception\Exception;
 use Framework\ORM\Factories\LaravelORMFactory;
 use Framework\ORM\Factories\ThinkphpORMFactory;
 
+/**
+ * ORM适配器工厂类
+ * 
+ * 用于创建不同ORM框架的适配器实例，支持Laravel Eloquent和ThinkPHP ORM。
+ * 采用工厂模式，根据配置动态创建对应的ORM适配器。
+ */
 class ORMAdapterFactory
 {
     /**
-     * @param  string              $mode  模式 (thinkORM / laravelORM)
-     * @param  mixed               $model 模型类名或实例
-     * @return ORMAdapterInterface
+     * 创建ORM适配器实例
+     * 
+     * 根据指定的ORM模式创建对应的工厂实例，支持thinkORM和laravelORM两种模式。
+     * 
+     * @param  string              $mode  ORM模式，可选值：thinkORM / laravelORM
+     * @param  mixed               $model 模型类名或实例，用于初始化ORM工厂
+     * @return ORMAdapterInterface 返回对应ORM的适配器实例
+     * @throws Exception           当传入无效的ORM类型时抛出异常
      */
     public static function createAdapter(string $mode, mixed $model = null): mixed
     {

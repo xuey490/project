@@ -19,35 +19,84 @@ namespace Framework\Session;
 use Symfony\Component\HttpFoundation\Session\Storage\Handler\RedisSessionHandler;
 
 /**
- * RedisGroupSessionHandler.
+ * 支持分组前缀和分布式锁的 Redis Session 处理器.
  *
- * - 支持 group_prefix（不会传递给父类）
- * - 实现 Redis 分布式锁（SET NX PX + Lua 释放）以保证高并发安全写入
+ * 继承 Symfony 的 RedisSessionHandler，扩展以下功能：
+ * - group_prefix（分组前缀）：支持多应用共享 Redis 时的命名空间隔离
+ * - 分布式锁：使用 Redis SET NX PX 命令和 Lua 脚本实现高并发安全的写入
+ * - 自旋锁等待：可配置锁获取的重试策略
  *
- * Options 支持（兼容 Symfony 的常规选项）：
- *  - prefix (string)         : 键前缀（父类支持）
- *  - ttl (int)               : session TTL（秒）
- *  - locking (bool)          : 是否启用显式锁（默认 true）
- *  - spin_lock_wait (int)    : 自旋每次等待，单位微秒（默认 150000）
- *  - lock_ttl (int)          : 锁过期时间，单位毫秒（默认 30000）
- *  - group_prefix (string)   : 自定义分组前缀（会拼接到 prefix 前面）
+ * 配置选项（Options）：
+ * - prefix (string)         : 键前缀（父类支持）
+ * - ttl (int)               : Session TTL（秒）
+ * - locking (bool)          : 是否启用显式锁，默认 true
+ * - spin_lock_wait (int)    : 自旋每次等待时间，单位微秒，默认 150000
+ * - lock_ttl (int)          : 锁过期时间，单位毫秒，默认 30000
+ * - group_prefix (string)   : 自定义分组前缀，会拼接到 prefix 前面
+ *
+ * @package Framework\Session
+ * @extends RedisSessionHandler
  */
 class RedisGroupSessionHandler extends RedisSessionHandler
 {
+    /**
+     * Redis 客户端实例.
+     *
+     * @var object
+     */
     protected object $redis;
 
+    /**
+     * Session 本地 TTL（秒）.
+     *
+     * @var int
+     */
     protected int $ttlLocal;
 
+    /**
+     * 是否启用分布式锁.
+     *
+     * @var bool
+     */
     protected bool $locking = true;
 
+    /**
+     * 自旋锁等待时间（微秒）.
+     *
+     * @var int
+     */
     protected int $spinLockWait = 150000; // 微秒
 
+    /**
+     * 锁过期时间（毫秒）.
+     *
+     * @var int
+     */
     protected int $lockTtl = 30000;       // 毫秒
 
+    /**
+     * Session 键前缀.
+     *
+     * @var string
+     */
     protected string $prefix = 'session:';
 
+    /**
+     * 分组前缀，用于多应用隔离.
+     *
+     * @var string
+     */
     protected string $groupPrefix = '';
 
+    /**
+     * 构造函数，初始化 Redis Session 处理器.
+     *
+     * 处理自定义配置选项，设置分组前缀和分布式锁参数，
+     * 然后调用父类构造函数完成基础初始化。
+     *
+     * @param object $redis   Redis 客户端实例（支持 setex、set、get、del、eval 等方法）
+     * @param array  $options 配置选项数组
+     */
     public function __construct(object $redis, array $options = [])
     {
         // 处理自定义 option（不要把 group_prefix 传给父类）
@@ -88,7 +137,15 @@ class RedisGroupSessionHandler extends RedisSessionHandler
     }
 
     /**
-     * 重写 write() —— 使用分布式锁保护写入（高并发安全）.
+     * 写入 Session 数据（使用分布式锁保护高并发安全）.
+     *
+     * 如果启用锁机制，在写入前会获取分布式锁，写入完成后释放。
+     * 不启用锁则直接使用 setex 写入。
+     *
+     * @param string $sessionId Session ID
+     * @param string $data      序列化的 Session 数据
+     *
+     * @return bool 写入成功返回 true，失败返回 false
      */
     public function write(string $sessionId, string $data): bool
     {
@@ -136,7 +193,13 @@ class RedisGroupSessionHandler extends RedisSessionHandler
     }
 
     /**
-     * read 保持简单与健壮.
+     * 读取 Session 数据.
+     *
+     * 从 Redis 中获取指定 Session ID 的数据，异常时返回空字符串。
+     *
+     * @param string $sessionId Session ID
+     *
+     * @return string Session 数据内容，不存在或异常时返回空字符串
      */
     public function read(string $sessionId): string
     {
@@ -150,7 +213,13 @@ class RedisGroupSessionHandler extends RedisSessionHandler
     }
 
     /**
-     * destroy.
+     * 销毁指定 Session.
+     *
+     * 从 Redis 中删除指定 Session ID 对应的键。
+     *
+     * @param string $sessionId Session ID
+     *
+     * @return bool 始终返回 true
      */
     public function destroy(string $sessionId): bool
     {
@@ -163,7 +232,13 @@ class RedisGroupSessionHandler extends RedisSessionHandler
     }
 
     /**
-     * gc: Redis TTL 自管理.
+     * 垃圾回收.
+     *
+     * Redis 使用 TTL 自动过期机制，无需手动清理。
+     *
+     * @param int $maxlifetime Session 最大生命周期（秒），此参数被忽略
+     *
+     * @return false|int 始终返回 0，表示由 Redis TTL 管理
      */
     public function gc(int $maxlifetime): false|int
     {
@@ -171,7 +246,13 @@ class RedisGroupSessionHandler extends RedisSessionHandler
     }
 
     /**
-     * make session key.
+     * 生成 Session 存储键名.
+     *
+     * 格式：{prefix}{sessionId}
+     *
+     * @param string $sessionId Session ID
+     *
+     * @return string 完整的 Redis 键名
      */
     protected function sessionKey(string $sessionId): string
     {
@@ -180,7 +261,14 @@ class RedisGroupSessionHandler extends RedisSessionHandler
     }
 
     /**
-     * lock key for this session id.
+     * 生成分布式锁键名.
+     *
+     * 格式：{prefix}lock:{sessionId}
+     * 与 Session 数据键区分，添加 'lock:' 前缀。
+     *
+     * @param string $sessionId Session ID
+     *
+     * @return string 锁的 Redis 键名
      */
     protected function lockKey(string $sessionId): string
     {
@@ -189,7 +277,14 @@ class RedisGroupSessionHandler extends RedisSessionHandler
     }
 
     /**
-     * Acquire lock using SET NX PX, return token string on success, false on fail.
+     * 获取分布式锁.
+     *
+     * 使用 Redis SET NX PX 命令实现原子性锁获取。
+     * 支持自旋重试，最大等待时间约 3 秒。
+     *
+     * @param string $sessionId Session ID
+     *
+     * @return false|string 成功返回锁令牌（token），失败返回 false
      */
     protected function acquireLock(string $sessionId): false|string
     {
@@ -236,7 +331,15 @@ class RedisGroupSessionHandler extends RedisSessionHandler
     }
 
     /**
-     * Release lock only if token matches (atomic via Lua).
+     * 释放分布式锁.
+     *
+     * 使用 Lua 脚本实现原子性锁释放，确保只有持有令牌的客户端才能释放锁。
+     * 如果 Lua 不可用，则降级为非原子的比较删除方式。
+     *
+     * @param string $sessionId Session ID
+     * @param string $token     获取锁时返回的令牌
+     *
+     * @return bool 释放成功返回 true，失败返回 false
      */
     protected function releaseLock(string $sessionId, string $token): bool
     {

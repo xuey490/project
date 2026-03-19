@@ -1,0 +1,20 @@
+// Global styles
+// NOTE: MiniProgram does not support * selector, use page and view instead
+page, view {
+  box-sizing: border-box;
+}
+
+page {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  font-size: 32px;
+  line-height: 1.6;
+  color: #333;
+  background-color: #f5f5f5;
+}
+
+.container {
+  min-height: 100vh;
+  padding: 32px;
+}

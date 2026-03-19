@@ -1,0 +1,17 @@
+[[app]]
+name = "docker"
+cmd = "docker ps"
+autoRun = true
+port = 3000
+
+[[app]]
+name = "game-basic"
+cmd = "cd game-basic && npm run dev"
+autoRun = true
+port = 5173
+
+[[app]]
+name = "backend"
+cmd = "cd backend && npm run dev"
+autoRun = true
+port = 3000

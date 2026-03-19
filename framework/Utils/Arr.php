@@ -21,6 +21,14 @@ use InvalidArgumentException;
 use stdClass;
 use Illuminate\Support\Collection;
 
+/**
+ * 数组工具类
+ *
+ * 提供丰富的数组操作方法，包括数组访问判断、元素增删、数组转换、
+ * 排序、过滤、合并等常用操作，支持多维数组和关联数组的处理。
+ *
+ * @package Framework\Utils
+ */
 class Arr
 {
 

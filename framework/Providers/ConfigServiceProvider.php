@@ -24,9 +24,28 @@ use Symfony\Component\DependencyInjection\Loader\Configurator\ContainerConfigura
 
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 
+/**
+ * 配置服务提供者
+ *
+ * 负责注册和管理框架的配置服务，提供配置文件的加载和缓存功能。
+ * 主要功能包括：
+ * - 注册 ConfigCache 服务，用于配置的持久化缓存
+ * - 注册 ConfigService 服务，提供统一的配置访问接口
+ * - 支持排除特定配置文件（如 routes.php、services.php）
+ */
 final class ConfigServiceProvider implements ServiceProviderInterface
 {
-    // public function __invoke(ContainerConfigurator $configurator): void
+    /**
+     * 注册配置服务到依赖注入容器
+     *
+     * 注册以下服务：
+     * - config_cache：配置缓存服务，将配置缓存到文件中以提高性能
+     * - config：配置服务别名，便于简洁访问
+     * - ConfigService：配置服务类，提供配置加载和访问功能
+     *
+     * @param ContainerConfigurator $configurator 容器配置器，用于注册服务定义
+     * @return void
+     */
     public function register(ContainerConfigurator $configurator): void
     {
         $services = $configurator->services();
@@ -62,7 +81,14 @@ final class ConfigServiceProvider implements ServiceProviderInterface
             ->public();
     }
 
+    /**
+     * 启动配置服务
+     *
+     * 该方法在服务注册后调用，用于执行额外的初始化操作。
+     * 当前实现为空，可根据需要添加启动逻辑。
+     *
+     * @param ContainerInterface $container 依赖注入容器实例
+     * @return void
+     */
     public function boot(ContainerInterface $container): void
-    # public function boot(ContainerConfigurator $container): void
-    {}
 }

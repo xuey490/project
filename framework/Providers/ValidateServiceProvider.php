@@ -24,12 +24,26 @@ use think\Validate;
 
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 
-/*
-* 注册Validate全局服务
-*/
+/**
+ * 验证服务提供者
+ *
+ * 负责注册和管理框架的数据验证服务，基于 ThinkPHP 验证器实现。
+ * 主要功能包括：
+ * - 注册 ThinkValidatorFactory 工厂类，用于创建验证器实例
+ * - 注册 validate 服务，提供数据验证功能
+ */
 final class ValidateServiceProvider implements ServiceProviderInterface
 {
-    // public function __invoke(ContainerConfigurator $configurator): void
+    /**
+     * 注册验证服务到依赖注入容器
+     *
+     * 注册以下服务：
+     * - ThinkValidatorFactory：验证器工厂类，用于创建验证器实例
+     * - validate：ThinkPHP 验证器实例，通过工厂方法创建
+     *
+     * @param ContainerConfigurator $configurator 容器配置器，用于注册服务定义
+     * @return void
+     */
     public function register(ContainerConfigurator $configurator): void
     {
         $services = $configurator->services();
