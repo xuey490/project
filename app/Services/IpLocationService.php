@@ -114,36 +114,35 @@ class IpLocationService extends BaseService
     protected function fetchLocation(string $ip): string
     {
         try {
-                // 使用免费的IP定位API (示例：ip-api.com)
-                $url = "http://ip-api.com/json/{$ip}?lang=zh-CN";
+            // 使用免费的IP定位API (示例：ip-api.com)
+            $url = "http://ip-api.com/json/{$ip}?lang=zh-CN";
 
-                $ch = curl_init();
-                curl_setopt($ch, CURLOPT_URL, $url);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
 
-                $response = curl_exec($ch);
-                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-                curl_close($ch);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
 
-                if ($httpCode === 200 && $response) {
-                    $data = json_decode($response, true);
+            if ($httpCode === 200 && $response) {
+                $data = json_decode($response, true);
 
-                    if (isset($data['status']) && $data['status'] === 'success') {
-                        $country = $data['country'] ?? '';
-                        $region = $data['regionName'] ?? '';
-                        $city = $data['city'] ?? '';
+                if (isset($data['status']) && $data['status'] === 'success') {
+                    $country = $data['country'] ?? '';
+                    $region = $data['regionName'] ?? '';
+                    $city = $data['city'] ?? '';
 
-                        $location = trim($country . ' ' . $region . ' ' . $city);
-                        return $location ?: '未知';
-                    }
+                    $location = trim($country . ' ' . $region . ' ' . $city);
+                    return $location ?: '未知';
                 }
-            } catch (\Exception $e) {
-                    // 忽略异常
             }
-
-            return '未知';
+        } catch (\Exception $e) {
+            // 忽略异常
         }
+
+        return '未知';
     }
 
     /**
