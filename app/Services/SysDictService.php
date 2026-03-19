@@ -17,7 +17,7 @@ use App\Models\SysDictData;
 use App\Dao\SysDictTypeDao;
 use App\Dao\SysDictDataDao;
 use Framework\Basic\BaseService;
-use think\facade\Cache;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * SysDictService 数据字典服务

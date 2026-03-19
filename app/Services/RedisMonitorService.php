@@ -298,7 +298,7 @@ class RedisMonitorService extends BaseService
         try {
             $size = [];
             $config = $this->redis->config('get', 'databases');
-            $databases = (int)$config[0] ?? 16;
+            $databases = isset($config[0]) ? (int)$config[0] : 16;
 
             for ($i = 0; $i < $databases; $i++) {
                 $dbSize = $this->redis->info('memory', 'db' . $i);
