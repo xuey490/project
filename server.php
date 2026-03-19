@@ -81,51 +81,51 @@ function log_info(string $msg): void {
 // ----------------------------------------------------------------------
 // Symfony Request / Response 转换
 // ----------------------------------------------------------------------
-
-
+// ----------------------------------------------------------------------
+// Symfony Request / Response 转换
 function convert_to_workerman_response(SymfonyResponse $res): WorkermanResponse {
     $headers = [];
 
-    // 遍历所有 headers，保留原始结构
     foreach ($res->headers->allPreserveCase() as $name => $values) {
-        // Symfony 返回的 $values 总是 array
         if (strtolower($name) === 'set-cookie') {
-            // Set-Cookie 必须保持为数组，每个 cookie 一项
-            $headers[$name] = $values; // 直接赋值数组
+            $headers[$name] = $values;
         } else {
-            // 其他 header 合并为字符串（如果多值）
             $headers[$name] = is_array($values) ? implode(', ', $values) : $values;
         }
     }
 
     $content = $res->getContent();
-    if (!isset($headers['Content-Length']) && $content !== '') {
-        $headers['Content-Length'] = strlen($content);
+
+    // 【修复 Duplicate Content-Length 问题】
+    // Workerman 会在 __toString() 中自动添加 Content-Length（如果没有 Transfer-Encoding）
+    // 这里不需要手动添加，否则会导致重复的 Content-Length 头
+    // 保留 Transfer-Encoding 头（如果有），让 Workerman 正确处理
+    // $headers['Transfer-Encoding'] = 'chunked'; // 如果需要分块传输，可以取消注释
+
+    // 移除可能存在的 Content-Length 头，让 Workerman 自动计算
+    if (isset($headers['content-length'])) {
+        unset($headers['content-length']);
     }
 
     return new WorkermanResponse($res->getStatusCode(), $headers, $content);
 }
 
-
+/**
+ * 修复核心：正确解析 Workerman 上传文件并转换为 Symfony UploadedFile 格式
+ */
 function convert_to_symfony_request(WorkermanRequest $request): SymfonyRequest
 {
-    // 基础请求信息
     $method = strtoupper($request->method());
     $uri = $request->uri();
     $rawBody = $request->rawBody();
     $remoteIp = $request->connection?->getRemoteIp() ?? '127.0.0.1';
     $remotePort = $request->connection?->getRemotePort() ?? 0;
-	
-	//$session =  $request->session();
 
-    // 解析 URI 中的查询字符串（兼容 Workerman 可能未自动解析的场景）
     $uriParts = parse_url($uri);
     $pathInfo = $uriParts['path'] ?? '/';
     $queryString = $uriParts['query'] ?? '';
 
-    // 请求参数
     $get = $request->get() ?? [];
-    // 合并 URI 中的查询参数（避免 Workerman 解析不全）
     if (!empty($queryString)) {
         parse_str($queryString, $queryParams);
         $get = array_merge($queryParams, $get);
@@ -133,17 +133,70 @@ function convert_to_symfony_request(WorkermanRequest $request): SymfonyRequest
 
     $post = $request->post() ?? [];
     $cookies = $request->cookie() ?? [];
-    $files = $request->file() ?? [];
-    $headers = $request->header() ?? [];
-	
-	$parameters = array_merge($get, $post);
-	
-	#$session->set('workerman_key', 'workerman_value');
-	#$session->save();
+    
+    // ========== 核心修复1：正确解析 Workerman 上传文件 ==========
+    $symfonyFiles = [];
+    $wmFiles = $request->file() ?? [];
+    //error_log('1.Workerman files: ' . print_r($wmFiles, true));
+    
+    #$wmFiles = $request->file() ?? [];
+    #$symfonyFiles = [];
 
-    // 构建服务器环境变量（Symfony 依赖大量SERVER参数）
+    foreach ($wmFiles as $field => $fileInfo) {
+
+        // 情况1：单文件
+        if (isset($fileInfo['tmp_name'])) {
+
+            if (!empty($fileInfo['tmp_name']) && file_exists($fileInfo['tmp_name'])) {
+
+                $symfonyFiles[$field] = new UploadedFile(
+                    $fileInfo['tmp_name'],
+                    $fileInfo['name'] ?? '',
+                    $fileInfo['type'] ?? null,
+                    $fileInfo['error'] ?? UPLOAD_ERR_OK,
+                    true
+                );
+            }
+
+            continue;
+        }
+
+        // 情况2：多文件（Workerman格式）
+        if (is_array($fileInfo)) {
+
+            $files = [];
+
+            foreach ($fileInfo as $index => $item) {
+
+                if (
+                    !isset($item['tmp_name']) ||
+                    empty($item['tmp_name']) ||
+                    !file_exists($item['tmp_name'])
+                ) {
+                    continue;
+                }
+
+                $files[$index] = new UploadedFile(
+                    $item['tmp_name'],
+                    $item['name'] ?? '',
+                    $item['type'] ?? null,
+                    $item['error'] ?? UPLOAD_ERR_OK,
+                    true
+                );
+            }
+
+            if ($files) {
+                $symfonyFiles[$field] = $files;
+            }
+        }
+    }
+    //dump($symfonyFiles);
+
+    $headers = $request->header() ?? [];
+
+    $parameters = array_merge($get, $post);
+
     $server = [
-        // 基础 HTTP 信息
         'REQUEST_METHOD' => $method,
         'REQUEST_URI' => $uri,
         'PATH_INFO' => $pathInfo,
@@ -154,47 +207,41 @@ function convert_to_symfony_request(WorkermanRequest $request): SymfonyRequest
         'HTTP_HOST' => $headers['host'] ?? 'localhost',
         'CONTENT_LENGTH' => $headers['content-length'] ?? strlen($rawBody),
         'CONTENT_TYPE' => $headers['content-type'] ?? '',
-        // PHP 环境标识（避免 Symfony 认为是 CLI 环境）
         'PHP_SELF' => $pathInfo,
         'SCRIPT_NAME' => $pathInfo,
-        'SCRIPT_FILENAME' => '', // 可根据实际项目路径填写
+        'SCRIPT_FILENAME' => '',
     ];
 
-    // 转换请求头为 SERVER 变量（HTTP_* 格式）
     foreach ($headers as $name => $value) {
         $key = 'HTTP_' . strtoupper(str_replace('-', '_', $name));
-        // 处理多值头（如 Set-Cookie 可能是数组）
         $server[$key] = is_array($value) ? implode(', ', $value) : $value;
     }
 
-    // 处理转发 IP（优先使用 X-Forwarded-For，不存在则用 remoteIp）
     if (!isset($server['HTTP_X_FORWARDED_FOR'])) {
         $server['HTTP_X_FORWARDED_FOR'] = $remoteIp;
     }
 
-    // 处理特殊方法（如 PUT、DELETE 等可能携带的表单数据）
     if (in_array($method, ['PUT', 'DELETE', 'PATCH']) && empty($post) && !empty($rawBody)) {
         parse_str($rawBody, $parsedPost);
         $post = array_merge($post, $parsedPost);
     }
 
-    // 构建并返回 Symfony Request
-
+    // ========== 核心修复2：传入解析后的 Symfony 文件数组 ==========
     $symfonyRequest = new SymfonyRequest(
         $get,
         $post,
-        [], // attributes（通常由 Symfony 路由填充）
+        [],
         $cookies,
-        $files,
+        $symfonyFiles, // 替换原来的 $request->file()
         $server,
         $rawBody
     );
-    #$session = new Session();
-	$session =app('session');
-    $symfonyRequest->setSession($session);
-	
-	return $symfonyRequest;
-	
+    #$session = app('session');
+    #$symfonyRequest->setSession($session);
+
+    //error_log('Symfony Request files->all(): ' . print_r($symfonyRequest->files->all(), true));
+    //dump($symfonyRequest->files->all());
+    return $symfonyRequest;
 }
 
 
@@ -299,6 +346,71 @@ function startWorkerProcess() {
     }
     
     return $resource;
+}
+
+/**
+ * 获取文件的 MIME 类型
+ * @param string $filePath 文件路径
+ * @return string MIME 类型
+ */
+function get_mime_type(string $filePath): string
+{
+    // 基于文件扩展名的 MIME 类型映射
+    $mimeTypes = [
+        // 图片
+        'jpg'  => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png'  => 'image/png',
+        'gif'  => 'image/gif',
+        'webp' => 'image/webp',
+        'svg'  => 'image/svg+xml',
+        'ico'  => 'image/x-icon',
+        'bmp'  => 'image/bmp',
+        
+        // 视频
+        'mp4'  => 'video/mp4',
+        'webm' => 'video/webm',
+        'ogg'  => 'video/ogg',
+        
+        // 音频
+        'mp3'  => 'audio/mpeg',
+        'wav'  => 'audio/wav',
+        'ogg'  => 'audio/ogg',
+        
+        // 文档
+        'pdf'  => 'application/pdf',
+        'doc'  => 'application/msword',
+        'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'xls'  => 'application/vnd.ms-excel',
+        'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'ppt'  => 'application/vnd.ms-powerpoint',
+        'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        
+        // 文本
+        'txt'  => 'text/plain',
+        'html' => 'text/html',
+        'css'  => 'text/css',
+        'js'   => 'application/javascript',
+        'json' => 'application/json',
+        'xml'  => 'application/xml',
+        
+        // 压缩文件
+        'zip'  => 'application/zip',
+        'rar'  => 'application/vnd.rar',
+        '7z'   => 'application/x-7z-compressed',
+        'tar'  => 'application/x-tar',
+        'gz'   => 'application/gzip',
+        
+        // 字体
+        'woff' => 'font/woff',
+        'woff2' => 'font/woff2',
+        'ttf'  => 'font/ttf',
+        'eot'  => 'application/vnd.ms-fontobject',
+    ];
+    
+    $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+    
+    return $mimeTypes[$extension] ?? 'application/octet-stream';
 }
 
 // ----------------------------------------------------------------------
@@ -446,6 +558,54 @@ if (isWorkerProcess()) {
 
     $worker->onMessage = function(TcpConnection $connection, WorkermanRequest $req) use (&$framework) {
         try {
+            // ==================== 静态文件处理 ====================
+            $uri = $req->uri();
+            $pathInfo = parse_url($uri, PHP_URL_PATH);
+            
+            // 检查是否是静态文件请求
+            $staticDirs = ['/uploads', '/assets', '/css', '/js', '/images', '/favicon.ico'];
+            $isStaticFile = false;
+            
+            foreach ($staticDirs as $dir) {
+                if (strpos($pathInfo, $dir) === 0) {
+                    $isStaticFile = true;
+                    break;
+                }
+            }
+            
+            if ($isStaticFile) {
+                $filePath = __DIR__ . '/public' . $pathInfo;
+                
+                // 安全检查：防止路径遍历攻击
+                $realPath = realpath($filePath);
+                $publicDir = realpath(__DIR__ . '/public');
+                
+                if ($realPath && strpos($realPath, $publicDir) === 0 && is_file($realPath)) {
+                    // 返回静态文件
+                    $contentType = get_mime_type($realPath);
+                    $fileContent = file_get_contents($realPath);
+                    
+                    // 添加缓存控制头
+                    $headers = [
+                        'Content-Type' => $contentType,
+                        'Cache-Control' => 'public, max-age=86400', // 缓存1天
+                    ];
+                    
+                    // 图片等静态文件添加更长的缓存时间
+                    if (preg_match('/\.(jpg|jpeg|png|gif|webp|svg|ico)$/i', $realPath)) {
+                        $headers['Cache-Control'] = 'public, max-age=2592000'; // 缓存30天
+                    }
+                    
+                    $connection->send(new WorkermanResponse(200, $headers, $fileContent));
+                    return;
+                }
+                
+                // 文件不存在，返回 404
+                $connection->send(new WorkermanResponse(404, ['Content-Type' => 'text/plain'], 'File Not Found'));
+                return;
+            }
+            // ==================== 静态文件处理结束 ====================
+
             if ($req->path() === '/_health') {
                 update_health();
                 $data = file_get_contents(HEALTH_FILE);

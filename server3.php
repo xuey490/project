@@ -24,6 +24,7 @@ use Workerman\Timer;
 use Workerman\Protocols\Http;
 use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Framework\Core\Framework;
 use Framework\Schema\SchemaWarmup;
 use Framework\Schema\SchemaRegistry;
@@ -72,13 +73,24 @@ function convert_to_workerman_response(SymfonyResponse $res): WorkermanResponse 
     }
 
     $content = $res->getContent();
-    if (!isset($headers['Content-Length']) && $content !== '') {
-        $headers['Content-Length'] = strlen($content);
+
+    // 【修复 Duplicate Content-Length 问题】
+    // Workerman 会在 __toString() 中自动添加 Content-Length（如果没有 Transfer-Encoding）
+    // 这里不需要手动添加，否则会导致重复的 Content-Length 头
+    // 保留 Transfer-Encoding 头（如果有），让 Workerman 正确处理
+    // $headers['Transfer-Encoding'] = 'chunked'; // 如果需要分块传输，可以取消注释
+
+    // 移除可能存在的 Content-Length 头，让 Workerman 自动计算
+    if (isset($headers['content-length'])) {
+        unset($headers['content-length']);
     }
 
     return new WorkermanResponse($res->getStatusCode(), $headers, $content);
 }
 
+/**
+ * 修复核心：正确解析 Workerman 上传文件并转换为 Symfony UploadedFile 格式
+ */
 function convert_to_symfony_request(WorkermanRequest $request): SymfonyRequest
 {
     $method = strtoupper($request->method());
@@ -99,7 +111,65 @@ function convert_to_symfony_request(WorkermanRequest $request): SymfonyRequest
 
     $post = $request->post() ?? [];
     $cookies = $request->cookie() ?? [];
-    $files = $request->file() ?? [];
+    
+    // ========== 核心修复1：正确解析 Workerman 上传文件 ==========
+    $symfonyFiles = [];
+    $wmFiles = $request->file() ?? [];
+    //error_log('1.Workerman files: ' . print_r($wmFiles, true));
+    
+    #$wmFiles = $request->file() ?? [];
+    #$symfonyFiles = [];
+
+    foreach ($wmFiles as $field => $fileInfo) {
+
+        // 情况1：单文件
+        if (isset($fileInfo['tmp_name'])) {
+
+            if (!empty($fileInfo['tmp_name']) && file_exists($fileInfo['tmp_name'])) {
+
+                $symfonyFiles[$field] = new UploadedFile(
+                    $fileInfo['tmp_name'],
+                    $fileInfo['name'] ?? '',
+                    $fileInfo['type'] ?? null,
+                    $fileInfo['error'] ?? UPLOAD_ERR_OK,
+                    true
+                );
+            }
+
+            continue;
+        }
+
+        // 情况2：多文件（Workerman格式）
+        if (is_array($fileInfo)) {
+
+            $files = [];
+
+            foreach ($fileInfo as $index => $item) {
+
+                if (
+                    !isset($item['tmp_name']) ||
+                    empty($item['tmp_name']) ||
+                    !file_exists($item['tmp_name'])
+                ) {
+                    continue;
+                }
+
+                $files[$index] = new UploadedFile(
+                    $item['tmp_name'],
+                    $item['name'] ?? '',
+                    $item['type'] ?? null,
+                    $item['error'] ?? UPLOAD_ERR_OK,
+                    true
+                );
+            }
+
+            if ($files) {
+                $symfonyFiles[$field] = $files;
+            }
+        }
+    }
+    //dump($symfonyFiles);
+
     $headers = $request->header() ?? [];
 
     $parameters = array_merge($get, $post);
@@ -134,18 +204,21 @@ function convert_to_symfony_request(WorkermanRequest $request): SymfonyRequest
         $post = array_merge($post, $parsedPost);
     }
 
+    // ========== 核心修复2：传入解析后的 Symfony 文件数组 ==========
     $symfonyRequest = new SymfonyRequest(
         $get,
         $post,
         [],
         $cookies,
-        $files,
+        $symfonyFiles, // 替换原来的 $request->file()
         $server,
         $rawBody
     );
     #$session = app('session');
     #$symfonyRequest->setSession($session);
 
+    //error_log('Symfony Request files->all(): ' . print_r($symfonyRequest->files->all(), true));
+    //dump($symfonyRequest->files->all());
     return $symfonyRequest;
 }
 
@@ -183,12 +256,9 @@ function scanFilesLastModify(array $dirs): array
     return $fileTimes;
 }
 
-
-
 /**
  * 跨平台安全重启
  */
-
 function restartWorkerman(Worker $worker): void
 {
     global $needRestart;
@@ -244,6 +314,71 @@ function isDatabaseConnected(?string $connection = null): bool
     }
 }
 
+/**
+ * 获取文件的 MIME 类型
+ * @param string $filePath 文件路径
+ * @return string MIME 类型
+ */
+function get_mime_type(string $filePath): string
+{
+    // 基于文件扩展名的 MIME 类型映射
+    $mimeTypes = [
+        // 图片
+        'jpg'  => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'png'  => 'image/png',
+        'gif'  => 'image/gif',
+        'webp' => 'image/webp',
+        'svg'  => 'image/svg+xml',
+        'ico'  => 'image/x-icon',
+        'bmp'  => 'image/bmp',
+        
+        // 视频
+        'mp4'  => 'video/mp4',
+        'webm' => 'video/webm',
+        'ogg'  => 'video/ogg',
+        
+        // 音频
+        'mp3'  => 'audio/mpeg',
+        'wav'  => 'audio/wav',
+        'ogg'  => 'audio/ogg',
+        
+        // 文档
+        'pdf'  => 'application/pdf',
+        'doc'  => 'application/msword',
+        'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'xls'  => 'application/vnd.ms-excel',
+        'xlsx' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'ppt'  => 'application/vnd.ms-powerpoint',
+        'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        
+        // 文本
+        'txt'  => 'text/plain',
+        'html' => 'text/html',
+        'css'  => 'text/css',
+        'js'   => 'application/javascript',
+        'json' => 'application/json',
+        'xml'  => 'application/xml',
+        
+        // 压缩文件
+        'zip'  => 'application/zip',
+        'rar'  => 'application/vnd.rar',
+        '7z'   => 'application/x-7z-compressed',
+        'tar'  => 'application/x-tar',
+        'gz'   => 'application/gzip',
+        
+        // 字体
+        'woff' => 'font/woff',
+        'woff2' => 'font/woff2',
+        'ttf'  => 'font/ttf',
+        'eot'  => 'application/vnd.ms-fontobject',
+    ];
+    
+    $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+    
+    return $mimeTypes[$extension] ?? 'application/octet-stream';
+}
+
 /* ------------------------------------------------------------
  | 启动 Workerman Worker
  |------------------------------------------------------------
@@ -260,28 +395,26 @@ $httpWorker->onWorkerStart = function (Worker $worker) use (&$framework) {
     
     $framework = Framework::getInstance();
 
-	
-	if(config('database.engine') == 'laravelORM' ){
-		try {
-			// 测试连接（执行一个无副作用的简单查询）
-			#DB::connection()->getPdo();
-			SchemaWarmup::setScanPath(
-				__DIR__ . '/app/Models',
-				'App\Models'
-			);
+    if(config('database.engine') == 'laravelORM' ){
+        try {
+            // 测试连接（执行一个无副作用的简单查询）
+            #DB::connection()->getPdo();
+            SchemaWarmup::setScanPath(
+                __DIR__ . '/app/Models',
+                'App\Models'
+            );
 
-			SchemaWarmup::warmupAll();
-			SchemaRegistry::freeze();
-		} catch (\Exception $e) {
-			/*return response()->json([
-				'status' => 'error',
-				'message' => '数据库连接失败：' . $e->getMessage()
-			], 500);
-			*/
-			Worker::log('数据库连接失败：' . $e->getMessage());
-		}
-	}
-	
+            SchemaWarmup::warmupAll();
+            SchemaRegistry::freeze();
+        } catch (\Exception $e) {
+            /*return response()->json([
+                'status' => 'error',
+                'message' => '数据库连接失败：' . $e->getMessage()
+            ], 500);
+            */
+            Worker::log('数据库连接失败：' . $e->getMessage());
+        }
+    }
 
     // -------------------------- 初始化监控任务 --------------------------
     // 1. 初始化文件修改时间（仅在进程启动时执行一次）
@@ -347,6 +480,56 @@ $httpWorker->onMessage = function(TcpConnection $connection, WorkermanRequest $r
     }
 
     try {
+        // ==================== 静态文件处理 ====================
+        $uri = $req->uri();
+        $pathInfo = parse_url($uri, PHP_URL_PATH);
+        
+        // 检查是否是静态文件请求
+        // 支持 /uploads/xxx, /assets/xxx, /css/xxx, /js/xxx, /images/xxx 等路径
+        $staticDirs = ['/uploads', '/assets', '/css', '/js', '/images', '/favicon.ico'];
+        $isStaticFile = false;
+        
+        foreach ($staticDirs as $dir) {
+            if (strpos($pathInfo, $dir) === 0) {
+                $isStaticFile = true;
+                break;
+            }
+        }
+        
+        if ($isStaticFile) {
+            $filePath = __DIR__ . '/public' . $pathInfo;
+            
+            // 安全检查：防止路径遍历攻击
+            $realPath = realpath($filePath);
+            $publicDir = realpath(__DIR__ . '/public');
+            
+            if ($realPath && strpos($realPath, $publicDir) === 0 && is_file($realPath)) {
+                // 返回静态文件
+                $contentType = get_mime_type($realPath);
+                $fileContent = file_get_contents($realPath);
+                
+                // 添加缓存控制头
+                $headers = [
+                    'Content-Type' => $contentType,
+                    'Cache-Control' => 'public, max-age=86400', // 缓存1天
+                ];
+                
+                // 图片等静态文件添加更长的缓存时间
+                if (preg_match('/\.(jpg|jpeg|png|gif|webp|svg|ico)$/i', $realPath)) {
+                    $headers['Cache-Control'] = 'public, max-age=2592000'; // 缓存30天
+                }
+                
+                $connection->send(new WorkermanResponse(200, $headers, $fileContent));
+                return;
+            }
+            
+            // 文件不存在，返回 404
+            $connection->send(new WorkermanResponse(404, ['Content-Type' => 'text/plain'], 'File Not Found'));
+            return;
+        }
+        // ==================== 静态文件处理结束 ====================
+
+        // ========== 关键：使用修复后的转换函数 ==========
         $symReq = convert_to_symfony_request($req);
         $symRes = $framework->handleRequest($symReq);
         
