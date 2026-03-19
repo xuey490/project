@@ -27,6 +27,16 @@ use Framework\Tenant\TenantContext;
  *        static::addGlobalScope(new LaTenantScope());
  *    }
  *
+* 为特定租户查询（超管使用）
+* User::forTenant(1001)->get();
+
+* 查询所有租户（保留作用域但忽略上下文）
+* User::allTenants()->get();
+* 模型结构变更后清理缓存
+* LaTenantScope::clearCache();
+* class User extends Model {
+*     protected string $tenantColumn = 'custom_tenant_id';
+* }
  * 临时跳过租户隔离：
  * - Model::withoutTenancy()->get();           // 移除作用域
  * - Model::withIgnoreTenant(fn() => ...);     // 安全作用域方式
