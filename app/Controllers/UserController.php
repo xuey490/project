@@ -67,13 +67,13 @@ class UserController extends BaseController
      * 获取用户详情
      *
      * @param Request $request 请求对象
-     * @param int     $id      用户ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/user/detail/{id}', methods: ['GET'], name: 'user.detail')]
     #[Auth(required: true)]
-    public function detail(Request $request, int $id): BaseJsonResponse
+    public function detail(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $result = $this->userService->getDetail($id);
 
         if (!$result) {
@@ -131,13 +131,14 @@ class UserController extends BaseController
      * 更新用户
      *
      * @param Request $request 请求对象
-     * @param int     $id      用户ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/user/update/{id}', methods: ['PUT'], name: 'user.update')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function update(Request $request, int $id): BaseJsonResponse
+    public function update(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
+        
         $data = [
             'nickname' => $this->input('nickname', ''),
             'email' => $this->input('email', ''),
@@ -169,13 +170,14 @@ class UserController extends BaseController
      * 删除用户
      *
      * @param Request $request 请求对象
-     * @param int     $id      用户ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/user/delete/{id}', methods: ['DELETE'], name: 'user.delete')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function delete(Request $request, int $id): BaseJsonResponse
+    public function delete(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
+        
         // 不能删除自己
         $operatorId = $this->getOperatorId($request);
         if ($id === $operatorId) {
@@ -194,13 +196,13 @@ class UserController extends BaseController
      * 更新用户状态
      *
      * @param Request $request 请求对象
-     * @param int     $id      用户ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/user/status/{id}', methods: ['PUT'], name: 'user.status')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function updateStatus(Request $request, int $id): BaseJsonResponse
+    public function updateStatus(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $status = (int)$this->input('status', 1);
 
         // 不能禁用自己
@@ -220,13 +222,13 @@ class UserController extends BaseController
      * 重置密码
      *
      * @param Request $request 请求对象
-     * @param int     $id      用户ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/user/reset-password/{id}', methods: ['PUT'], name: 'user.resetPassword')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function resetPassword(Request $request, int $id): BaseJsonResponse
+    public function resetPassword(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $password = $this->input('password', '123456');
 
         if (strlen($password) < 6) {

@@ -147,8 +147,7 @@ class OperationLogMiddleware
                 'user_agent' => $userAgent,
             ]);
         } catch (\Exception $e) {
-                // 日志记录失败不影响正常请求
-            }
+            // 日志记录失败不影响正常请求
         }
     }
 

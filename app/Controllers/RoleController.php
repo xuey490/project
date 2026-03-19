@@ -97,13 +97,13 @@ class RoleController extends BaseController
      * 获取角色详情
      *
      * @param Request $request 请求对象
-     * @param int     $id      角色ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/role/detail/{id}', methods: ['GET'], name: 'role.detail')]
     #[Auth(required: true)]
-    public function detail(Request $request, int $id): BaseJsonResponse
+    public function detail(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $result = $this->roleService->getDetail($id);
 
         if (!$result) {
@@ -157,13 +157,14 @@ class RoleController extends BaseController
      * 更新角色
      *
      * @param Request $request 请求对象
-     * @param int     $id      角色ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/role/update/{id}', methods: ['PUT'], name: 'role.update')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function update(Request $request, int $id): BaseJsonResponse
+    public function update(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
+        
         $data = [
             'role_name' => $this->input('role_name', ''),
             'role_code' => $this->input('role_code', ''),
@@ -192,13 +193,13 @@ class RoleController extends BaseController
      * 删除角色
      *
      * @param Request $request 请求对象
-     * @param int     $id      角色ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/role/delete/{id}', methods: ['DELETE'], name: 'role.delete')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function delete(Request $request, int $id): BaseJsonResponse
+    public function delete(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         try {
             $this->roleService->delete($id);
             return $this->success([], '删除成功');
@@ -211,13 +212,13 @@ class RoleController extends BaseController
      * 更新角色状态
      *
      * @param Request $request 请求对象
-     * @param int     $id      角色ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/role/status/{id}', methods: ['PUT'], name: 'role.status')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function updateStatus(Request $request, int $id): BaseJsonResponse
+    public function updateStatus(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $status = (int)$this->input('status', 1);
 
         $result = $this->roleService->updateStatus($id, $status);
@@ -231,13 +232,13 @@ class RoleController extends BaseController
      * 分配菜单给角色
      *
      * @param Request $request 请求对象
-     * @param int     $id      角色ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/role/assign-menus/{id}', methods: ['PUT'], name: 'role.assignMenus')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function assignMenus(Request $request, int $id): BaseJsonResponse
+    public function assignMenus(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $menuIds = $this->input('menu_ids', []);
         $operator = $this->getOperatorId($request);
 

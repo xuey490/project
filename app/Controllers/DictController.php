@@ -60,13 +60,13 @@ class DictController extends BaseController
      * 获取字典类型详情
      *
      * @param Request $request 请求对象
-     * @param int     $id      字典类型ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/dict/type/detail/{id}', methods: ['GET'], name: 'dict.type.detail')]
     #[Auth(required: true)]
-    public function typeDetail(Request $request, int $id): BaseJsonResponse
+    public function typeDetail(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $result = $this->dictService->getTypeDetail($id);
 
         if (!$result) {
@@ -111,13 +111,13 @@ class DictController extends BaseController
      * 更新字典类型
      *
      * @param Request $request 请求对象
-     * @param int     $id      字典类型ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/dict/type/update/{id}', methods: ['PUT'], name: 'dict.type.update')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function typeUpdate(Request $request, int $id): BaseJsonResponse
+    public function typeUpdate(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $data = [
             'dict_name' => $this->input('dict_name', ''),
             'dict_code' => $this->input('dict_code', ''),
@@ -141,13 +141,13 @@ class DictController extends BaseController
      * 删除字典类型
      *
      * @param Request $request 请求对象
-     * @param int     $id      字典类型ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/dict/type/delete/{id}', methods: ['DELETE'], name: 'dict.type.delete')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function typeDelete(Request $request, int $id): BaseJsonResponse
+    public function typeDelete(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         try {
             $this->dictService->deleteType($id);
             return $this->success([], '删除成功');
@@ -160,13 +160,13 @@ class DictController extends BaseController
      * 更新字典类型状态
      *
      * @param Request $request 请求对象
-     * @param int     $id      字典类型ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/dict/type/status/{id}', methods: ['PUT'], name: 'dict.type.status')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function typeUpdateStatus(Request $request, int $id): BaseJsonResponse
+    public function typeUpdateStatus(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $status = (int)$this->input('status', 1);
 
         $result = $this->dictService->updateTypeStatus($id, $status);
@@ -213,13 +213,13 @@ class DictController extends BaseController
      * 获取字典数据详情
      *
      * @param Request $request 请求对象
-     * @param int     $id      字典数据ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/dict/data/detail/{id}', methods: ['GET'], name: 'dict.data.detail')]
     #[Auth(required: true)]
-    public function dataDetail(Request $request, int $id): BaseJsonResponse
+    public function dataDetail(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $result = $this->dictService->getDataDetail($id);
 
         if (!$result) {
@@ -267,13 +267,13 @@ class DictController extends BaseController
      * 更新字典数据
      *
      * @param Request $request 请求对象
-     * @param int     $id      字典数据ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/dict/data/update/{id}', methods: ['PUT'], name: 'dict.data.update')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function dataUpdate(Request $request, int $id): BaseJsonResponse
+    public function dataUpdate(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $data = [
             'dict_label' => $this->input('dict_label', ''),
             'dict_value' => $this->input('dict_value', ''),
@@ -299,13 +299,13 @@ class DictController extends BaseController
      * 删除字典数据
      *
      * @param Request $request 请求对象
-     * @param int     $id      字典数据ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/dict/data/delete/{id}', methods: ['DELETE'], name: 'dict.data.delete')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function dataDelete(Request $request, int $id): BaseJsonResponse
+    public function dataDelete(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         try {
             $this->dictService->deleteData($id);
             return $this->success([], '删除成功');
@@ -318,13 +318,13 @@ class DictController extends BaseController
      * 更新字典数据状态
      *
      * @param Request $request 请求对象
-     * @param int     $id      字典数据ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/dict/data/status/{id}', methods: ['PUT'], name: 'dict.data.status')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function dataUpdateStatus(Request $request, int $id): BaseJsonResponse
+    public function dataUpdateStatus(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $status = (int)$this->input('status', 1);
 
         $result = $this->dictService->updateDataStatus($id, $status);

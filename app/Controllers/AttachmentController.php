@@ -92,13 +92,13 @@ class AttachmentController extends BaseController
      * 获取附件详情
      *
      * @param Request $request 请求对象
-     * @param int     $id      附件ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/attachment/detail/{id}', methods: ['GET'], name: 'attachment.detail')]
     #[Auth(required: true)]
-    public function detail(Request $request, int $id): BaseJsonResponse
+    public function detail(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $result = $this->attachmentService->getDetail($id);
 
         if (!$result) {
@@ -112,13 +112,13 @@ class AttachmentController extends BaseController
      * 更新附件名称
      *
      * @param Request $request 请求对象
-     * @param int     $id      附件ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/attachment/update/{id}', methods: ['PUT'], name: 'attachment.update')]
     #[Auth(required: true)]
-    public function update(Request $request, int $id): BaseJsonResponse
+    public function update(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id', 0);
         $fileName = $this->input('file_name', '');
 
         if (empty($fileName)) {
@@ -139,13 +139,14 @@ class AttachmentController extends BaseController
      * 删除附件
      *
      * @param Request $request 请求对象
-     * @param int     $id      附件ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/attachment/delete/{id}', methods: ['DELETE'], name: 'attachment.delete')]
     #[Auth(required: true)]
-    public function delete(Request $request, int $id): BaseJsonResponse
+    public function delete(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
+        
         try {
             $this->attachmentService->delete($id);
             return $this->success([], '删除成功');
@@ -158,13 +159,13 @@ class AttachmentController extends BaseController
      * 下载附件
      *
      * @param Request $request 请求对象
-     * @param int     $id      附件ID
      * @return \Symfony\Component\HttpFoundation\BinaryFileResponse
      */
     #[Route(path: '/api/system/attachment/download/{id}', methods: ['GET'], name: 'attachment.download')]
     #[Auth(required: true)]
-    public function download(Request $request, int $id)
+    public function download(Request $request)
     {
+        $id = (int) $request->attributes->get('id');
         $attachment = \App\Models\SysAttachment::find($id);
 
         if (!$attachment) {
@@ -267,13 +268,13 @@ class AttachmentController extends BaseController
      * 更新分类
      *
      * @param Request $request 请求对象
-     * @param int     $id      分类ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/attachment-category/update/{id}', methods: ['PUT'], name: 'attachmentCategory.update')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function categoryUpdate(Request $request, int $id): BaseJsonResponse
+    public function categoryUpdate(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         $data = [
             'parent_id' => $this->input('parent_id') !== '' ? (int)$this->input('parent_id') : null,
             'category_name' => $this->input('category_name', ''),
@@ -299,13 +300,13 @@ class AttachmentController extends BaseController
      * 删除分类
      *
      * @param Request $request 请求对象
-     * @param int     $id      分类ID
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/system/attachment-category/delete/{id}', methods: ['DELETE'], name: 'attachmentCategory.delete')]
     #[Auth(required: true, roles: ['admin', 'super_admin'])]
-    public function categoryDelete(Request $request, int $id): BaseJsonResponse
+    public function categoryDelete(Request $request): BaseJsonResponse
     {
+        $id = (int) $request->attributes->get('id');
         try {
             $this->attachmentService->deleteCategory($id);
             return $this->success([], '删除成功');

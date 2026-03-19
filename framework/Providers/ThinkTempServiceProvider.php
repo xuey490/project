@@ -25,28 +25,12 @@ use think\Template;
 use function Symfony\Component\DependencyInjection\Loader\Configurator\param;
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 
-/**
- * ThinkPHP 模板服务提供者
- *
- * 负责注册和管理框架的 ThinkPHP 模板引擎服务。
- * 主要功能包括：
- * - 注册 ThinkTemplateFactory 工厂类，用于创建模板实例
- * - 注册 thinkTemp 服务，提供 ThinkPHP 模板渲染功能
- * - 根据 view.php 配置文件初始化模板引擎
- */
+/*
+* 注册ThinkTemp 全局服务
+*/
 final class ThinkTempServiceProvider implements ServiceProviderInterface
 {
-    /**
-     * 注册 ThinkPHP 模板服务到依赖注入容器
-     *
-     * 注册以下服务：
-     * - ThinkTemplateFactory：模板工厂类，用于创建模板实例
-     * - think_template.config：模板配置参数
-     * - thinkTemp：模板服务实例，通过工厂方法创建
-     *
-     * @param ContainerConfigurator $configurator 容器配置器，用于注册服务定义
-     * @return void
-     */
+    // public function __invoke(ContainerConfigurator $configurator): void
     public function register(ContainerConfigurator $configurator): void
     {
         $services = $configurator->services();
@@ -80,14 +64,7 @@ final class ThinkTempServiceProvider implements ServiceProviderInterface
             ->public(); // 允许从容器外部获取
     }
 
-    /**
-     * 启动 ThinkPHP 模板服务
-     *
-     * 该方法在服务注册后调用，用于执行额外的初始化操作。
-     * 当前实现为空，可根据需要添加启动逻辑。
-     *
-     * @param ContainerInterface $container 依赖注入容器实例
-     * @return void
-     */
     public function boot(ContainerInterface $container): void
+    # public function boot(ContainerConfigurator $container): void
+    {}
 }

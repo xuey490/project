@@ -34,6 +34,12 @@ class ArticleDao extends BaseDao
 
     // ==================== 基础 CRUD ====================
 
+    // 指定该 DAO 操作哪个模型
+    protected function setModel(): string
+    {
+        return \App\Models\Article::class;
+    }
+	
     /**
      * 根据ID获取文章
      *

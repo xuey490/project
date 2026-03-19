@@ -30,36 +30,12 @@ use Symfony\Component\HttpFoundation\Session\Storage\NativeSessionStorage;
 
 use function Symfony\Component\DependencyInjection\Loader\Configurator\service;
 
-/**
- * 会话服务提供者
- *
- * 负责注册和管理框架的会话服务，支持多种存储后端。
- * 主要功能包括：
- * - 注册 Redis 客户端服务，用于 Redis 存储模式
- * - 注册 Session Handler 服务，支持文件、Redis、Redis 分组三种存储模式
- * - 注册 Session Storage 服务，管理会话存储
- * - 注册 Session 服务，提供会话操作接口
- *
- * 支持的存储类型：
- * - file：文件存储模式（默认）
- * - redis：Redis 存储模式
- * - redis_grouped：Redis 分组存储模式
- */
+/*
+* 注册全局的session服务
+*/
 final class SessionServiceProvider implements ServiceProviderInterface
 {
-    /**
-     * 注册会话服务到依赖注入容器
-     *
-     * 根据配置文件中的 storage_type 设置，注册以下服务：
-     * - redis.client / redis：Redis 客户端服务
-     * - session.handler：会话处理器，根据存储类型选择不同实现
-     * - session.handler.strict：严格会话处理器（文件模式）
-     * - session.storage：会话存储服务
-     * - session：会话服务实例
-     *
-     * @param ContainerConfigurator $configurator 容器配置器，用于注册服务定义
-     * @return void
-     */
+    // public function __invoke(ContainerConfigurator $configurator): void
     public function register(ContainerConfigurator $configurator): void
     {
         $services = $configurator->services();
@@ -154,14 +130,7 @@ final class SessionServiceProvider implements ServiceProviderInterface
             ->public();
     }
 
-    /**
-     * 启动会话服务
-     *
-     * 该方法在服务注册后调用，用于执行额外的初始化操作。
-     * 当前实现为空，可根据需要添加启动逻辑。
-     *
-     * @param ContainerInterface $container 依赖注入容器实例
-     * @return void
-     */
     public function boot(ContainerInterface $container): void
+    # public function boot(ContainerConfigurator $container): void
+    {}
 }

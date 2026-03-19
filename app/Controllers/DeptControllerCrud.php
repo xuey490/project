@@ -54,12 +54,10 @@ class DeptControllerCrud extends BaseController
      */
     // protected string $validatorClass = DeptValidator::class;
 
-    /**
-     * 部门服务实例
-     * 由 BaseController 自动注入
-     * @var SysDeptService
-     */
-    protected SysDeptService $service;
+    // 注意：$service 属性由基类 BaseController 自动注入
+    // 基类定义为 protected object $service
+    // 如需使用具体类型，可通过类型转换或 IDE 注解获得代码提示
+    // @var SysDeptService $this->service
 
     // ==================== 基础 CRUD（使用 Trait 方法）====================
 
