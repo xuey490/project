@@ -16,7 +16,6 @@ declare(strict_types=1);
 
 namespace Framework\Basic\Traits;
 
-use Framework\Utils\Json;
 use Symfony\Component\HttpFoundation\Request;
 use Throwable;
 
@@ -97,7 +96,7 @@ trait CrudActionTrait
                 return $this->fail('数据不存在');
             }
 
-            return Json::success($data->toArray(), 'ok');
+            return $this->success($data->toArray(), 'ok');
         } catch (Throwable $e) {
             return $this->fail($e->getMessage());
         }
@@ -122,7 +121,7 @@ trait CrudActionTrait
             }
 
             $model = $this->service->save($data);
-            return Json::success($model->toArray(), 'ok');
+            return $this->success($model->toArray(), 'ok');
         } catch (Throwable $e) {
             return $this->fail($e->getMessage());
         }

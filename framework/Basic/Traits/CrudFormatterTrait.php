@@ -16,7 +16,6 @@ declare(strict_types=1);
 
 namespace Framework\Basic\Traits;
 
-use Framework\Utils\Json;
 use Framework\Utils\Tree;
 
 /**
@@ -41,7 +40,7 @@ trait CrudFormatterTrait
      */
     protected function formatSelect($list, int $total)
     {
-        return Json::success([
+        return $this->success([
             'total' => $total,
             'items' => $list,
         ], 'ok');
@@ -59,7 +58,7 @@ trait CrudFormatterTrait
      */
     protected function formatNormal($list, int $total)
     {
-        return Json::success([
+        return $this->success([
             'total' => $total,
             'list'  => $list,
         ], 'ok');
@@ -86,6 +85,6 @@ trait CrudFormatterTrait
             ];
         }
         $tree = new Tree($nodes);
-        return Json::success($tree->getTree(), 'ok');
+        return $this->success($tree->getTree(), 'ok');
     }
 }
