@@ -67,6 +67,7 @@ class SysRole extends BaseLaORMModel
         'parent_id',
         'sort',
         'status',
+        'data_scope',
         'remark',
         'created_by',
         'updated_by',
@@ -81,6 +82,7 @@ class SysRole extends BaseLaORMModel
         'parent_id' => 'integer',
         'sort' => 'integer',
         'status' => 'integer',
+        'data_scope' => 'integer',
         'created_by' => 'integer',
         'updated_by' => 'integer',
         'created_at' => 'datetime',
@@ -95,6 +97,26 @@ class SysRole extends BaseLaORMModel
 
     /** @var int 启用状态 */
     public const STATUS_ENABLED = 1;
+
+    // ==================== 数据权限范围常量 ====================
+
+    /** @var int 全部数据 */
+    public const DATA_SCOPE_ALL = 1;
+
+    /** @var int 本部门数据 */
+    public const DATA_SCOPE_DEPT = 2;
+
+    /** @var int 本部门及子部门数据 */
+    public const DATA_SCOPE_DEPT_AND_CHILD = 3;
+
+    /** @var int 仅本人数据 */
+    public const DATA_SCOPE_SELF = 4;
+
+    /** @var int 本部门及子部门 + 本人数据 */
+    public const DATA_SCOPE_DEPT_AND_SELF = 5;
+
+    /** @var int 自定义部门数据 */
+    public const DATA_SCOPE_CUSTOM = 6;
 
     // ==================== 关联关系 ====================
 
@@ -146,6 +168,21 @@ class SysRole extends BaseLaORMModel
     public function children(): HasMany
     {
         return $this->hasMany(SysRole::class, 'parent_id', 'id');
+    }
+
+    /**
+     * 自定义数据权限部门
+     *
+     * @return BelongsToMany
+     */
+    public function dataScopeDepts(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            SysDept::class,
+            'sys_role_dept',
+            'role_id',
+            'dept_id'
+        );
     }
 
     // ==================== 业务方法 ====================
@@ -228,5 +265,73 @@ class SysRole extends BaseLaORMModel
         }
 
         return !$query->exists();
+    }
+
+    // ==================== 数据权限方法 ====================
+
+    /**
+     * 获取数据权限范围名称
+     *
+     * @return string
+     */
+    public function getDataScopeName(): string
+    {
+        return match ($this->data_scope) {
+            self::DATA_SCOPE_ALL => '全部数据',
+            self::DATA_SCOPE_DEPT => '本部门数据',
+            self::DATA_SCOPE_DEPT_AND_CHILD => '本部门及子部门数据',
+            self::DATA_SCOPE_SELF => '仅本人数据',
+            self::DATA_SCOPE_DEPT_AND_SELF => '本部门及子部门+本人数据',
+            self::DATA_SCOPE_CUSTOM => '自定义部门数据',
+            default => '未知',
+        };
+    }
+
+    /**
+     * 是否为自定义数据权限
+     *
+     * @return bool
+     */
+    public function isCustomDataScope(): bool
+    {
+        return $this->data_scope === self::DATA_SCOPE_CUSTOM;
+    }
+
+    /**
+     * 同步自定义数据权限部门
+     *
+     * @param array $deptIds 部门ID数组
+     * @return void
+     */
+    public function syncDataScopeDepts(array $deptIds): void
+    {
+        $this->dataScopeDepts()->sync($deptIds);
+    }
+
+    /**
+     * 获取自定义数据权限部门ID列表
+     *
+     * @return array
+     */
+    public function getDataScopeDeptIds(): array
+    {
+        return $this->dataScopeDepts()->pluck('id')->toArray();
+    }
+
+    /**
+     * 获取所有数据权限选项（用于前端选择）
+     *
+     * @return array
+     */
+    public static function getDataScopeOptions(): array
+    {
+        return [
+            ['value' => self::DATA_SCOPE_ALL, 'label' => '全部数据', 'desc' => '可查看所有数据'],
+            ['value' => self::DATA_SCOPE_DEPT, 'label' => '本部门数据', 'desc' => '仅可查看本部门数据'],
+            ['value' => self::DATA_SCOPE_DEPT_AND_CHILD, 'label' => '本部门及子部门', 'desc' => '可查看本部门及所有子部门数据'],
+            ['value' => self::DATA_SCOPE_SELF, 'label' => '仅本人数据', 'desc' => '仅可查看自己创建的数据'],
+            ['value' => self::DATA_SCOPE_DEPT_AND_SELF, 'label' => '部门+本人', 'desc' => '可查看本部门、子部门及自己创建的数据'],
+            ['value' => self::DATA_SCOPE_CUSTOM, 'label' => '自定义部门', 'desc' => '可查看指定部门的数据'],
+        ];
     }
 }

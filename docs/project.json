@@ -1,5 +1,5 @@
 {
   "name": "project",
-  "version_description": "Implement multi-tenant functionality",
+  "version_description": "Optimize tenant scope with caching",
   "preview_type": "pc"
 }
