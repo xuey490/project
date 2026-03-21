@@ -49,10 +49,11 @@ class BaseLaORMModel extends Model
     // ================= 基础配置 =================
 
     /**
-     * 是否自增主键
+     * 是否自增主键（默认使用自增ID）
+     * 子类如需使用雪花ID，设为 false 并配置 pkGenerateType = 'snowflake'
      * @var bool
      */
-    public $incrementing = false;
+    public $incrementing = true;
 
     /**
      * 是否自动维护时间戳
@@ -80,29 +81,10 @@ class BaseLaORMModel extends Model
     protected $keyType = 'int';
 
     /**
-     * 数据库存储统一使用 Unix 时间戳
+     * 日期格式 - 数据库使用 datetime 类型
      * @var string
      */
-    protected $dateFormat = 'U';
-
-    /**
-     * 基础日期字段（父类统一定义）
-     * 子类可通过 extraDates() 方法扩展
-     * @var array
-     */
-    protected $dates = [
-        'create_time',
-        'update_time',
-        'delete_time',
-    ];
-
-    /**
-     * 前端精度保护 - ID 转为字符串
-     * @var array
-     */
-    protected $casts = [
-        'id' => 'string',
-    ];
+    protected $dateFormat = 'Y-m-d H:i:s';
 
     /**
      * 雪花算法实例（单例）
@@ -115,7 +97,7 @@ class BaseLaORMModel extends Model
      * 可选值: 'snowflake'（雪花ID）, 'auto'（自增）
      * @var string
      */
-    protected string $pkGenerateType = 'snowflake';
+    protected string $pkGenerateType = 'auto';
 
     /**
      * 表字段缓存
@@ -165,6 +147,18 @@ class BaseLaORMModel extends Model
         }
     }
 
+    /**
+     * 初始化模型实例
+     *
+     * Laravel 会在模型构造后自动调用此方法。
+     *
+     * @return void
+     */
+    protected function initialize(): void
+    {
+        $this->initializeBaseLaORMModel();
+    }
+
     // ================= Model Boot =================
 
     /**
@@ -173,8 +167,9 @@ class BaseLaORMModel extends Model
      * 注册以下模型事件：
      * - creating: 生成雪花ID、填充创建时间
      * - updating: 填充更新时间
-     * - deleting: 填充软删除时间
      * - deleted: 执行删除后处理
+     *
+     * 注意：软删除由 SoftDeletes trait 自行处理，不需要在此设置
      *
      * @return void
      */
@@ -203,16 +198,6 @@ class BaseLaORMModel extends Model
             if ($model->timestamps) {
                 $now = Carbon::now()->timestamp;
                 $model->fillTimestampFields($now, false);
-            }
-        });
-
-        // 删除事件（软删时间同步）
-        static::deleting(function ($model) {
-            if ($model->timestamps && $model::isSoftDeleteEnabled()) {
-                $now = Carbon::now()->timestamp;
-                if ($model->hasColumnCached('delete_time')) {
-                    $model->delete_time = $now;
-                }
             }
         });
 
@@ -263,7 +248,7 @@ class BaseLaORMModel extends Model
      */
     protected function extraDates(): array
     {
-        return [];
+        return ['delete_time'];
     }
 
     /**

@@ -210,7 +210,7 @@ class ArticleService
      * @return bool
      * @throws \Exception
      */
-    public function delete(int $id): bool
+    public function delete(int|string $id): bool
     {
         $article = $this->articleDao->getById($id);
         if (!$article) {

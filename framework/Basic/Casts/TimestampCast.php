@@ -57,19 +57,19 @@ class TimestampCast implements CastsAttributes
     }
 
     /**
-     * 将时间值转换为整数时间戳用于数据库存储
+     * 将时间值转换为 datetime 格式字符串用于数据库存储
      *
      * 保存到数据库时调用此方法，支持多种输入格式：
      * - null 或空字符串：返回 null
-     * - DateTimeInterface 对象：获取其时间戳
-     * - 数值型：转换为整数
-     * - 字符串：使用 strtotime() 解析
+     * - DateTimeInterface 对象：格式化为 Y-m-d H:i:s
+     * - 数值型：从时间戳转换为 datetime 格式
+     * - 字符串：使用 strtotime() 解析后格式化
      *
      * @param \Illuminate\Database\Eloquent\Model $model 模型实例
      * @param string $key 字段名称
      * @param mixed $value 要存储的值（可以是时间字符串、时间戳、DateTime 对象等）
      * @param array $attributes 模型所有属性的数组
-     * @return int|null 返回整数时间戳，如果无法转换则返回 null
+     * @return string|null 返回 datetime 格式字符串，如果无法转换则返回 null
      */
     public function set($model, string $key, $value, array $attributes)
     {
@@ -78,16 +78,16 @@ class TimestampCast implements CastsAttributes
         }
 
         if ($value instanceof \DateTimeInterface) {
-            return $value->getTimestamp();
+            return $value->format('Y-m-d H:i:s');
         }
 
         if (is_numeric($value)) {
-            return (int) $value;
+            return Carbon::createFromTimestamp((int) $value)->format('Y-m-d H:i:s');
         }
 
         if (is_string($value)) {
             $ts = strtotime($value);
-            return $ts !== false ? $ts : null;
+            return $ts !== false ? date('Y-m-d H:i:s', $ts) : null;
         }
 
         return null;
