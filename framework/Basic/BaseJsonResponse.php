@@ -55,7 +55,7 @@ class BaseJsonResponse extends JsonResponse
         string $msg = 'ok'
     ): static {
         return new static([
-            'code' => 0, // 确保成功状态码为 0
+            'code' => 200, // 与前端 ApiStatus.success 对齐
             'msg'  => $msg,
             'data' => $data,
         ], self::HTTP_OK);

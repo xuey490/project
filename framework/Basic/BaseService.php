@@ -158,7 +158,7 @@ abstract class BaseService
      */
     protected function executeLaravelOrmTransaction(Closure $closure): mixed
     {
-        return LaravelDb::transaction(function () use ($closure) {
+        return \Illuminate\Database\Capsule\Manager::connection()->transaction(function () use ($closure) {
             return $closure();
         });
     }
@@ -179,7 +179,7 @@ abstract class BaseService
         if ($this->transactionLevel === 0) {
             match ($framework) {
                 'thinkORM'   => ThinkDb::startTrans(),
-                'laravelORM' => LaravelDb::beginTransaction(),
+                'laravelORM' => \Illuminate\Database\Capsule\Manager::connection()->beginTransaction(),
             };
         }
 
@@ -203,7 +203,7 @@ abstract class BaseService
         if ($this->transactionLevel === 0) {
             match ($framework) {
                 'thinkORM'   => ThinkDb::commit(),
-                'laravelORM' => LaravelDb::commit(),
+                'laravelORM' => \Illuminate\Database\Capsule\Manager::connection()->commit(),
             };
         }
     }
@@ -225,7 +225,7 @@ abstract class BaseService
         if ($this->transactionLevel === 0) {
             match ($framework) {
                 'thinkORM'   => ThinkDb::rollback(),
-                'laravelORM' => LaravelDb::rollBack(),
+                'laravelORM' => \Illuminate\Database\Capsule\Manager::connection()->rollBack(),
             };
         }
     }

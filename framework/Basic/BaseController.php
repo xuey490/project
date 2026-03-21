@@ -61,8 +61,8 @@ abstract class BaseController
 		
 		$this->container = app();
 		
-        // 1. 获取全局 Request
-        $this->request = app('request');
+        // 1. 获取全局 Request - 优先从 ContextBag 获取，再从容器获取
+        $this->request = \Framework\DI\ContextBag::get('request') ?? app('request');
 
         // 2. 获取全局 DB
         $this->db = app('db');

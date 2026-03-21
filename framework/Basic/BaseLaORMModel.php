@@ -62,6 +62,18 @@ class BaseLaORMModel extends Model
     public $timestamps = true;
 
     /**
+     * 创建时间字段名（Laravel Eloquent 标准常量）
+     * 所有子模型统一使用 create_time
+     */
+    public const CREATED_AT = 'create_time';
+
+    /**
+     * 更新时间字段名（Laravel Eloquent 标准常量）
+     * 所有子模型统一使用 update_time
+     */
+    public const UPDATED_AT = 'update_time';
+
+    /**
      * 主键类型
      * @var string
      */
@@ -79,9 +91,6 @@ class BaseLaORMModel extends Model
      * @var array
      */
     protected $dates = [
-        'created_at',
-        'updated_at',
-        'deleted_at',
         'create_time',
         'update_time',
         'delete_time',
@@ -130,14 +139,14 @@ class BaseLaORMModel extends Model
      * 子类可覆盖定义，设为 null 则不自动填充
      * @var string|null
      */
-    protected ?string $createdAtColumn = 'created_at';
+    protected ?string $createdAtColumn = 'create_time';
 
     /**
      * 更新时间字段名
      * 子类可覆盖定义，设为 null 则不自动填充
      * @var string|null
      */
-    protected ?string $updatedAtColumn = 'updated_at';
+    protected ?string $updatedAtColumn = 'update_time';
 
     // ================= 初始化 =================
 
@@ -201,10 +210,6 @@ class BaseLaORMModel extends Model
         static::deleting(function ($model) {
             if ($model->timestamps && $model::isSoftDeleteEnabled()) {
                 $now = Carbon::now()->timestamp;
-                // 填充 deleted_at 和 delete_time
-                if ($model->hasColumnCached('deleted_at')) {
-                    $model->deleted_at = $now;
-                }
                 if ($model->hasColumnCached('delete_time')) {
                     $model->delete_time = $now;
                 }
@@ -231,39 +236,18 @@ class BaseLaORMModel extends Model
     {
         if ($isCreate) {
             // 创建时填充创建时间
-            $createFields = array_filter([
-                $this->createdAtColumn,
-                $this->createdAtColumn === 'created_at' ? 'create_time' : null,
-            ]);
-
-            foreach ($createFields as $field) {
-                if ($field && $this->hasColumnCached($field) && empty($this->{$field})) {
-                    $this->{$field} = $timestamp;
-                }
+            if ($this->createdAtColumn && $this->hasColumnCached($this->createdAtColumn) && empty($this->{$this->createdAtColumn})) {
+                $this->{$this->createdAtColumn} = $timestamp;
             }
 
             // 同时填充更新时间（创建时通常等于创建时间）
-            $updateFields = array_filter([
-                $this->updatedAtColumn,
-                $this->updatedAtColumn === 'updated_at' ? 'update_time' : null,
-            ]);
-
-            foreach ($updateFields as $field) {
-                if ($field && $this->hasColumnCached($field) && empty($this->{$field})) {
-                    $this->{$field} = $timestamp;
-                }
+            if ($this->updatedAtColumn && $this->hasColumnCached($this->updatedAtColumn) && empty($this->{$this->updatedAtColumn})) {
+                $this->{$this->updatedAtColumn} = $timestamp;
             }
         } else {
             // 更新时只填充更新时间
-            $updateFields = array_filter([
-                $this->updatedAtColumn,
-                $this->updatedAtColumn === 'updated_at' ? 'update_time' : null,
-            ]);
-
-            foreach ($updateFields as $field) {
-                if ($field && $this->hasColumnCached($field)) {
-                    $this->{$field} = $timestamp;
-                }
+            if ($this->updatedAtColumn && $this->hasColumnCached($this->updatedAtColumn)) {
+                $this->{$this->updatedAtColumn} = $timestamp;
             }
         }
     }
