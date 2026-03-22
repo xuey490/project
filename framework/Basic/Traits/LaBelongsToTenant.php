@@ -53,7 +53,9 @@ trait LaBelongsToTenant
 
         // 2. 创建时自动写入租户ID（新增限制）
         static::creating(function (Model $model) {
-			$tenantId =  TenantContext::getTenantId() ;	// function_exists('getCurrentTenantId') ? \getCurrentTenantId() : null;
+			$tenantId =  TenantContext::getTenantId() ;	
+            //error_log($tenantId);
+            // function_exists('getCurrentTenantId') ? \getCurrentTenantId() : null;
             // 如果有租户ID，且模型里还没有设置该字段
             if ($tenantId && !isset($model->tenant_id)) {
                 $model->setAttribute('tenant_id', $tenantId);
