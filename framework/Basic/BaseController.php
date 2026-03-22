@@ -133,33 +133,114 @@ abstract class BaseController
     }
 
     /**
+     * 缓存解析后的 JSON body
+     * @var array|null
+     */
+    protected ?array $jsonBodyCache = null;
+
+    /**
+     * 获取当前请求对象
+     * 优先使用方法参数传入的 $request，其次使用构造函数中的全局 $request
+     *
+     * @param Request|null $request
+     * @return Request
+     */
+    protected function getCurrentRequest(?Request $request = null): Request
+    {
+        return $request ?? $this->request;
+    }
+
+    /**
      * 获取请求参数，并支持可选的 XSS 过滤.
+     *
+     * 支持从以下来源获取参数：
+     * 1. Query 参数 (GET)
+     * 2. Request 参数 (POST 表单)
+     * 3. JSON Body (PUT/POST JSON 请求)
      *
      * @param string $key     参数名
      * @param mixed  $default 默认值
      * @param bool   $filter  是否开启 XSS 过滤（默认开启）
+     * @param Request|null $request 请求对象（可选）
      */
-    protected function input(string $key, mixed $default = null, bool $filter = true): mixed
+    protected function input(string $key, mixed $default = null, bool $filter = true, ?Request $request = null): mixed
     {
-        // 1. 优先从 Query (GET) 获取，其次从 Request (POST) 获取
-        // 你也可以根据需要调整优先级
-        $value = $this->request->query->get($key);
+        $req = $this->getCurrentRequest($request);
+
+        // 1. 优先从 Query (GET) 获取
+        $value = $req->query->get($key);
+
+        // 2. 从 Request (POST 表单) 获取
         if ($value === null) {
-            $value = $this->request->request->get($key, $default);
+            $value = $req->request->get($key);
         }
 
-        // 2. 如果开启过滤，且值是字符串，则进行转义
+        // 3. 从 JSON Body 获取（支持 PUT/POST JSON 请求）
+        if ($value === null) {
+            $jsonBody = $this->getJsonBody($req);
+            if (isset($jsonBody[$key])) {
+                $value = $jsonBody[$key];
+            }
+        }
+
+        // 4. 如果所有来源都没有，使用默认值
+        if ($value === null) {
+            return $default;
+        }
+
+        // 5. 如果开启过滤，且值是字符串，则进行转义
         if ($filter && is_string($value)) {
-            // strip_tags 用于去除 HTML 标签（彻底删掉 <script>）
-            // 或者使用 htmlspecialchars 转义（保留符号但使其失效）
-
-            // 方式 A：彻底移除标签（适合昵称、标题等纯文本）
-            // $value = strip_tags($value);
-
-            // 方式 B：转义实体（适合不想丢失数据，但想安全显示的场景）
             $value = htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
         }
 
         return $value;
+    }
+
+    /**
+     * 获取所有请求参数（合并 GET、POST、JSON Body）
+     *
+     * @param Request|null $request 请求对象（可选）
+     * @return array
+     */
+    protected function inputAll(?Request $request = null): array
+    {
+        $req = $this->getCurrentRequest($request);
+        return array_merge(
+            $req->query->all(),
+            $req->request->all(),
+            $this->getJsonBody($req)
+        );
+    }
+
+    /**
+     * 获取并缓存 JSON Body
+     *
+     * @param Request|null $request 请求对象（可选）
+     * @return array
+     */
+    protected function getJsonBody(?Request $request = null): array
+    {
+        $req = $this->getCurrentRequest($request);
+
+        // 使用请求对象的哈希作为缓存键，确保不同请求有独立缓存
+        $cacheKey = spl_object_id($req);
+
+        static $cache = [];
+
+        if (isset($cache[$cacheKey])) {
+            return $cache[$cacheKey];
+        }
+
+        $cache[$cacheKey] = [];
+        $content = $req->getContent();
+
+        if (!empty($content)) {
+            $decoded = json_decode($content, true);
+            if (is_array($decoded)) {
+                $cache[$cacheKey] = $decoded;
+            }
+        }
+
+        return $cache[$cacheKey];
     }
 }

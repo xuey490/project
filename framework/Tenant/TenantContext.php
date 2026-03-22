@@ -34,7 +34,7 @@ use Symfony\Component\HttpFoundation\RequestStack;
  * 使用示例：
  * ```php
  * // 在中间件中设置租户
- * TenantContext::setTenantIdFromRequest($request, 1001);
+ * TenantContext::setTenantIdToRequest($request, 1001);
  *
  * // 在模型中自动应用租户隔离
  * TenantContext::shouldApplyTenant(); // 返回 true/false
@@ -126,6 +126,8 @@ final class TenantContext
     public static function getTenantId(): ?int
     {
         $request = self::getCurrentRequest();
+
+        //error_log('request: ' . json_encode($request));
         if ($request === null) {
             return null;
         }

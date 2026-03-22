@@ -86,6 +86,7 @@ final class SessionTenantContext
             }
         } catch (\Throwable $e) {
             // Session 未启动或不可用
+            error_log($e->getMessage());
         }
         return null;
     }
