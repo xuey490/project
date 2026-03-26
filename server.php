@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * server.php
- * Workerman wrapper for FSSPHP
+ * Workerman wrapper for FSSPHP with WebSocket support
  *
  * Usage:
  *   php server.php start          - Start in debug mode (foreground)
@@ -15,7 +15,9 @@ declare(strict_types=1);
  *   php server.php status         - Show server status
  *   php server.php connections    - Show connections
  *
- * Traditional FPM: don't run this script; your existing index.php / front controller remains unchanged.
+ * Services:
+ *   - HTTP Server: http://0.0.0.0:8000
+ *   - WebSocket Server: ws://0.0.0.0:1234 (or wss:// with SSL)
  */
 
 use Workerman\Worker;
@@ -40,6 +42,7 @@ define('BASE_PATH', __DIR__);
 define('APP_ROOT', __DIR__);
 define('LOG_DIR', APP_ROOT . '/storage/workerman');
 define('HEALTH_FILE', LOG_DIR . '/health.json');
+define('WS_LOG_FILE', LOG_DIR . '/websocket.log');
 
 // 创建日志目录
 if (!is_dir(LOG_DIR)) {
@@ -62,6 +65,11 @@ function log_info(string $msg): void {
     file_put_contents(LOG_DIR . '/server.log', $line, FILE_APPEND);
 }
 
+function ws_log(string $msg): void {
+    $line = '[' . date('Y-m-d H:i:s') . '] ' . $msg . PHP_EOL;
+    file_put_contents(WS_LOG_FILE, $line, FILE_APPEND);
+}
+
 // ----------------------------------------------------------------------
 // 健康检查与日志轮转
 // ----------------------------------------------------------------------
@@ -78,11 +86,17 @@ function update_health(): void {
 }
 
 function rotate_logs(): void {
-    $file = LOG_DIR . '/server.log';
-    if (file_exists($file) && filesize($file) > 2 * 1024 * 1024) {
-        $new = LOG_DIR . '/server-' . date('Ymd_His') . '.log';
-        rename($file, $new);
-        log_info("[LogRotate] Rotated to $new");
+    $files = [
+        LOG_DIR . '/server.log',
+        WS_LOG_FILE
+    ];
+    
+    foreach ($files as $file) {
+        if (file_exists($file) && filesize($file) > 2 * 1024 * 1024) {
+            $new = LOG_DIR . '/' . basename($file, '.log') . '-' . date('Ymd_His') . '.log';
+            rename($file, $new);
+            log_info("[LogRotate] Rotated to $new");
+        }
     }
 }
 
@@ -266,21 +280,240 @@ function get_mime_type(string $filePath): string
 }
 
 // ----------------------------------------------------------------------
+// WebSocket 连接管理器
+// ----------------------------------------------------------------------
+class WebSocketManager
+{
+    private static ?WebSocketManager $instance = null;
+    private array $connections = []; // 存储所有连接
+    private array $rooms = []; // 存储房间信息
+    
+    public static function getInstance(): WebSocketManager
+    {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+    
+    /**
+     * 添加连接
+     */
+    public function addConnection(TcpConnection $connection): void
+    {
+        $this->connections[$connection->id] = [
+            'connection' => $connection,
+            'user_id' => null,
+            'rooms' => [],
+            'data' => [],
+            'connected_at' => time()
+        ];
+        
+        ws_log("[WS] Connection #{$connection->id} added. Total: " . count($this->connections));
+    }
+    
+    /**
+     * 移除连接
+     */
+    public function removeConnection(TcpConnection $connection): void
+    {
+        $connId = $connection->id;
+        
+        if (isset($this->connections[$connId])) {
+            // 从所有房间中移除
+            foreach ($this->connections[$connId]['rooms'] as $roomId) {
+                $this->leaveRoom($connection, $roomId);
+            }
+            
+            unset($this->connections[$connId]);
+            ws_log("[WS] Connection #{$connId} removed. Total: " . count($this->connections));
+        }
+    }
+    
+    /**
+     * 绑定用户ID
+     */
+    public function bindUser(TcpConnection $connection, $userId): void
+    {
+        if (isset($this->connections[$connection->id])) {
+            $this->connections[$connection->id]['user_id'] = $userId;
+            ws_log("[WS] Connection #{$connection->id} bound to user #{$userId}");
+        }
+    }
+    
+    /**
+     * 加入房间
+     */
+    public function joinRoom(TcpConnection $connection, string $roomId): void
+    {
+        if (!isset($this->connections[$connection->id])) {
+            return;
+        }
+        
+        // 添加到房间的连接列表
+        if (!isset($this->rooms[$roomId])) {
+            $this->rooms[$roomId] = [];
+        }
+        $this->rooms[$roomId][$connection->id] = true;
+        
+        // 添加到连接的房间列表
+        $this->connections[$connection->id]['rooms'][$roomId] = true;
+        
+        ws_log("[WS] Connection #{$connection->id} joined room '{$roomId}'. Room size: " . count($this->rooms[$roomId]));
+    }
+    
+    /**
+     * 离开房间
+     */
+    public function leaveRoom(TcpConnection $connection, string $roomId): void
+    {
+        if (!isset($this->connections[$connection->id])) {
+            return;
+        }
+        
+        // 从房间中移除
+        if (isset($this->rooms[$roomId][$connection->id])) {
+            unset($this->rooms[$roomId][$connection->id]);
+            if (empty($this->rooms[$roomId])) {
+                unset($this->rooms[$roomId]);
+            }
+        }
+        
+        // 从连接的房间列表中移除
+        unset($this->connections[$connection->id]['rooms'][$roomId]);
+        
+        ws_log("[WS] Connection #{$connection->id} left room '{$roomId}'");
+    }
+    
+    /**
+     * 发送消息给指定连接
+     */
+    public function sendToConnection(TcpConnection $connection, array $data): void
+    {
+        $connection->send(json_encode($data, JSON_UNESCAPED_UNICODE));
+    }
+    
+    /**
+     * 发送消息给指定用户
+     */
+    public function sendToUser($userId, array $data): int
+    {
+        $count = 0;
+        foreach ($this->connections as $connData) {
+            if ($connData['user_id'] === $userId) {
+                $connData['connection']->send(json_encode($data, JSON_UNESCAPED_UNICODE));
+                $count++;
+            }
+        }
+        return $count;
+    }
+    
+    /**
+     * 发送消息到房间
+     */
+    public function sendToRoom(string $roomId, array $data, ?TcpConnection $exclude = null): int
+    {
+        if (!isset($this->rooms[$roomId])) {
+            return 0;
+        }
+        
+        $count = 0;
+        $message = json_encode($data, JSON_UNESCAPED_UNICODE);
+        
+        foreach ($this->rooms[$roomId] as $connId => $true) {
+            if ($exclude && $connId === $exclude->id) {
+                continue;
+            }
+            
+            if (isset($this->connections[$connId])) {
+                $this->connections[$connId]['connection']->send($message);
+                $count++;
+            }
+        }
+        
+        return $count;
+    }
+    
+    /**
+     * 广播消息给所有连接
+     */
+    public function broadcast(array $data, ?TcpConnection $exclude = null): int
+    {
+        $count = 0;
+        $message = json_encode($data, JSON_UNESCAPED_UNICODE);
+        
+        foreach ($this->connections as $connId => $connData) {
+            if ($exclude && $connId === $exclude->id) {
+                continue;
+            }
+            
+            $connData['connection']->send($message);
+            $count++;
+        }
+        
+        return $count;
+    }
+    
+    /**
+     * 获取在线连接数
+     */
+    public function getOnlineCount(): int
+    {
+        return count($this->connections);
+    }
+    
+    /**
+     * 获取房间信息
+     */
+    public function getRoomInfo(string $roomId): ?array
+    {
+        if (!isset($this->rooms[$roomId])) {
+            return null;
+        }
+        
+        $connections = [];
+        foreach ($this->rooms[$roomId] as $connId => $true) {
+            if (isset($this->connections[$connId])) {
+                $connections[] = [
+                    'id' => $connId,
+                    'user_id' => $this->connections[$connId]['user_id'],
+                    'connected_at' => $this->connections[$connId]['connected_at']
+                ];
+            }
+        }
+        
+        return [
+            'room_id' => $roomId,
+            'count' => count($connections),
+            'connections' => $connections
+        ];
+    }
+    
+    /**
+     * 获取所有房间
+     */
+    public function getAllRooms(): array
+    {
+        return array_keys($this->rooms);
+    }
+}
+
+// ----------------------------------------------------------------------
 // 创建 HTTP Worker
 // ----------------------------------------------------------------------
-$worker = new Worker('http://0.0.0.0:8000');
-$worker->name = 'FSSPHP-Worker';
-$worker->count = 4; // 根据 CPU 核心数调整
+$httpWorker = new Worker('http://0.0.0.0:8000');
+$httpWorker->name = 'FSSPHP-HTTP';
+$httpWorker->count = 4;
 
 // 存储 Framework 实例
 $framework = null;
 
 // ----------------------------------------------------------------------
-// Worker 启动回调
+// HTTP Worker 启动回调
 // ----------------------------------------------------------------------
-$worker->onWorkerStart = function(Worker $worker) use (&$framework) {
-    log_info("[Worker] PID " . getmypid() . " started");
-    Worker::log("[Worker] PID " . getmypid() . " started");
+$httpWorker->onWorkerStart = function(Worker $worker) use (&$framework) {
+    log_info("[HTTP-Worker] PID " . getmypid() . " started");
+    Worker::log("[HTTP-Worker] PID " . getmypid() . " started");
     update_health();
 
     // 初始化框架
@@ -305,20 +538,20 @@ $worker->onWorkerStart = function(Worker $worker) use (&$framework) {
         $memory = memory_get_usage(true) / 1024 / 1024;
         $time = date('Y-m-d H:i:s');
         
-        Worker::log("[{$time}] [Memory] Worker #{$worker->id} PID {$pid} uses {$memory} MB");
+        Worker::log("[{$time}] [Memory] HTTP-Worker #{$worker->id} PID {$pid} uses {$memory} MB");
 
         // 内存超限则重启
         if ($memory > MEMORY_LIMIT_MB) {
-            Worker::log("[{$time}] [Warning] Worker #{$worker->id} PID {$pid} memory exceeded limit ({$memory} MB > " . MEMORY_LIMIT_MB . " MB), stopping...");
+            Worker::log("[{$time}] [Warning] HTTP-Worker #{$worker->id} PID {$pid} memory exceeded limit ({$memory} MB > " . MEMORY_LIMIT_MB . " MB), stopping...");
             $worker->stop();
         }
     });
 };
 
 // ----------------------------------------------------------------------
-// 请求处理回调
+// HTTP 请求处理回调
 // ----------------------------------------------------------------------
-$worker->onMessage = function(TcpConnection $connection, WorkermanRequest $req) use (&$framework) {
+$httpWorker->onMessage = function(TcpConnection $connection, WorkermanRequest $req) use (&$framework) {
     $symReq = null;
     $symRes = null;
     
@@ -372,6 +605,19 @@ $worker->onMessage = function(TcpConnection $connection, WorkermanRequest $req) 
             $connection->send(convert_to_workerman_response($response));
             return;
         }
+        
+        // WebSocket 统计信息端点
+        if ($req->path() === '/_ws-stats') {
+            $wsManager = WebSocketManager::getInstance();
+            $stats = [
+                'online_count' => $wsManager->getOnlineCount(),
+                'rooms' => $wsManager->getAllRooms(),
+                'time' => date('Y-m-d H:i:s')
+            ];
+            $response = new SymfonyResponse(json_encode($stats), 200, ['Content-Type' => 'application/json']);
+            $connection->send(convert_to_workerman_response($response));
+            return;
+        }
 
         // 转换请求并处理
         $symReq = convert_to_symfony_request($req);
@@ -400,6 +646,271 @@ $worker->onMessage = function(TcpConnection $connection, WorkermanRequest $req) 
 };
 
 // ----------------------------------------------------------------------
-// 运行 Worker
+// 创建 WebSocket Worker (ws://0.0.0.0:1234)
+// ----------------------------------------------------------------------
+$wsWorker = new Worker('websocket://0.0.0.0:1234');
+$wsWorker->name = 'FSSPHP-WebSocket';
+$wsWorker->count = 2;
+
+// 如果需要 SSL/TLS (wss://)，取消下面的注释并配置证书路径
+/*
+$wsWorker->transport = 'ssl';
+$wsWorker->context = [
+    'ssl' => [
+        'local_cert'  => '/path/to/your/cert.pem',
+        'local_pk'    => '/path/to/your/private.key',
+        'verify_peer' => false,
+    ]
+];
+*/
+
+// ----------------------------------------------------------------------
+// WebSocket Worker 启动回调
+// ----------------------------------------------------------------------
+$wsWorker->onWorkerStart = function(Worker $worker) {
+    ws_log("[WS-Worker] PID " . getmypid() . " started");
+    Worker::log("[WS-Worker] PID " . getmypid() . " started");
+    
+    // 心跳检测定时器
+    Timer::add(55, function() use ($worker) {
+        $wsManager = WebSocketManager::getInstance();
+        $time = date('Y-m-d H:i:s');
+        
+        foreach ($worker->connections as $connection) {
+            // 如果上次心跳时间超过 120 秒，则关闭连接
+            if (empty($connection->lastHeartbeatTime)) {
+                $connection->lastHeartbeatTime = time();
+            } elseif (time() - $connection->lastHeartbeatTime > 120) {
+                ws_log("[WS] Connection #{$connection->id} timeout, closing");
+                $connection->close();
+                continue;
+            }
+            
+            // 发送心跳包
+            $connection->send(json_encode(['type' => 'ping']));
+        }
+        
+        ws_log("[{$time}] [WS-Heartbeat] Online: " . $wsManager->getOnlineCount());
+    });
+};
+
+// ----------------------------------------------------------------------
+// WebSocket 连接建立回调
+// ----------------------------------------------------------------------
+$wsWorker->onConnect = function(TcpConnection $connection) {
+    $connection->lastHeartbeatTime = time();
+    
+    $wsManager = WebSocketManager::getInstance();
+    $wsManager->addConnection($connection);
+    
+    ws_log("[WS] New connection #{$connection->id} from {$connection->getRemoteIp()}");
+    
+    // 发送欢迎消息
+    $wsManager->sendToConnection($connection, [
+        'type' => 'connected',
+        'data' => [
+            'connection_id' => $connection->id,
+            'message' => 'Welcome to FSSPHP WebSocket Server',
+            'time' => date('Y-m-d H:i:s')
+        ]
+    ]);
+};
+
+// ----------------------------------------------------------------------
+// WebSocket 消息接收回调
+// ----------------------------------------------------------------------
+$wsWorker->onMessage = function(TcpConnection $connection, string $data) {
+    $wsManager = WebSocketManager::getInstance();
+    
+    try {
+        // 更新心跳时间
+        $connection->lastHeartbeatTime = time();
+        
+        // 解析消息
+        $message = json_decode($data, true);
+        
+        if (!$message || !isset($message['type'])) {
+            $wsManager->sendToConnection($connection, [
+                'type' => 'error',
+                'data' => ['message' => 'Invalid message format']
+            ]);
+            return;
+        }
+        
+        $type = $message['type'];
+        $payload = $message['data'] ?? [];
+        
+        ws_log("[WS] Received message type '{$type}' from connection #{$connection->id}");
+        
+        // 根据消息类型处理
+        switch ($type) {
+            case 'pong':
+                // 心跳响应，已更新心跳时间
+                break;
+                
+            case 'bind':
+                // 绑定用户ID
+                if (isset($payload['user_id'])) {
+                    $wsManager->bindUser($connection, $payload['user_id']);
+                    $wsManager->sendToConnection($connection, [
+                        'type' => 'bind_success',
+                        'data' => ['user_id' => $payload['user_id']]
+                    ]);
+                }
+                break;
+                
+            case 'join':
+                // 加入房间
+                if (isset($payload['room_id'])) {
+                    $wsManager->joinRoom($connection, $payload['room_id']);
+                    
+                    // 通知房间内其他人
+                    $wsManager->sendToRoom($payload['room_id'], [
+                        'type' => 'user_joined',
+                        'data' => [
+                            'connection_id' => $connection->id,
+                            'room_id' => $payload['room_id']
+                        ]
+                    ], $connection);
+                    
+                    // 发送确认给当前连接
+                    $wsManager->sendToConnection($connection, [
+                        'type' => 'join_success',
+                        'data' => ['room_id' => $payload['room_id']]
+                    ]);
+                }
+                break;
+                
+            case 'leave':
+                // 离开房间
+                if (isset($payload['room_id'])) {
+                    $wsManager->leaveRoom($connection, $payload['room_id']);
+                    
+                    // 通知房间内其他人
+                    $wsManager->sendToRoom($payload['room_id'], [
+                        'type' => 'user_left',
+                        'data' => [
+                            'connection_id' => $connection->id,
+                            'room_id' => $payload['room_id']
+                        ]
+                    ], $connection);
+                    
+                    // 发送确认给当前连接
+                    $wsManager->sendToConnection($connection, [
+                        'type' => 'leave_success',
+                        'data' => ['room_id' => $payload['room_id']]
+                    ]);
+                }
+                break;
+                
+            case 'message':
+                // 发送消息到房间
+                if (isset($payload['room_id']) && isset($payload['content'])) {
+                    $wsManager->sendToRoom($payload['room_id'], [
+                        'type' => 'message',
+                        'data' => [
+                            'connection_id' => $connection->id,
+                            'room_id' => $payload['room_id'],
+                            'content' => $payload['content'],
+                            'time' => date('Y-m-d H:i:s')
+                        ]
+                    ]);
+                }
+                break;
+                
+            case 'broadcast':
+                // 广播消息
+                $count = $wsManager->broadcast([
+                    'type' => 'broadcast',
+                    'data' => [
+                        'connection_id' => $connection->id,
+                        'content' => $payload['content'] ?? '',
+                        'time' => date('Y-m-d H:i:s')
+                    ]
+                ], $connection);
+                
+                $wsManager->sendToConnection($connection, [
+                    'type' => 'broadcast_success',
+                    'data' => ['sent_to' => $count]
+                ]);
+                break;
+                
+            case 'private_message':
+                // 私聊消息
+                if (isset($payload['user_id']) && isset($payload['content'])) {
+                    $count = $wsManager->sendToUser($payload['user_id'], [
+                        'type' => 'private_message',
+                        'data' => [
+                            'from_connection_id' => $connection->id,
+                            'content' => $payload['content'],
+                            'time' => date('Y-m-d H:i:s')
+                        ]
+                    ]);
+                    
+                    $wsManager->sendToConnection($connection, [
+                        'type' => 'private_message_sent',
+                        'data' => [
+                            'user_id' => $payload['user_id'],
+                            'delivered' => $count > 0
+                        ]
+                    ]);
+                }
+                break;
+                
+            case 'get_room_info':
+                // 获取房间信息
+                if (isset($payload['room_id'])) {
+                    $roomInfo = $wsManager->getRoomInfo($payload['room_id']);
+                    $wsManager->sendToConnection($connection, [
+                        'type' => 'room_info',
+                        'data' => $roomInfo
+                    ]);
+                }
+                break;
+                
+            case 'get_online_count':
+                // 获取在线人数
+                $wsManager->sendToConnection($connection, [
+                    'type' => 'online_count',
+                    'data' => ['count' => $wsManager->getOnlineCount()]
+                ]);
+                break;
+                
+            default:
+                // 未知消息类型
+                $wsManager->sendToConnection($connection, [
+                    'type' => 'error',
+                    'data' => ['message' => "Unknown message type: {$type}"]
+                ]);
+        }
+        
+    } catch (Throwable $e) {
+        ws_log("[WS-Error] {$e->getMessage()} in {$e->getFile()}:{$e->getLine()}");
+        $wsManager->sendToConnection($connection, [
+            'type' => 'error',
+            'data' => ['message' => 'Internal server error']
+        ]);
+    }
+};
+
+// ----------------------------------------------------------------------
+// WebSocket 连接关闭回调
+// ----------------------------------------------------------------------
+$wsWorker->onClose = function(TcpConnection $connection) {
+    $wsManager = WebSocketManager::getInstance();
+    $wsManager->removeConnection($connection);
+    
+    ws_log("[WS] Connection #{$connection->id} closed");
+};
+
+// ----------------------------------------------------------------------
+// WebSocket 错误回调
+// ----------------------------------------------------------------------
+$wsWorker->onError = function(TcpConnection $connection, $code, $msg) {
+    ws_log("[WS-Error] Connection #{$connection->id} error: {$code} - {$msg}");
+};
+
+// ----------------------------------------------------------------------
+// 运行所有 Worker
 // ----------------------------------------------------------------------
 Worker::runAll();
