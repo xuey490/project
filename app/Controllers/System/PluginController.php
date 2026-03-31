@@ -265,23 +265,6 @@ class PluginController extends BaseController
         return $this->fail('配置更新失败');
     }
 
-    /**
-     * 获取 JSON 请求体
-     *
-     * @param Request $request
-     * @return array
-     */
-    protected function getJsonBody(Request $request): array
-    {
-        $content = $request->getContent();
-        if (empty($content)) {
-            return [];
-        }
-
-        $data = json_decode($content, true);
-        return is_array($data) ? $data : [];
-    }
-
     // ============ 插件市场 API ============
 
     /**

@@ -4,10 +4,9 @@ declare(strict_types=1);
 
 /**
  * 操作日志中间件
+ * 记录所有非白名单的 POST/PUT/PATCH/DELETE 请求
  *
  * @package App\Middlewares
- * @author  Genie
- * @date    2026-03-12
  */
 
 namespace App\Middlewares;
@@ -16,209 +15,95 @@ use App\Models\SysOperationLog;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
-/**
- * OperationLogMiddleware 操作日志中间件
- */
 class OperationLogMiddleware
 {
     /**
-     * 排除的路径
-     * @var array
+     * 白名单路径前缀（不记录操作日志）
      */
-    protected array $exceptPaths = [
-        '/api/system/operation-log',
-        '/api/system/login-log',
+    protected array $whitelist = [
+        '/api/core/login',
+        '/api/core/logout',
+        '/api/core/refresh',
+        '/api/core/captcha',
+        '/api/core/logs/',
         '/api/system/monitor',
         '/api/system/redis',
         '/api/system/database',
     ];
 
-    /**
-     * 处理请求
-     *
-     * @param Request  $request 请求对象
-     * @param callable $next    下一个处理器
-     * @return Response
-     */
     public function handle(Request $request, callable $next): Response
     {
         $startTime = microtime(true);
+        $response  = $next($request);
 
-        // 执行请求
-        $response = $next($request);
-
-        // 检查是否需要记录日志
-        if (!$this->shouldLog($request)) {
+        // 只记录写操作
+        $method = strtoupper($request->getMethod());
+        if (!in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
             return $response;
         }
 
-        // 异步记录日志
-        $this->recordLog($request, $response, $startTime);
+        // 白名单跳过
+        $path = $request->getPathInfo();
+        foreach ($this->whitelist as $prefix) {
+            if (str_starts_with($path, $prefix)) {
+                return $response;
+            }
+        }
+		$duration = round((microtime(true) - $startTime) * 1000, 2);
+        $this->writeLog($request, $response, $duration);
 
         return $response;
     }
 
-    /**
-     * 检查是否需要记录日志
-     *
-     * @param Request $request 请求对象
-     * @return bool
-     */
-    protected function shouldLog(Request $request): bool
+    protected function writeLog(Request $request, Response $response, $duration): void
     {
-        $path = $request->getPathInfo();
+        try {
+            $user      = $request->attributes->get('user', []);
+            $userAgent = $request->headers->get('User-Agent', '');
+            $ip        = $request->getClientIp() ?? '';
 
-        // 排除GET请求和特定路径
-        if ($request->getMethod() === 'GET') {
-            return false;
-        }
+            // 获取请求数据（合并 POST body 和 JSON body）
+            $params = $request->request->all();
+            if (empty($params)) {
+                $raw = $request->getContent();
+                if (!empty($raw)) {
+                    $decoded = json_decode($raw, true);
+                    $params  = is_array($decoded) ? $decoded : [];
+                }
+            }
+            // 脱敏：移除密码字段
+            unset($params['password'], $params['old_password'], $params['new_password']);
+            $requestData = json_encode($params, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            if (strlen($requestData) > 2000) {
+                $requestData = substr($requestData, 0, 2000) . '...';
+            }
 
-        // 检查排除路径
-        foreach ($this->exceptPaths as $exceptPath) {
-            if (str_starts_with($path, $exceptPath)) {
-                return false;
+            // 解析路由名称作为 service_name
+            $routeInfo   = $request->attributes->get('_route');
+            $routeName   = '';
+            if (is_array($routeInfo)) {
+                $routeName = $routeInfo['params']['_route_name'] ?? ($routeInfo['name'] ?? '');
+            } elseif (is_string($routeInfo)) {
+                $routeName = $routeInfo;
+            }
+
+            SysOperationLog::record([
+                'username'     => $user['username'] ?? ($user['name'] ?? ''),
+                'app'          => 'system',
+                'method'       => strtoupper($request->getMethod()),
+                'router'       => $request->getPathInfo(),
+                'service_name' => $routeName,
+                'ip'           => $ip,
+                'ip_location'  => '',
+                'request_data' => $requestData,
+                'created_by'   => $user['id'] ?? 0,
+				'duration'	   => $duration,
+            ]);
+        } catch (\Throwable $e) {
+            // 日志写入失败不影响主流程，开发环境下输出错误
+            if (env('APP_DEBUG', false)) {
+                error_log('[OperationLogMiddleware] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
             }
         }
-
-        return true;
     }
-
-    /**
-     * 记录操作日志
-     *
-     * @param Request  $request  请求对象
-     * @param Response $response 响应对象
-     * @param float   $startTime 开始时间
-     * @return void
-     */
-    protected function recordLog(Request $request, Response $response, float $startTime): void
-    {
-        $duration = round((microtime(true) - $startTime) * 1000); // 毫秒
-
-        $user = $request->attributes->get('user', []);
-
-        // 获取请求参数
-        $params = $request->request->all() ?: $request->query->all() ?: [];
-        $params = is_array($params) ? $params : [];
-        $paramsString = json_encode($params, JSON_UNESCAPED_SLASHES);
-
-        if (strlen($paramsString) > 2000) {
-            $paramsString = substr($paramsString, 0, 2000) . '...';
-        }
-
-        // 获取响应结果
-        $responseContent = $response->getContent();
-        $resultString = is_string($responseContent) ? $responseContent : '';
-        if (strlen($resultString) > 2000) {
-            $resultString = substr($resultString, 0, 2000) . '...';
-        }
-
-        // 获取路由信息
-        $route = $request->attributes->get('_route');
-
-        $module = $route['params']['_module'] ?? 'system';
-        $routeName = $route['params']['_route_name'] ?? '';
-
-        // 获取客户端信息
-        $userAgent = $request->headers->get('User-Agent', '');
-
-        // 获取IP地理位置
-        $ip = $request->getClientIp() ?? '';
-        $location = $this->getIpLocation($ip);
-
-        // 记录日志
-        try {
-            SysOperationLog::record([
-                'user_id' => $user['id'] ?? 0,
-                'username' => $user['username'] ?? '',
-                'module' => $module,
-                'business_type' => $this->getBusinessType($request->getMethod()),
-                'method' => $request->getMethod(),
-                'url' => $request->getPathInfo(),
-                'route_name' => $routeName,
-                'operation_ip' => $ip,
-                'operation_location' => $location,
-                'request_params' => $paramsString,
-                'response_result' => $resultString,
-                'status' => $response->getStatusCode() < 400 ? 0 : 1,
-                'duration' => $duration,
-                'browser' => $this->getBrowser($userAgent),
-                'os' => $this->getOs($userAgent),
-                'user_agent' => $userAgent,
-            ]);
-        } catch (\Exception $e) {
-            // 日志记录失败不影响正常请求
-        }
-    }
-
-    /**
-     * 获取业务类型
-     *
-     * @param string $method HTTP方法
-     * @return string
-     */
-    protected function getBusinessType(string $method): string
-    {
-        return match (strtoupper($method)) {
-            'GET' => '查询',
-            'POST' => '新增',
-            'PUT' => '修改',
-            'DELETE' => '删除',
-            'PATCH' => '修改',
-            default => '其他',
-        };
-    }
-
-    /**
-     * 获取浏览器
-     *
-     * @param string $userAgent User-Agent
-     * @return string
-     */
-    protected function getBrowser(string $userAgent): string
-    {
-        if (preg_match('/Chrome/i', $userAgent)) {
-            return 'Chrome';
-        }
-        if (preg_match('/Firefox/i', $userAgent)) {
-            return 'Firefox';
-        }
-        if (preg_match('/Safari/i', $userAgent)) {
-            return 'Safari';
-        }
-        if (preg_match('/Edge/i', $userAgent)) {
-            return 'Edge';
-        }
-        if (preg_match('/MSIE|Trident/i', $userAgent)) {
-            return 'IE';
-        }
-        return 'Other';
-    }
-
-    /**
-     * 获取操作系统
-     *
-     * @param string $userAgent User-Agent
-     * @return string
-     */
-    protected function getOs(string $userAgent): string
-    {
-        if (preg_match('/Windows/i', $userAgent)) {
-            return 'Windows';
-        }
-        if (preg_match('/Mac/i', $userAgent)) {
-            return 'Mac';
-        }
-        if (preg_match('/Linux/i', $userAgent)) {
-            return 'Linux';
-        }
-        if (preg_match('/Android/i', $userAgent)) {
-            return 'Android';
-        }
-        if (preg_match('/iOS/i', $userAgent)) {
-            return 'iOS';
-        }
-        return 'Other';
-    }
-
 }

@@ -16,13 +16,13 @@ use Symfony\Component\HttpFoundation\Response;
 class Captcha
 {
 	
-    public function captchaImage(Request $request): Response
+    public function index(Request $request): Response
     {
 		$CaptchaImage =\Framework\Utils\Captcha::base64();
 		
 		$imgsrc = $CaptchaImage['base64'];
 		
-		return new Response ( "<img src='{$imgsrc}'>" );
+		return new Response ( "<img title='captcha1' src='{$imgsrc}'>" );
 
     }
 	

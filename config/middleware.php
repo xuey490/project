@@ -62,6 +62,19 @@ return [
 		'enabled' => env('APP_DEBUG' , true),
 	],
 
+    // 测试环境写操作保护（拦截 POST/PUT/PATCH/DELETE）
+    'test_env_write_guard' => [
+        'enabled' => true,
+        'only_envs' => ['test', 'testing'],
+        'block_methods' => ['POST', 'PUT', 'PATCH', 'DELETE'],
+        'whitelist' => [
+            '/api/core/login',
+            '/api/core/logout',
+            '/api/core/refresh',
+            '/api/core/captcha*',
+        ],
+    ],
+
     // 可扩展其他中间件
     // 'rate_limit' => [...]
 ];
