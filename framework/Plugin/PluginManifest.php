@@ -5,8 +5,8 @@ declare(strict_types=1);
 /**
  * This file is part of NovaFrame Framework.
  *
- * @link     https://github.com/xuey490/novaphp
- * @license  https://github.com/xuey490/novaphp/blob/main/LICENSE
+ * @link     https://github.com/xuey490/project
+ * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
  * @Filename: PluginManifest.php
  * @Date: 2025-03-31

@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * 插件市场配置文件
  *
- * @package NovaFrame\Plugin
+ * @package Fssphp\Plugin
  */
 
 return [
@@ -17,7 +17,7 @@ return [
     | 官方插件仓库中心的 API 地址。
     |
     */
-    'official_url' => env('PLUGIN_MARKET_URL', 'https://market.novaframe.cn/api'),
+    'official_url' => env('PLUGIN_MARKET_URL', 'https://market.Fssphp.cn/api'),
 
     /*
     |--------------------------------------------------------------------------

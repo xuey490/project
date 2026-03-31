@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * server.php
- * Workerman wrapper for NovaFrame
+ * Workerman wrapper for Fssphp
  *
  * Usage:
  *  - CLI/Workerman mode: php server.php start|stop|restart|reload -d
@@ -492,7 +492,7 @@ function isWorkerProcess(): bool {
 // 如果是工作进程模式，启动 Worker
 if (isWorkerProcess()) {
     $worker = new Worker('http://0.0.0.0:8000');
-    $worker->name = 'NovaFrame-Worker';
+    $worker->name = 'Fssphp-Worker';
     $worker->count = 1;
     $framework = null;
 

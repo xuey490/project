@@ -1,4 +1,4 @@
-# NovaFrame 插件系统完善 - 实现总结
+# Fssphp 插件系统完善 - 实现总结
 
 ## 一、实现概览
 
@@ -174,7 +174,7 @@ $cacheManager->clearConfigCache('blog');
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     NovaFrame 应用                          │
+│                     Fssphp 应用                          │
 │                                                             │
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │ PluginMarketService                                  │   │
@@ -188,7 +188,7 @@ $cacheManager->clearConfigCache('blog');
 │                            ▼                                │
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │ 远程市场 API                                          │   │
-│  │ - 官方市场: https://market.novaframe.cn/api          │   │
+│  │ - 官方市场: https://market.Fssphp.cn/api          │   │
 │  │ - 第三方市场: 可配置                                  │   │
 │  └─────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
@@ -199,7 +199,7 @@ $cacheManager->clearConfigCache('blog');
 ```php
 // config/plugin/market.php
 return [
-    'official_url' => env('PLUGIN_MARKET_URL', 'https://market.novaframe.cn/api'),
+    'official_url' => env('PLUGIN_MARKET_URL', 'https://market.Fssphp.cn/api'),
     'api_key' => env('PLUGIN_MARKET_KEY', ''),
     'allow_third_party' => true,
     'third_party_markets' => [],

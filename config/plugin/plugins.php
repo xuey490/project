@@ -7,8 +7,8 @@ declare(strict_types=1);
  *
  * 管理已安装插件列表和插件扫描路径
  *
- * @package NovaFrame\Plugin
- * @author  NovaFrame Team
+ * @package Fssphp\Plugin
+ * @author  Fssphp Team
  */
 
 return [
