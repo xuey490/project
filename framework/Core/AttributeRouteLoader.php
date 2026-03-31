@@ -93,6 +93,39 @@ class AttributeRouteLoader
     }
 
     /**
+     * 从多个目录加载路由（支持插件）
+     *
+     * @param array $controllerDirs 控制器目录映射 [namespace => directory]
+     * @return RouteCollection
+     */
+    public function loadRoutesFromMultipleDirs(array $controllerDirs): RouteCollection
+    {
+        $routeCollection = new RouteCollection();
+
+        foreach ($controllerDirs as $namespace => $dir) {
+            // 临时设置当前目录和命名空间
+            $originalDir = $this->controller_dir;
+            $originalNamespace = $this->controller_namespace;
+            $originalCache = $this->scanned_files_cache;
+
+            $this->controller_dir = rtrim($dir, '/');
+            $this->controller_namespace = rtrim($namespace, '\\');
+            $this->scanned_files_cache = null; // 清除缓存以扫描新目录
+
+            // 加载该目录的路由
+            $routes = $this->loadRoutes();
+            $routeCollection->addCollection($routes);
+
+            // 恢复原设置
+            $this->controller_dir = $originalDir;
+            $this->controller_namespace = $originalNamespace;
+            $this->scanned_files_cache = $originalCache;
+        }
+
+        return $routeCollection;
+    }
+
+    /**
      * 加载所有路由
      *
      * @return RouteCollection

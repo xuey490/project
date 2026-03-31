@@ -18,6 +18,7 @@ namespace Framework\Core;
 
 use Framework\Container\Container;
 use Framework\Middleware\MiddlewareDispatcher;
+use Framework\Plugin\PluginManager;
 use Psr\Log\LoggerInterface;
 use Psr\SimpleCache\CacheInterface;
 use RuntimeException;
@@ -37,11 +38,13 @@ use Throwable;
 final class Framework
 {
     // 核心路径常量（可通过配置覆盖）
-    private const CONTROLLER_DIR = BASE_PATH . '/app/Controllers';
+    private const MAIN_CONTROLLER_DIR = BASE_PATH . '/app/Controllers';
 
-    private const CONTROLLER_NAMESPACE = 'App\Controllers';
+    private const MAIN_CONTROLLER_NAMESPACE = 'App\Controllers';
 
     private const ROUTE_CACHE_FILE = BASE_PATH . '/storage/cache/routes.php';
+
+    private const PLUGIN_CONFIG_FILE = BASE_PATH . '/config/plugin/plugins.php';
 
     private const DIR_PERMISSION = 0755; // 目录默认权限
 
@@ -58,6 +61,8 @@ final class Framework
     private Kernel $kernel;
 
     private ?LoggerInterface $logger = null;
+
+    private ?PluginManager $pluginManager = null;
 
     /**
      * 单例模式：禁止外部实例化.
@@ -170,10 +175,13 @@ final class Framework
      */
     private function initializeDependencies(): void
     {
-        // 1. 加载路由（支持缓存）
+        // 1. 初始化插件管理器
+        $this->initializePluginManager();
+
+        // 2. 加载路由（主应用 + 插件，支持缓存）
         $allRoutes = $this->loadAllRoutes();
 
-        // 2. 初始化中间件调度器
+        // 3. 初始化中间件调度器
         // 优先尝试容器获取，否则新建
         try {
             if ($this->container->has(MiddlewareDispatcher::class)) {
@@ -187,17 +195,17 @@ final class Framework
             $this->logError('Failed to initialize MiddlewareDispatcher: ' . $e->getMessage());
         }
 
-        // 3. 初始化路由
+        // 4. 初始化路由
         $this->router = new Router(
             $allRoutes,
             $this->container,
 			#$this->logger,
-            self::CONTROLLER_NAMESPACE
+            self::MAIN_CONTROLLER_NAMESPACE
         );
-		// 4. 从容器获取缓存实例
+		// 5. 从容器获取缓存实例
 		$cacheService = app('cache');
 
-		// 5. 注入到 Router
+		// 6. 注入到 Router
 		// 必须做类型检查，因为 Router 强类型要求 Psr\SimpleCache\CacheInterface
 		if ($cacheService instanceof CacheInterface) {
 			$this->router->setCache($cacheService);
@@ -210,12 +218,39 @@ final class Framework
 			error_log("Warning: app('cache') does not implement PSR-16 SimpleCache.");
 		}
 		
-		// 6. 配置安全策略 (可选，但推荐)
+		// 7. 配置安全策略 (可选，但推荐)
 		$this->router->setSecurityPolicy(
 			requireExplicitAction: false, // 默认关闭，建议开启，强制要求 #[Action]
 			blacklist: []
 		);
 		
+    }
+
+    /**
+     * 初始化插件管理器
+     */
+    private function initializePluginManager(): void
+    {
+        // 检查插件配置文件是否存在
+        if (!file_exists(self::PLUGIN_CONFIG_FILE)) {
+            $this->pluginManager = null;
+            return;
+        }
+
+        try {
+            $pluginConfig = require self::PLUGIN_CONFIG_FILE;
+            $this->pluginManager = new PluginManager($pluginConfig);
+            $this->pluginManager->discover();
+            $this->pluginManager->loadEnabled();
+
+            $loadedPlugins = array_keys($this->pluginManager->getLoaded());
+            if (!empty($loadedPlugins)) {
+                $this->logger?->info('[Plugins] Loaded: ' . implode(', ', $loadedPlugins));
+            }
+        } catch (Throwable $e) {
+            $this->logError('Failed to initialize PluginManager: ' . $e->getMessage());
+            $this->pluginManager = null;
+        }
     }
 
     /**
@@ -353,10 +388,10 @@ final class Framework
             }
         }
 
-        // 2. 加载 Attribute 注解路由
+        // 2. 加载 Attribute 注解路由（主应用）
         $attrLoader = new AttributeRouteLoader(
-            self::CONTROLLER_DIR,
-            self::CONTROLLER_NAMESPACE
+            self::MAIN_CONTROLLER_DIR,
+            self::MAIN_CONTROLLER_NAMESPACE
         );
 
         $annotatedRoutes = $attrLoader->loadRoutes();
@@ -367,19 +402,43 @@ final class Framework
             $annotatedCount = $annotatedRoutes->count();
         }
 
+        // 3. 加载插件路由
+        $pluginCount = 0;
+        if ($this->pluginManager !== null) {
+            $pluginControllerDirs = $this->pluginManager->getControllerDirs();
+            if (!empty($pluginControllerDirs)) {
+                $pluginRoutes = $attrLoader->loadRoutesFromMultipleDirs($pluginControllerDirs);
+                if ($pluginRoutes instanceof RouteCollection) {
+                    $allRoutes->addCollection($pluginRoutes);
+                    $pluginCount = $pluginRoutes->count();
+                }
+            }
+        }
+
         // 生产环境缓存路由
         if ($isProduction) {
             $this->cacheRoutes($allRoutes);
         }
 
         $this->logger?->info(sprintf(
-            '[Route Loaded]Loaded %d routes (manual: %d, annotated: %d)',
+            '[Route Loaded] Loaded %d routes (manual: %d, annotated: %d, plugins: %d)',
             $allRoutes->count(),
             $manualCount,
-            $annotatedCount
+            $annotatedCount,
+            $pluginCount
         ));
 
         return $allRoutes;
+    }
+
+    /**
+     * 获取插件管理器
+     *
+     * @return PluginManager|null
+     */
+    public function getPluginManager(): ?PluginManager
+    {
+        return $this->pluginManager;
     }
 
     /**

@@ -142,16 +142,26 @@ class LaTenantScope implements Scope
     /**
      * 检查模型是否有租户字段
      *
+     * 优先通过 $fillable 快速判断，避免不必要的数据库查询。
+     * 如果 $fillable 中没有声明 tenant_id，直接返回 false，
+     * 防止向无 tenant_id 列的表添加租户过滤条件。
+     *
      * @param Model $model 模型实例
      * @return bool 有租户字段返回 true
      */
     private function hasTenantColumn(Model $model): bool
     {
+        // 优先通过 fillable 快速判断（无需查数据库）
+        if (!in_array('tenant_id', $model->getFillable(), true)) {
+            return false;
+        }
+
+        // fillable 中有 tenant_id，再通过 getFields 确认表结构
         try {
             $fields = $model->getFields();
             return in_array('tenant_id', $fields, true);
         } catch (\Throwable $e) {
-            // 如果无法获取字段，默认启用租户隔离（安全优先）
+            // 获取字段失败时，以 fillable 声明为准，返回 true
             return true;
         }
     }

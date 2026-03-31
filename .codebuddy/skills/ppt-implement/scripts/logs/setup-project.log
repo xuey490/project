@@ -1,4 +1,0 @@
-[2026-03-12 06:33:10] [INFO] ==== setup-project.js =====
-[2026-03-12 06:33:10] [DEBUG] [PPT Setup] stdin 数据: {"session_id":"2031981763396263936","transcript_path":"/root/.codebuddy/projects/workspace/2031981763396263936.jsonl","cwd":"/workspace","hook_event_name":"PreToolUse","tool_name":"Skill","tool_input":{"skill":"github-connector","args":"clone https://github.com/xuey490/project.git /workspace --depth 1 --single-branch --branch 0.8.1"},"client":"CLI","version":"2.55.1","generation_id":"4487e5ab21e441e8bb4df7d837754f97","model":"glm-5.0"}
-[2026-03-12 06:33:10] [INFO] [PPT Setup] skill: github-connector
-[2026-03-12 06:33:10] [INFO] [PPT Setup] 跳过: skill 是 "github-connector"，不是 "ppt-implement"
