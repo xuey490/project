@@ -71,7 +71,8 @@
     "autoload": {
         "psr-4": {
             "Framework\\": "framework/",
-            "App\\": "app/"
+            "App\\": "app/",
+            "Plugins\\": "plugins/"
         },
         "files": [
             "framework/helpers.php"
