@@ -1,4 +1,4 @@
-# NovaFrame PHP 框架插件系统 - 实现总结
+# Fssphp PHP 框架插件系统 - 实现总结
 
 ## 一、已完成的工作
 
@@ -117,7 +117,7 @@ php novaphp plugin:list
     "namespace": "插件命名空间",
     "requires": {
         "php": "^8.3",
-        "novaframe": "^0.8.0"
+        "Fssphp": "^0.8.0"
     },
     "dependencies": {
         "其他插件名": "^1.0.0"

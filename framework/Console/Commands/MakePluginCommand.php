@@ -3,14 +3,14 @@
 declare(strict_types=1);
 
 /**
- * This file is part of NovaFrame Framework.
+ * This file is part of Fssphp Framework.
  *
- * @link     https://github.com/xuey490/novaphp
- * @license  https://github.com/xuey490/novaphp/blob/main/LICENSE
+ * @link     https://github.com/xuey490/project
+ * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
  * @Filename: MakePluginCommand.php
  * @Date: 2025-03-31
- * @Developer: NovaFrame Team
+ * @Developer: Fssphp Team
  * @Email: xuey863toy@gmail.com
  */
 
@@ -168,12 +168,12 @@ class MakePluginCommand extends Command
             'name' => $name,
             'title' => $className . ' Plugin',
             'version' => '1.0.0',
-            'description' => $className . ' plugin for NovaFrame',
+            'description' => $className . ' plugin for Fssphp',
             'author' => 'Your Name',
             'namespace' => "Plugins\\{$className}",
             'requires' => [
                 'php' => '^8.3',
-                'novaframe' => '^0.8.0',
+                'Fssphp' => '^0.8.0',
             ],
             'dependencies' => [],
             'autoload' => [

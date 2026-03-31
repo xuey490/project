@@ -3,11 +3,11 @@
     "title": "博客管理",
     "version": "1.0.0",
     "description": "博客文章管理插件，支持文章发布、分类、标签等功能",
-    "author": "NovaFrame Team",
+    "author": "Fssphp Team",
     "namespace": "Plugins\\Blog",
     "requires": {
         "php": "^8.3",
-        "novaframe": "^0.8.0"
+        "Fssphp": "^0.8.0"
     },
     "dependencies": {},
     "autoload": {

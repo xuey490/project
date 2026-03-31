@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * 插件迁移数据表配置
  *
- * @package NovaFrame\Plugin
+ * @package Fssphp\Plugin
  */
 
 return [

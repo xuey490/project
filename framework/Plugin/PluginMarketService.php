@@ -3,14 +3,14 @@
 declare(strict_types=1);
 
 /**
- * This file is part of NovaFrame Framework.
+ * This file is part of Fssphp Framework.
  *
- * @link     https://github.com/xuey490/novaphp
- * @license  https://github.com/xuey490/novaphp/blob/main/LICENSE
+ * @link     https://github.com/xuey490/project
+ * @license  https://github.com/xuey490/project/blob/main/LICENSE
  *
  * @Filename: PluginMarketService.php
  * @Date: 2025-03-31
- * @Developer: NovaFrame Team
+ * @Developer: Fssphp Team
  * @Email: xuey863toy@gmail.com
  */
 
@@ -52,7 +52,7 @@ class PluginMarketService
             $this->config = require $configFile;
         } else {
             $this->config = [
-                'official_url' => 'https://market.novaframe.cn/api',
+                'official_url' => 'https://market.Fssphp.cn/api',
                 'api_key' => '',
                 'allow_third_party' => true,
                 'third_party_markets' => [],
@@ -264,7 +264,7 @@ class PluginMarketService
         // 请求头
         $headers = [
             'Accept: application/json',
-            'User-Agent: NovaFrame-Plugin-Client/0.8.1',
+            'User-Agent: Fssphp-Plugin-Client/0.8.1',
         ];
 
         if (!empty($this->config['api_key'])) {

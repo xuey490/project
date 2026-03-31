@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * 博客插件配置文件
  *
- * @package NovaFrame\Plugin
+ * @package Fssphp\Plugin
  */
 
 return [

@@ -4,10 +4,10 @@
 declare(strict_types=1);
 
 /**
- * NovaFrame CLI 入口文件
+ * Fssphp CLI 入口文件
  *
- * @package NovaFrame
- * @author  NovaFrame Team
+ * @package Fssphp
+ * @author  Fssphp Team
  */
 
 // ✅ 修复：定义项目根目录常量（必须添加这行）
