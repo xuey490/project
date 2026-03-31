@@ -31,26 +31,17 @@ class AuthMiddleware
             return $next($request);
         }
 
-        /** @var array<class-string,object> $attributes */
-        $attributes = $request->attributes->get('_attributes', []);
-        /** @var Auth|null $auth */
-        $auth = $attributes[Auth::class] ?? null;
-
-        $routeInfo = $request->attributes->get('_route');
-
-        $legacyAuth = $request->attributes->get('_auth', false);
-        $needAuth   = ($auth && $auth->required) || $legacyAuth === true;
-
-        if (! $needAuth && $this->isAdminRequest($request, $routeInfo)) {
-            $needAuth = true;
-        }
-
-        if (! $needAuth) {
-            return $next($request);
-        }
+        // 白名单之外的所有请求都必须验证 token
+        app('db');
 
         $accessToken = $this->extractAccessToken($request);
         if (! $accessToken) {
+            $this->debugLog('[AuthMiddleware] 401 - 无access_token', [
+                'path' => $request->getPathInfo(),
+                'method' => $request->getMethod(),
+                'auth_header' => $request->headers->get('Authorization'),
+                'cookie_access_token' => $request->cookies->has('access_token') ? 'exists' : 'missing',
+            ]);
             return BaseJsonResponse::unauthorized('请先登录');
         }
 
@@ -68,10 +59,15 @@ class AuthMiddleware
             $tenantId = (int) ($claims->get('tenant_id') ?? 0);
             $exp  = $claims->get('exp')->getTimestamp();
 
-            // 2️⃣ 设置租户上下文（多租户支持）- 直接设置到 Request 避免 RequestStack 依赖
+            // 2️⃣ 设置租户上下文（多租户隔离）
             TenantContext::setTenantIdToRequest($request, $tenantId > 0 ? $tenantId : null);
 
-            // 3️⃣ 角色校验
+            // 3️⃣ 角色校验（仅当路由明确声明了角色限制时才校验）
+            $attributes = $request->attributes->get('_attributes', []);
+            /** @var Auth|null $auth */
+            $auth = $attributes[Auth::class] ?? null;
+            $routeInfo = $request->attributes->get('_route');
+
             $routeRoles = $request->attributes->get('_roles');
             if (!is_array($routeRoles) && is_array($routeInfo) && isset($routeInfo['__meta_flat']['_roles']) && is_array($routeInfo['__meta_flat']['_roles'])) {
                 $routeRoles = $routeInfo['__meta_flat']['_roles'];
@@ -80,6 +76,11 @@ class AuthMiddleware
 
             if ((! empty($auth?->roles) && ! in_array($role, $auth->roles, true))
                 || (! empty($routeRoles) && ! in_array($role, $routeRoles, true))) {
+                $this->debugLog('[AuthMiddleware] 403 - 角色不匹配', [
+                    'path' => $request->getPathInfo(),
+                    'user_role' => $role,
+                    'required_roles' => $auth?->roles ?? $routeRoles,
+                ]);
                 return BaseJsonResponse::error('无权限访问！', 403);
             }
 
@@ -89,9 +90,12 @@ class AuthMiddleware
                 $this->tryRefresh($request, $jwt, $uid);
             }
 
+            //error_log(json_encode($claims->all()));
+
             // 5️⃣ 注入用户上下文
             $request->attributes->set('user', [
                 'id'        => $uid,
+                'username'  => $claims->get('name') ?? '',
                 'role'      => $role,
                 'tenant_id' => $tenantId,
             ]);
@@ -99,7 +103,8 @@ class AuthMiddleware
             $request->attributes->set('user_claims', $claims->all());
 
             // 6️⃣ 验证用户状态（使用数据库字段：status 和 deleted_at）
-            $currentUser = SysUser::with(['dept', 'roles', 'roles.depts', 'roles.menus'])->find($uid);
+            //$currentUser = SysUser::with(['dept', 'roles', 'roles.depts', 'roles.menus'])->find($uid);
+            $currentUser = SysUser::with(['dept', 'roles', 'roles.dataScopeDepts', 'roles.menus'])->find($uid);
             if ($currentUser) {
                 // 检查用户是否被禁用（status = 0 表示禁用）
                 if ($currentUser->isDisabled()) {
@@ -117,7 +122,18 @@ class AuthMiddleware
             }
 
         } catch (\Throwable $e) {
-            return BaseJsonResponse::unauthorized('登录已过期或无效');
+            $this->debugLog('[AuthMiddleware] 401 - parseForAccess 异常', [
+                'path' => $request->getPathInfo(),
+                'error' => get_class($e) . ': ' . $e->getMessage(),
+                'token_prefix' => substr($accessToken, 0, 30) . '...',
+                'file' => $e->getFile() . ':' . $e->getLine(),
+            ]);
+            // 开发环境返回详细错误信息，生产环境返回通用提示
+            $debug = env('APP_DEBUG', false);
+            $msg = $debug
+                ? '登录已过期或无效: ' . $e->getMessage()
+                : '登录已过期或无效';
+            return BaseJsonResponse::unauthorized($msg);
         }
 
         // 7️⃣ 执行后续逻辑
@@ -238,21 +254,40 @@ class AuthMiddleware
     protected function isWhitelisted(Request $request): bool
     {
         $path = (string) $request->getPathInfo();
-        $method = strtoupper((string) $request->getMethod());
 
-        if ($method === 'OPTIONS') {
+        // 精确匹配白名单路径
+        $exactWhitelist = [
+            '/api/core/login',
+            '/api/core/logout',
+            '/api/core/captcha',
+            '/api/core/refresh',
+            '/api/core/tenants-by-username',
+        ];
+
+        if (in_array($path, $exactWhitelist, true)) {
             return true;
         }
 
-        if (in_array($path, ['/system/login', '/system/logout', '/login', '/logout'])) {
-            return true;
-        }
-
-        $controller = $request->attributes->get('_controller');
-        if (is_string($controller) && str_contains($controller, 'Auth::login')) {
+        // 验证码接口（前缀匹配）
+        if (str_starts_with($path, '/api/core/captcha')) {
             return true;
         }
 
         return false;
+    }
+
+    /**
+     * 临时诊断日志（排查401后可删除）
+     */
+    protected function debugLog(string $message, array $context = []): void
+    {
+        $logFile = BASE_PATH . '/runtime/logs/auth_debug.log';
+        $dir = dirname($logFile);
+        if (!is_dir($dir)) {
+            @mkdir($dir, 0755, true);
+        }
+        $time = date('Y-m-d H:i:s');
+        $line = "[{$time}] {$message}" . ($context ? ' | ' . json_encode($context, JSON_UNESCAPED_UNICODE) : '') . PHP_EOL;
+        @file_put_contents($logFile, $line, FILE_APPEND);
     }
 }

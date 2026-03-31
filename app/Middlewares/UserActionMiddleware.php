@@ -56,7 +56,6 @@ class UserActionMiddleware
      */
     private function logAction(Request $request, Response $response): void
     {
-		dump('LogAction');
         // 获取注解配置
 		$attributes = $request->attributes->get('_attributes', []);
 		

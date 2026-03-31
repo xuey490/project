@@ -56,7 +56,8 @@ class BaseJsonResponse extends JsonResponse
     ): static {
         return new static([
             'code' => 200, // 与前端 ApiStatus.success 对齐
-            'msg'  => $msg,
+            'msg' => $msg,
+            'message' => $msg,
             'data' => $data,
         ], self::HTTP_OK);
     }
@@ -79,7 +80,8 @@ class BaseJsonResponse extends JsonResponse
     ): static {
         return new static([
             'code' => $code,
-            'msg'  => $msg,
+            'msg' => $msg,
+            'message' => $msg,
             'data' => $data,
         ], self::HTTP_OK);
     }
@@ -101,7 +103,8 @@ class BaseJsonResponse extends JsonResponse
     ): static {
         return new static([
             'code' => $code,
-            'msg'  => $msg,
+            'msg' => $msg,
+            'message' => $msg,
             'data' => [],
         ], $httpStatus);
     }
@@ -119,7 +122,8 @@ class BaseJsonResponse extends JsonResponse
     ): static {
         return new static([
             'code' => 401,
-            'msg'  => $msg,
+            'msg' => $msg,
+            'message' => $msg,
             'data' => [],
         ], self::HTTP_UNAUTHORIZED);
     }
@@ -137,7 +141,8 @@ class BaseJsonResponse extends JsonResponse
     ): static {
         return new static([
             'code' => 403,
-            'msg'  => $msg,
+            'msg' => $msg,
+            'message' => $msg,
             'data' => [],
         ], self::HTTP_FORBIDDEN);
     }

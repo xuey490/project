@@ -25,6 +25,12 @@ class SysPluginDao extends BaseDao
      */
     protected string $modelClass = SysPlugin::class;
 
+    // 指定该 DAO 操作哪个模型
+    protected function setModel(): string
+    {
+        return \App\Models\SysPlugin::class;
+    }
+	
     /**
      * 根据名称查找插件
      *

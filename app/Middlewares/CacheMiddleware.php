@@ -49,7 +49,7 @@ class CacheMiddleware
 
         // 2. 生成缓存 Key
         // 如果注解没指定 Key，则使用 Request URI (包含查询参数) 的 Hash
-        $cacheKey = $attr->key ?: 'route_cache_' . md5($request->getUri());
+        $cacheKey = $attr->key ?: 'route:cache:' . md5($request->getUri());
 
         // 3. [尝试读取缓存]
         $cachedData = app('cache')->get($cacheKey);
