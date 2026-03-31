@@ -29,7 +29,7 @@ class PluginService extends BaseService
      *
      * @var SysPluginDao
      */
-    protected SysPluginDao $dao;
+    protected SysPluginDao $Plugdao;
 
     /**
      * 插件管理器
@@ -50,7 +50,7 @@ class PluginService extends BaseService
      */
     protected function initialize(): void
     {
-        $this->dao = new SysPluginDao();
+        $this->Plugdao = new SysPluginDao();
 
         // 加载插件配置
         $configFile = BASE_PATH . '/config/plugin/plugins.php';
@@ -124,7 +124,7 @@ class PluginService extends BaseService
             $found[] = $name;
 
             // 检查是否已存在于数据库
-            $existing = $this->dao->findByName($name);
+            $existing = $this->Plugdao->findByName($name);
 
             if ($existing === null) {
                 // 新插件，记录到数据库
@@ -176,7 +176,7 @@ class PluginService extends BaseService
         }
 
         // 检查数据库记录
-        $plugin = $this->dao->findByName($name);
+        $plugin = $this->Plugdao->findByName($name);
         if ($plugin !== null && $plugin->isInstalled()) {
             return ['success' => false, 'message' => "插件 '{$name}' 已安装"];
         }
@@ -223,7 +223,7 @@ class PluginService extends BaseService
      */
     public function uninstall(string $name): array
     {
-        $plugin = $this->dao->findByName($name);
+        $plugin = $this->Plugdao->findByName($name);
         if ($plugin === null) {
             return ['success' => false, 'message' => "插件 '{$name}' 未安装"];
         }
@@ -256,7 +256,7 @@ class PluginService extends BaseService
      */
     public function enable(string $name): array
     {
-        $plugin = $this->dao->findByName($name);
+        $plugin = $this->Plugdao->findByName($name);
         if ($plugin === null) {
             return ['success' => false, 'message' => "插件 '{$name}' 未安装"];
         }
@@ -290,7 +290,7 @@ class PluginService extends BaseService
      */
     public function disable(string $name): array
     {
-        $plugin = $this->dao->findByName($name);
+        $plugin = $this->Plugdao->findByName($name);
         if ($plugin === null) {
             return ['success' => false, 'message' => "插件 '{$name}' 未安装"];
         }
@@ -390,7 +390,7 @@ class PluginService extends BaseService
      */
     public function getConfig(string $name): array
     {
-        $plugin = $this->dao->findByName($name);
+        $plugin = $this->Plugdao->findByName($name);
         if ($plugin === null) {
             return [];
         }
@@ -417,7 +417,7 @@ class PluginService extends BaseService
      */
     public function updateConfig(string $name, array $config): bool
     {
-        $plugin = $this->dao->findByName($name);
+        $plugin = $this->Plugdao->findByName($name);
         if ($plugin === null) {
             return false;
         }

@@ -1,13 +1,21 @@
 <?php
 
 return [
+    // 测试环境写操作保护（仅在 APP_ENV 命中配置时生效）
+    \App\Middlewares\TestEnvWriteGuardMiddleware::class,
+
     // 认证中间件（验证 JWT Token）
-    \App\Middlewares\AuthMiddleware::class,
+    #\App\Middlewares\AuthMiddleware::class,
 
     // 操作日志中间件（记录写操作）
-    \App\Middlewares\OperationLogMiddleware::class,
+    #\App\Middlewares\OperationLogMiddleware::class,
+
+	//租户id解析中间件
+	#\App\Middlewares\TenantMiddleware::class,
 
     // 以下中间件按需启用：
-    // \App\Middlewares\CasbinRbacMiddleware::class,
-    // \App\Middlewares\MenuPermissionMiddleware::class,
+    #\App\Middlewares\CasbinRbacMiddleware::class,
+    #\App\Middlewares\MenuPermissionMiddleware::class,
+
+   # \App\Middlewares\PermissionMiddleware::class,
 ];
