@@ -10,6 +10,9 @@ declare(strict_types=1);
  * @author  NovaFrame Team
  */
 
+// ✅ 修复：定义项目根目录常量（必须添加这行）
+define('BASE_PATH', __DIR__);
+
 require __DIR__ . '/vendor/autoload.php';
 
 use Symfony\Component\Console\Application;
@@ -28,6 +31,7 @@ use Framework\Console\Commands\PluginDisableCommand;
 use Framework\Console\Commands\MakePluginCommand;
 use Framework\Console\Commands\PluginCacheCommand;
 use Framework\Console\Commands\PluginMarketCommand;
+
 // 路由命令
 use Framework\Console\Commands\RouteListCommand;
 

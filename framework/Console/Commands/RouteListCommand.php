@@ -33,7 +33,7 @@ use Symfony\Component\Routing\RouteCollection;
  * 显示系统中所有注册的路由，包括：
  * - 手动路由 (config/routes.php)
  * - 主应用注解路由 (app/Controllers)
- * - 插件注解路由 (plugins/*/Controllers)
+ * - 插件注解路由 (plugins/Controllers)
  *
  * 使用方法：
  *   php novaphp route:list
@@ -57,7 +57,8 @@ class RouteListCommand extends Command
      */
     protected function configure(): void
     {
-        $this->setDescription('列出所有路由')
+        $this->setName('route:list') // ✅ 关键修复
+             ->setDescription('列出所有路由')
              ->setHelp('此命令显示系统中所有注册的路由，包括手动路由、注解路由和插件路由。')
              ->addOption('method', 'm', InputOption::VALUE_OPTIONAL, '按 HTTP 方法筛选')
              ->addOption('path', 'p', InputOption::VALUE_OPTIONAL, '按路径前缀筛选')
