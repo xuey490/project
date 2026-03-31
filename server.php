@@ -23,6 +23,7 @@ use Workerman\Timer;
 use Workerman\Protocols\Http;
 use Symfony\Component\HttpFoundation\Request as SymfonyRequest;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Framework\Core\Framework;
 #use Symfony\Component\HttpFoundation\Session\Session;
 #use Symfony\Component\HttpFoundation\Session\Storage\NativeSessionStorage;
