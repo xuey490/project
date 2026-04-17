@@ -28,11 +28,11 @@ class CreateBlogPostsTable extends Migration
         $engine = $config['engine'] ?? 'thinkORM';
 
         if ($engine === 'laravelORM') {
-            // Laravel ORM 方式
-            \Illuminate\Support\Facades\Schema::create('blog_posts', function ($table) {
+            // Laravel ORM 方式（使用 SchemaBuilder，避免 Facade 依赖）
+            $this->schema()->create('blog_posts', function ($table) {
                 $table->id();
                 $table->string('title', 255)->comment('文章标题');
-                $table->string('slug', 255)->unique()->comment('URL别名');
+                $table->string('slug', 191)->unique()->comment('URL别名');
                 $table->string('summary', 500)->nullable()->comment('文章摘要');
                 $table->text('content')->comment('文章内容');
                 $table->string('cover_image', 255)->nullable()->comment('封面图片');
@@ -56,7 +56,7 @@ class CreateBlogPostsTable extends Migration
                 CREATE TABLE IF NOT EXISTS `blog_posts` (
                     `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
                     `title` VARCHAR(255) NOT NULL COMMENT '文章标题',
-                    `slug` VARCHAR(255) NOT NULL UNIQUE COMMENT 'URL别名',
+                    `slug` VARCHAR(191) NOT NULL UNIQUE COMMENT 'URL别名',
                     `summary` VARCHAR(500) NULL COMMENT '文章摘要',
                     `content` TEXT NOT NULL COMMENT '文章内容',
                     `cover_image` VARCHAR(255) NULL COMMENT '封面图片',

@@ -47,7 +47,8 @@ class PluginListCommand extends Command
      */
     protected function configure(): void
     {
-        $this->setDescription('列出所有插件')
+        $this->setName(self::$defaultName)
+             ->setDescription('列出所有插件')
              ->setHelp('此命令列出所有已发现和已安装的插件，包括其状态、版本等信息。');
     }
 

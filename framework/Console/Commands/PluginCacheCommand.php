@@ -50,7 +50,8 @@ class PluginCacheCommand extends Command
      */
     protected function configure(): void
     {
-        $this->setDescription('清除插件缓存')
+        $this->setName(self::$defaultName)
+             ->setDescription('清除插件缓存')
              ->setHelp('此命令清除插件相关的缓存，包括路由缓存、清单缓存、配置缓存等。')
              ->addOption('routes', 'r', InputOption::VALUE_NONE, '仅清除路由缓存')
              ->addOption('manifests', 'm', InputOption::VALUE_NONE, '仅清除清单缓存')

@@ -28,7 +28,7 @@ class CreateBlogCategoriesTable extends Migration
         $engine = $config['engine'] ?? 'thinkORM';
 
         if ($engine === 'laravelORM') {
-            \Illuminate\Support\Facades\Schema::create('blog_categories', function ($table) {
+            $this->schema()->create('blog_categories', function ($table) {
                 $table->id();
                 $table->string('name', 100)->comment('分类名称');
                 $table->string('slug', 100)->unique()->comment('URL别名');

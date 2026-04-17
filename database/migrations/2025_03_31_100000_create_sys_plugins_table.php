@@ -16,7 +16,7 @@ return new class {
         $engine = $config['engine'] ?? 'thinkORM';
 
         if ($engine === 'laravelORM') {
-            \Illuminate\Support\Facades\Schema::create('sys_plugins', function ($table) {
+            $db->getSchemaBuilder()->create('sys_plugins', function ($table) {
                 $table->id();
                 $table->string('name', 100)->unique()->comment('插件名称');
                 $table->string('title', 200)->comment('插件标题');
@@ -65,7 +65,7 @@ return new class {
         $engine = $config['engine'] ?? 'thinkORM';
 
         if ($engine === 'laravelORM') {
-            \Illuminate\Support\Facades\Schema::dropIfExists('sys_plugins');
+            $db->getSchemaBuilder()->dropIfExists('sys_plugins');
         } else {
             $db->statement("DROP TABLE IF EXISTS `sys_plugins`;");
         }

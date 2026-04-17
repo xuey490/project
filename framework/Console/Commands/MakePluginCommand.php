@@ -54,7 +54,8 @@ class MakePluginCommand extends Command
      */
     protected function configure(): void
     {
-        $this->setDescription('创建插件骨架')
+        $this->setName(self::$defaultName)
+             ->setDescription('创建插件骨架')
              ->addArgument('name', InputArgument::REQUIRED, '插件名称')
              ->setHelp('此命令创建一个新插件的目录结构和基础文件。');
     }
