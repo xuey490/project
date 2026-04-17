@@ -135,8 +135,8 @@ abstract class Migration
         $engine = $config['engine'] ?? 'thinkORM';
 
         if ($engine === 'laravelORM') {
-            // Laravel ORM 方式
-            \Illuminate\Support\Facades\Schema::create($table, $callback);
+            // 通过 SchemaBuilder 执行，避免依赖 Facade 容器别名
+            $this->schema()->create($table, $callback);
         } else {
             // ThinkORM 方式 - 执行原始 SQL
             // 简化实现，实际应根据 callback 解析字段
@@ -160,7 +160,7 @@ abstract class Migration
         $engine = $config['engine'] ?? 'thinkORM';
 
         if ($engine === 'laravelORM') {
-            \Illuminate\Support\Facades\Schema::dropIfExists($table);
+            $this->schema()->dropIfExists($table);
         } else {
             $this->db->statement("DROP TABLE IF EXISTS `{$table}`;");
         }
@@ -178,7 +178,7 @@ abstract class Migration
         $engine = $config['engine'] ?? 'thinkORM';
 
         if ($engine === 'laravelORM') {
-            return \Illuminate\Support\Facades\Schema::hasTable($table);
+            return $this->schema()->hasTable($table);
         }
 
         // ThinkORM 方式

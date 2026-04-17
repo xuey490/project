@@ -650,7 +650,7 @@ $httpWorker->onMessage = function(TcpConnection $connection, WorkermanRequest $r
 // ----------------------------------------------------------------------
 $wsWorker = new Worker('websocket://0.0.0.0:1234');
 $wsWorker->name = 'FSSPHP-WebSocket';
-$wsWorker->count = 2;
+$wsWorker->count = 1;
 
 // 如果需要 SSL/TLS (wss://)，取消下面的注释并配置证书路径
 /*

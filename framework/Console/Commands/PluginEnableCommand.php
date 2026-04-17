@@ -47,7 +47,8 @@ class PluginEnableCommand extends Command
      */
     protected function configure(): void
     {
-        $this->setDescription('启用插件')
+        $this->setName(self::$defaultName)
+             ->setDescription('启用插件')
              ->addArgument('name', InputArgument::REQUIRED, '插件名称')
              ->setHelp('此命令启用指定的已安装插件。');
     }

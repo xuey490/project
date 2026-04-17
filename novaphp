@@ -16,6 +16,8 @@ define('BASE_PATH', __DIR__);
 require __DIR__ . '/vendor/autoload.php';
 
 use Symfony\Component\Console\Application;
+use Framework\Container\Container;
+use Framework\Core\App;
 // 原有命令
 use Framework\Console\Commands\MakeControllerCommand;
 use Framework\Console\Commands\MakeModelCommand;
@@ -34,6 +36,12 @@ use Framework\Console\Commands\PluginMarketCommand;
 
 // 路由命令
 use Framework\Console\Commands\RouteListCommand;
+
+// 初始化容器，确保 CLI 命令中可使用 app() / App::make()
+Container::init();
+App::setContainer(Container::getInstance());
+app('db');
+
 
 $application = new Application('Novaphp Framework', '0.8.1');
 
