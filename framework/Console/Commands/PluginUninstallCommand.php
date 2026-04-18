@@ -50,11 +50,13 @@ class PluginUninstallCommand extends Command
      */
     protected function configure(): void
     {
-        $this->setDescription('卸载插件')
+        $this->setName(self::$defaultName)
+             ->setDescription('卸载插件')
              ->addArgument('name', InputArgument::REQUIRED, '插件名称')
              ->addOption('force', 'f', InputOption::VALUE_NONE, '强制卸载（忽略依赖检查）')
              ->setHelp('此命令卸载指定的插件，包括回滚数据库迁移和清理插件配置。');
     }
+
 
     /**
      * 执行命令

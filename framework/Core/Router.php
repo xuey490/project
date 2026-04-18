@@ -413,16 +413,33 @@ class Router
         // 恢复基本的 Request Attributes
         $attributes = $cachedRoute['params'] ?? [];
         $attributes['_controller'] = $cachedRoute['controller'] . '::' . $cachedRoute['method'];
-        $attributes['_middleware'] = $cachedRoute['middleware'] ?? [];
+        $cachedMiddleware = is_array($cachedRoute['middleware'] ?? null) ? $cachedRoute['middleware'] : [];
 
-        // 恢复元数据 (Auth, Roles 等)
-        if (isset($cachedRoute['__meta_flat'])) {
-            $attributes = array_merge($attributes, $cachedRoute['__meta_flat']);
+        // 即使命中缓存，也重新读取最新 Attribute 元数据，避免注解变更后缓存导致鉴权失效
+        $controller = (string) ($cachedRoute['controller'] ?? '');
+        $method = (string) ($cachedRoute['method'] ?? '');
+        if ($controller !== '' && $method !== '') {
+            $meta = $this->getMetadata($controller, $method);
+            $attributes['_middleware'] = array_values(array_unique(array_merge(
+                $cachedMiddleware,
+                (array) ($meta['middleware'] ?? [])
+            )));
+            $attributes['_auth'] = $meta['auth'] ?? null;
+            $attributes['_roles'] = array_values(array_unique((array) ($meta['roles'] ?? [])));
+            $attributes['_attributes'] = $meta['attributes_instances'] ?? [];
+
+            // 同步更新缓存结果中的扁平元数据，保证后续逻辑一致
+            $cachedRoute['middleware'] = $attributes['_middleware'];
+            $cachedRoute['__meta_flat'] = [
+                '_auth' => $attributes['_auth'],
+                '_roles' => $attributes['_roles'],
+            ];
+        } else {
+            $attributes['_middleware'] = $cachedMiddleware;
+            if (isset($cachedRoute['__meta_flat'])) {
+                $attributes = array_merge($attributes, $cachedRoute['__meta_flat']);
+            }
         }
-
-        // 注意：如果需要 _attributes (对象实例)，需要确保 saveToCache 时序列化了它们
-        // 这里为了性能和安全性，建议业务代码直接从 _auth / _roles 读取简单类型数据，
-        // 而不是依赖对象实例。如果必须依赖对象，cache 必须支持对象序列化。
 
         $request->attributes->add($attributes);
         return $cachedRoute;

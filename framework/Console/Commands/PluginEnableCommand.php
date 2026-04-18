@@ -42,12 +42,14 @@ class PluginEnableCommand extends Command
      */
     protected static $defaultName = 'plugin:enable';
 
+
     /**
      * 配置命令
      */
     protected function configure(): void
     {
-        $this->setDescription('启用插件')
+        $this->setName(self::$defaultName)
+             ->setDescription('启用插件')
              ->addArgument('name', InputArgument::REQUIRED, '插件名称')
              ->setHelp('此命令启用指定的已安装插件。');
     }

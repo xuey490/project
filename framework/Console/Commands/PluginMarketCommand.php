@@ -34,7 +34,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  *   php novaphp plugin:market search blog
  *   php novaphp plugin:market detail blog
  *   php novaphp plugin:market install blog
- *   php novaphp plugin:market install blog --version=1.2.0
+ *   php novaphp plugin:market install blog --plugin-version=1.2.0
  *
  * @package Framework\Console\Commands
  */
@@ -59,11 +59,12 @@ class PluginMarketCommand extends Command
      */
     protected function configure(): void
     {
-        $this->setDescription('插件市场操作')
+        $this->setName(self::$defaultName)
+             ->setDescription('插件市场操作')
              ->setHelp('从远程市场搜索、查看和安装插件。')
              ->addArgument('action', InputArgument::REQUIRED, '操作: search, detail, install, markets')
              ->addArgument('name', InputArgument::OPTIONAL, '插件名称')
-             ->addOption('version', 'v', InputOption::VALUE_OPTIONAL, '指定版本')
+             ->addOption('plugin-version', null, InputOption::VALUE_OPTIONAL, '指定插件版本')
              ->addOption('page', 'p', InputOption::VALUE_OPTIONAL, '页码', 1)
              ->addOption('limit', 'l', InputOption::VALUE_OPTIONAL, '每页数量', 20)
              ->addOption('market', 'm', InputOption::VALUE_OPTIONAL, '指定市场地址');
@@ -222,7 +223,7 @@ class PluginMarketCommand extends Command
             return Command::FAILURE;
         }
 
-        $version = $input->getOption('version') ?? 'latest';
+        $version = $input->getOption('plugin-version') ?? 'latest';
         $market = $input->getOption('market');
 
         $io->title("从市场安装插件: {$name}");

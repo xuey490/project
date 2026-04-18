@@ -28,7 +28,7 @@ class CreateBlogTagsTable extends Migration
         $engine = $config['engine'] ?? 'thinkORM';
 
         if ($engine === 'laravelORM') {
-            \Illuminate\Support\Facades\Schema::create('blog_tags', function ($table) {
+            $this->schema()->create('blog_tags', function ($table) {
                 $table->id();
                 $table->string('name', 50)->comment('标签名称');
                 $table->string('slug', 50)->unique()->comment('URL别名');
@@ -36,7 +36,7 @@ class CreateBlogTagsTable extends Migration
             });
 
             // 文章标签关联表
-            \Illuminate\Support\Facades\Schema::create('blog_post_tags', function ($table) {
+            $this->schema()->create('blog_post_tags', function ($table) {
                 $table->unsignedBigInteger('post_id');
                 $table->unsignedBigInteger('tag_id');
                 $table->primary(['post_id', 'tag_id']);

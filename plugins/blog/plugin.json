@@ -21,6 +21,6 @@
     },
     "routes": {
         "prefix": "/api/blog",
-        "middleware": []
+        "middleware": ["App\\Middlewares\\AuthMiddleware"]
     }
 }

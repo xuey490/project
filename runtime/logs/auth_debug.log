@@ -3,3 +3,34 @@
 [2026-03-31 20:33:42] [AuthMiddleware] 401 - parseForAccess 异常 | {"path":"\/home","error":"Illuminate\\Database\\QueryException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'fssoa.sys_user' doesn't exist (Connection: default, Host: 127.0.0.1, Port: 3306, Database: fssoa, SQL: select * from `sys_user` where `sys_user`.`id` = 1 and `sys_user`.`deleted_at` is null limit 1)","token_prefix":"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUz...","file":"C:\\Users\\Administrator\\Desktop\\fssphp\\project\\vendor\\illuminate\\database\\Connection.php:838"}
 [2026-03-31 20:33:46] [AuthMiddleware] 401 - parseForAccess 异常 | {"path":"\/home\/index","error":"Illuminate\\Database\\QueryException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'fssoa.sys_user' doesn't exist (Connection: default, Host: 127.0.0.1, Port: 3306, Database: fssoa, SQL: select * from `sys_user` where `sys_user`.`id` = 1 and `sys_user`.`deleted_at` is null limit 1)","token_prefix":"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUz...","file":"C:\\Users\\Administrator\\Desktop\\fssphp\\project\\vendor\\illuminate\\database\\Connection.php:838"}
 [2026-03-31 20:33:47] [AuthMiddleware] 401 - parseForAccess 异常 | {"path":"\/home\/index","error":"Illuminate\\Database\\QueryException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'fssoa.sys_user' doesn't exist (Connection: default, Host: 127.0.0.1, Port: 3306, Database: fssoa, SQL: select * from `sys_user` where `sys_user`.`id` = 1 and `sys_user`.`deleted_at` is null limit 1)","token_prefix":"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUz...","file":"C:\\Users\\Administrator\\Desktop\\fssphp\\project\\vendor\\illuminate\\database\\Connection.php:838"}
+[2026-04-18 20:41:34] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/system\/user\/list","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:21:08] [AuthMiddleware] 401 - 无access_token | {"path":"\/post\/list","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:21:11] [AuthMiddleware] 401 - 无access_token | {"path":"\/post\/list","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:21:11] [AuthMiddleware] 401 - 无access_token | {"path":"\/post\/list","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:21:27] [AuthMiddleware] 401 - 无access_token | {"path":"\/post\/list","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:22:18] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/system\/post\/list","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:24:11] [AuthMiddleware] 401 - 无access_token | {"path":"\/post\/detail","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:24:14] [AuthMiddleware] 401 - 无access_token | {"path":"\/post\/detail","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:24:14] [AuthMiddleware] 401 - 无access_token | {"path":"\/post\/detail","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:24:14] [AuthMiddleware] 401 - 无access_token | {"path":"\/post\/detail","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:24:15] [AuthMiddleware] 401 - 无access_token | {"path":"\/post\/detail","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:26:20] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/system\/post\/list","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:26:24] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/system\/user\/list","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:29:32] [AuthMiddleware] 401 - 无access_token | {"path":"\/post\/list","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:29:33] [AuthMiddleware] 401 - 无access_token | {"path":"\/post\/list","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:29:34] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/blog\/posts","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:32:14] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/blog\/posts","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:32:15] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/blog\/posts","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:32:22] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/blog\/posts","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:32:23] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/blog\/posts","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:32:31] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/blog\/posts","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:32:31] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/blog\/posts","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:32:32] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/blog\/posts","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:32:32] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/blog\/posts","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:32:32] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/blog\/posts","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:32:33] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/blog\/posts","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:32:33] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/blog\/posts","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:33:29] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/blog\/posts","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:33:29] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/blog\/posts","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:33:31] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/blog\/posts","method":"GET","auth_header":null,"cookie_access_token":"missing"}
+[2026-04-18 21:33:31] [AuthMiddleware] 401 - 无access_token | {"path":"\/api\/blog\/posts","method":"GET","auth_header":null,"cookie_access_token":"missing"}

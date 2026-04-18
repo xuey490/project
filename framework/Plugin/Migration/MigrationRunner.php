@@ -189,11 +189,31 @@ class MigrationRunner
     public function getExecutedMigrations(string $pluginName): array
     {
         try {
-            return $this->db->table($this->migrationTable)
+            $rows = $this->db->table($this->migrationTable)
                 ->where('plugin_name', $pluginName)
                 ->orderBy('id', 'desc')
                 ->get()
                 ->toArray();
+
+            $normalized = [];
+            foreach ($rows as $row) {
+                if (is_object($row)) {
+                    /** @var object $row */
+                    $row = get_object_vars($row);
+                }
+                if (!is_array($row)) {
+                    continue;
+                }
+
+                $normalized[] = [
+                    'plugin_name' => (string) ($row['plugin_name'] ?? ''),
+                    'migration_name' => (string) ($row['migration_name'] ?? ''),
+                    'migration_file' => (string) ($row['migration_file'] ?? ''),
+                    'executed_at' => (string) ($row['executed_at'] ?? ''),
+                ];
+            }
+
+            return $normalized;
         } catch (\Throwable $e) {
             return [];
         }

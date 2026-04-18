@@ -64,6 +64,8 @@ class AuthMiddleware
 
             // 3️⃣ 角色校验（仅当路由明确声明了角色限制时才校验）
             $attributes = $request->attributes->get('_attributes', []);
+			
+
             /** @var Auth|null $auth */
             $auth = $attributes[Auth::class] ?? null;
             $routeInfo = $request->attributes->get('_route');

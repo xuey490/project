@@ -50,7 +50,8 @@ class PluginInstallCommand extends Command
      */
     protected function configure(): void
     {
-        $this->setDescription('安装插件')
+        $this->setName(self::$defaultName)
+             ->setDescription('安装插件')
              ->addArgument('name', InputArgument::REQUIRED, '插件名称')
              ->addOption('force', 'f', InputOption::VALUE_NONE, '强制重新安装')
              ->setHelp('此命令安装指定的插件，包括执行数据库迁移和注册插件服务。');
