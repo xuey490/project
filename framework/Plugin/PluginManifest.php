@@ -247,10 +247,10 @@ class PluginManifest
         }
 
         // 检查框架版本（如果定义了常量）
-        if (isset($this->requires['novaframe']) && defined('NOVAFRAME_VERSION')) {
-            $frameworkVersion = $this->requires['novaframe'];
-            if (!$this->satisfiesVersion(NOVAFRAME_VERSION, $frameworkVersion)) {
-                $errors[] = "Framework version mismatch: required {$frameworkVersion}, current " . NOVAFRAME_VERSION;
+        if (isset($this->requires['Fssphp']) && defined('FSSPHP_VERSION')) {
+            $frameworkVersion = $this->requires['Fssphp'];
+            if (!$this->satisfiesVersion(FSSPHP_VERSION, $frameworkVersion)) {
+                $errors[] = "Framework version mismatch: required {$frameworkVersion}, current " . FSSPHP_VERSION;
             }
         }
 

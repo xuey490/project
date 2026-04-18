@@ -28,6 +28,7 @@ class PostController extends BaseController
      * @return BaseJsonResponse
      */
     #[Route(path: '/api/blog/posts', methods: ['GET'], name: 'blog.post.list')]
+    #[Auth(required: true)]
     public function list(Request $request): BaseJsonResponse
     {
         $page = (int) $this->input('page', 1);

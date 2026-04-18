@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 // ✅ 修复：定义项目根目录常量（必须添加这行）
 define('BASE_PATH', __DIR__);
+define('FSSPHP_VERSION', '0.8.0');
 
 require __DIR__ . '/vendor/autoload.php';
 
@@ -40,7 +41,6 @@ use Framework\Console\Commands\RouteListCommand;
 // 初始化容器，确保 CLI 命令中可使用 app() / App::make()
 Container::init();
 App::setContainer(Container::getInstance());
-app('db');
 
 
 $application = new Application('Novaphp Framework', '0.8.1');

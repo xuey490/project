@@ -57,6 +57,7 @@ class PluginUninstallCommand extends Command
              ->setHelp('此命令卸载指定的插件，包括回滚数据库迁移和清理插件配置。');
     }
 
+
     /**
      * 执行命令
      *

@@ -128,6 +128,7 @@ class PluginManager
                 if (file_exists($manifestPath)) {
                     try {
                         $manifest = PluginManifest::fromFile($manifestPath);
+                        //dump($manifest);
                         $this->manifests[$manifest->name] = $manifest;
                     } catch (InvalidArgumentException $e) {
                         // 记录错误但继续扫描其他插件
@@ -558,6 +559,8 @@ class PluginManager
 
         $errors = [];
         $dependencies = $manifest->dependencies;
+
+        //error_log(json_encode($dependencies));
 
         foreach ($dependencies as $depName => $versionConstraint) {
             // 检查依赖是否已安装

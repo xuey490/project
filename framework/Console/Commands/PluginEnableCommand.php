@@ -42,6 +42,7 @@ class PluginEnableCommand extends Command
      */
     protected static $defaultName = 'plugin:enable';
 
+
     /**
      * 配置命令
      */
