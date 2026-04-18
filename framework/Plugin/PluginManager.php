@@ -286,6 +286,7 @@ class PluginManager
                 'version' => $manifest->version,
                 'installed_at' => date('Y-m-d H:i:s'),
             ]);
+            $this->clearRouteCacheBestEffort();
 
             return [
                 'success' => true,
@@ -348,6 +349,7 @@ class PluginManager
 
             // 更新配置
             $this->removeFromInstalledConfig($name);
+            $this->clearRouteCacheBestEffort();
 
             return ['success' => true, 'message' => "Plugin '{$name}' uninstalled successfully"];
         } catch (\Throwable $e) {
@@ -390,6 +392,7 @@ class PluginManager
 
             // 更新配置
             $this->updateInstalledConfig($name, ['enabled' => true]);
+            $this->clearRouteCacheBestEffort();
 
             return ['success' => true, 'message' => "Plugin '{$name}' enabled successfully"];
         } catch (\Throwable $e) {
@@ -432,6 +435,7 @@ class PluginManager
 
             // 更新配置
             $this->updateInstalledConfig($name, ['enabled' => false]);
+            $this->clearRouteCacheBestEffort();
 
             return ['success' => true, 'message' => "Plugin '{$name}' disabled successfully"];
         } catch (\Throwable $e) {
@@ -728,6 +732,18 @@ class PluginManager
             // 写回配置文件
             $content = "<?php\n\ndeclare(strict_types=1);\n\nreturn " . var_export($config, true) . ";\n";
             file_put_contents($configFile, $content);
+        }
+    }
+
+    /**
+     * 尽力清理插件路由缓存，避免安装/卸载后命中旧路由。
+     */
+    private function clearRouteCacheBestEffort(): void
+    {
+        try {
+            (new PluginCacheManager())->clearRouteCache();
+        } catch (\Throwable $e) {
+            // 缓存清理失败不阻断主流程
         }
     }
 }
