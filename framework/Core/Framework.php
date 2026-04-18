@@ -16,6 +16,7 @@ declare(strict_types=1);
 
 namespace Framework\Core;
 
+use Framework\Basic\BaseJsonResponse;
 use Framework\Container\Container;
 use Framework\Middleware\MiddlewareDispatcher;
 use Framework\Plugin\PluginManager;
@@ -470,6 +471,11 @@ final class Framework
             return $this->handleNotFound();
         }
 
+        // 运行时兜底：插件未安装/已卸载(或未启用)时，禁止继续访问插件控制器
+        if (! $this->isPluginControllerAvailable($controllerClass)) {
+            return BaseJsonResponse::error('插件未安装或已卸载', Response::HTTP_NOT_FOUND);
+        }
+
         // 从容器获取控制器实例（支持依赖注入）
         //$controller = $this->container->get($controllerClass);
         // 它会尝试从容器获取，如果获取不到，会自动 new 并执行我们注入逻辑#
@@ -487,6 +493,52 @@ final class Framework
 
         // 统一处理返回值
         return $this->normalizeResponse($response);
+    }
+
+    /**
+     * 判断插件控制器当前是否可访问（已安装且启用）
+     */
+    private function isPluginControllerAvailable(string $controllerClass): bool
+    {
+        if (!str_starts_with($controllerClass, 'Plugins\\')) {
+            return true;
+        }
+
+        $segments = explode('\\', $controllerClass);
+        $pluginNamespaceName = $segments[1] ?? '';
+        if ($pluginNamespaceName === '') {
+            return false;
+        }
+
+        if (!file_exists(self::PLUGIN_CONFIG_FILE)) {
+            return false;
+        }
+
+        $config = require self::PLUGIN_CONFIG_FILE;
+        $installed = is_array($config['installed'] ?? null) ? $config['installed'] : [];
+        if (empty($installed)) {
+            return false;
+        }
+
+        $pluginKey = null;
+        if (array_key_exists($pluginNamespaceName, $installed)) {
+            $pluginKey = $pluginNamespaceName;
+        } else {
+            $needle = strtolower($pluginNamespaceName);
+            foreach (array_keys($installed) as $name) {
+                if (strtolower((string) $name) === $needle) {
+                    $pluginKey = (string) $name;
+                    break;
+                }
+            }
+        }
+
+        if ($pluginKey === null) {
+            return false;
+        }
+
+        $pluginInfo = is_array($installed[$pluginKey] ?? null) ? $installed[$pluginKey] : [];
+        return ($pluginInfo['enabled'] ?? false) === true;
     }
 
     /**
