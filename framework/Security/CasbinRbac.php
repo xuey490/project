@@ -18,7 +18,7 @@ namespace Framework\Security;
 
 use Casbin\Enforcer;
 use Casbin\Model\Model;
-use Casbin\Adapter\MySQL\Adapter;
+use App\Services\Casbin\DatabaseAdapter;
 
 /**
  * 基于 Casbin 的 RBAC（基于角色的访问控制）服务类.
@@ -42,7 +42,10 @@ class CasbinRbac
      *
      * @var Enforcer
      */
-    protected $enforcer;
+    protected Enforcer $enforcer;
+    protected bool $requestUseTenant = false;
+    protected bool $policyUseTenant = false;
+    protected bool $groupUseTenant = false;
 
     /**
      * 构造函数，初始化 Casbin RBAC 服务.
@@ -53,6 +56,7 @@ class CasbinRbac
      * @param array $config Casbin 配置数组，包含以下键：
      *                      - model.config_text: RBAC 模型规则文本
      *                      - adapter.table_name: 策略存储表名
+     *                      - adapter.connection: 数据库连接名（可选）
      *                      - cache.enable: 是否启用缓存
      *                      - cache.key_prefix: 缓存键前缀
      *                      - cache.ttl: 缓存过期时间（秒）
@@ -60,30 +64,26 @@ class CasbinRbac
     public function __construct(array $config)
     {
         // 1. 加载 RBAC 模型规则
+        //dump($config);
         $model = new Model();
-        $model->loadModelText($config['model']['config_text']);
+        // 从文件加载模型配置
+        if (!empty($config['model']['path']) && file_exists($config['model']['path'])) {
+            $model->loadModel($config['model']['path']);
+        } elseif (!empty($config['model']['content'])) {
+            // 如果提供了模型内容字符串，则从文本加载
+            $model->loadModelFromText($config['model']['content']);
+        } else {
+            throw new \RuntimeException('Casbin model configuration not found');
+        }
 
-        // 2. 从 App('db') 获取 PDO 连接，初始化 Casbin MySQL 适配器
-        $db = App('db');
-        // 假设 App('db') 提供 getPdo() 方法获取 PDO 实例（需根据自研框架调整）
-        $pdo = $db->getPdo();
-        // 直接传入 PDO 实例 + 策略表名，复用框架数据库连接
-        $adapter = new Adapter($pdo, $config['adapter']['table_name']);
+        // 2. 框架层只依赖统一持久层适配器，不直接感知底层实现细节
+        $tableName = $config['adapter']['table_name'] ?? 'casbin_rule';
+        $connection = $config['adapter']['connection'] ?? null;
+        $adapter = new DatabaseAdapter($tableName, is_string($connection) ? $connection : null);
 
         // 3. 创建 Casbin 执行器
         $this->enforcer = new Enforcer($model, $adapter);
-
-        // 4. 开启缓存，使用自定义缓存适配器（复用 App('cache')）
-        if ($config['cache']['enable']) {
-            $this->enforcer->enableCache();
-            $cacheAdapter = new CasbinCacheAdapter(
-                $config['cache']['key_prefix'],
-                $config['cache']['ttl']
-            );
-            $this->enforcer->setCacheAdapter($cacheAdapter);
-            // 开启自动刷新缓存（权限变更时自动清除缓存）
-            $this->enforcer->setAutoRefreshCache(true);
-        }
+        $this->initModelArity($config);
     }
 
     /**
@@ -99,7 +99,15 @@ class CasbinRbac
      */
     public function bindUserRole($userId, $roleId, $tenantId = 'default'): bool
     {
-        return $this->enforcer->addGroupingPolicy($userId, $roleId, $tenantId);
+        $user = (string) $userId;
+        $role = (string) $roleId;
+        $tenant = (string) $tenantId;
+
+        if ($this->groupUseTenant) {
+            return $this->enforcer->addGroupingPolicy($user, $role, $tenant);
+        }
+
+        return $this->enforcer->addGroupingPolicy($user, $role);
     }
 
     /**
@@ -115,7 +123,15 @@ class CasbinRbac
      */
     public function unbindUserRole($userId, $roleId, $tenantId = 'default'): bool
     {
-        return $this->enforcer->removeGroupingPolicy($userId, $roleId, $tenantId);
+        $user = (string) $userId;
+        $role = (string) $roleId;
+        $tenant = (string) $tenantId;
+
+        if ($this->groupUseTenant) {
+            return $this->enforcer->removeGroupingPolicy($user, $role, $tenant);
+        }
+
+        return $this->enforcer->removeGroupingPolicy($user, $role);
     }
 
     /**
@@ -132,7 +148,16 @@ class CasbinRbac
      */
     public function addRolePolicy($roleId, string $resource, string $action, $tenantId = 'default'): bool
     {
-        return $this->enforcer->addPolicy($roleId, $resource, $action, $tenantId);
+        $role = (string) $roleId;
+        $obj = (string) $resource;
+        $act = (string) $action;
+        $tenant = (string) $tenantId;
+
+        if ($this->policyUseTenant) {
+            return $this->enforcer->addPolicy($role, $obj, $act, $tenant);
+        }
+
+        return $this->enforcer->addPolicy($role, $obj, $act);
     }
 
     /**
@@ -150,7 +175,18 @@ class CasbinRbac
      */
     public function checkPermission($userId, string $resource, string $action, $tenantId = 'default'): bool
     {
-        return $this->enforcer->enforce($userId, $resource, $action, $tenantId);
+        $user = (string) $userId;
+        $obj = (string) $resource;
+        $act = (string) $action;
+        $tenant = (string) $tenantId;
+
+        #dump('checkPermission:'.$user.' '.$obj.' '.$act.' '.$tenant);
+
+        if ($this->requestUseTenant) {
+            return $this->enforcer->enforce($user, $obj, $act, $tenant);
+        }
+
+        return $this->enforcer->enforce($user, $obj, $act);
     }
 
     /**
@@ -165,7 +201,14 @@ class CasbinRbac
      */
     public function getUserRoles($userId, $tenantId = 'default'): array
     {
-        return $this->enforcer->getRolesForUser($userId, $tenantId);
+        $user = (string) $userId;
+        $tenant = (string) $tenantId;
+
+        if ($this->groupUseTenant) {
+            return $this->enforcer->getRolesForUser($user, $tenant);
+        }
+
+        return $this->enforcer->getRolesForUser($user);
     }
 
     /**
@@ -180,6 +223,59 @@ class CasbinRbac
      */
     public function getRolePolicies($roleId, $tenantId = 'default'): array
     {
-        return $this->enforcer->getFilteredPolicy(0, $roleId, '', '', $tenantId);
+        $role = (string) $roleId;
+        $tenant = (string) $tenantId;
+
+        if ($this->policyUseTenant) {
+            return $this->enforcer->getFilteredPolicy(0, $role, '', '', $tenant);
+        }
+
+        return $this->enforcer->getFilteredPolicy(0, $role);
+    }
+
+    /**
+     * 初始化模型参数维度（自动适配是否启用租户域）.
+     */
+    protected function initModelArity(array $config): void
+    {
+        $modelText = $this->resolveModelText($config);
+        if ($modelText === '') {
+            return;
+        }
+
+        $this->requestUseTenant = $this->detectArity($modelText, 'r') >= 4;
+        $this->policyUseTenant = $this->detectArity($modelText, 'p') >= 4;
+        $this->groupUseTenant = $this->detectArity($modelText, 'g') >= 3;
+    }
+
+    /**
+     * 解析模型文本（支持 file/content）。
+     */
+    protected function resolveModelText(array $config): string
+    {
+        if (!empty($config['model']['content']) && is_string($config['model']['content'])) {
+            return $config['model']['content'];
+        }
+
+        $path = $config['model']['path'] ?? null;
+        if (is_string($path) && $path !== '' && file_exists($path)) {
+            $text = file_get_contents($path);
+            return is_string($text) ? $text : '';
+        }
+
+        return '';
+    }
+
+    /**
+     * 检测模型定义维度，例如 r/p/g 定义参数个数。
+     */
+    protected function detectArity(string $modelText, string $symbol): int
+    {
+        if (!preg_match('/^\s*' . preg_quote($symbol, '/') . '\s*=\s*(.+)\s*$/mi', $modelText, $matches)) {
+            return 0;
+        }
+
+        $parts = array_filter(array_map('trim', explode(',', $matches[1])), static fn ($v) => $v !== '');
+        return count($parts);
     }
 }
