@@ -23,8 +23,8 @@ use Framework\Attributes\MiddlewareProviderInterface;
 use Symfony\Component\Routing\Route as SymfonyRoute;
 use Symfony\Component\Routing\RouteCollection;
 use InvalidArgumentException;
-use ReflectionClass;
-use ReflectionMethod;
+use \ReflectionClass;
+use \ReflectionMethod;
 
 /**
  * AttributeRouteLoader
@@ -755,7 +755,7 @@ class AttributeRouteLoader
 			$ref_class = new ReflectionClass($class_name);
 			$this->reflection_cache[$class_name] = $ref_class;
 			return $ref_class;
-		} catch (ReflectionException $e) {
+		} catch (\ReflectionException $e) {
 			error_log(sprintf('反射类 %s 失败: %s', $class_name, $e->getMessage()));
 			return null;
 		}

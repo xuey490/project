@@ -224,6 +224,18 @@ final class Framework
 			requireExplicitAction: false, // 默认关闭，建议开启，强制要求 #[Action]
 			blacklist: []
 		);
+
+        // 8. 注入插件自动路由映射（/blog/post/list 风格）
+        if ($this->pluginManager !== null) {
+            $pluginAutoNamespaces = [];
+            foreach ($this->pluginManager->getLoaded() as $pluginName => $manifest) {
+                if (!is_string($pluginName) || $pluginName === '') {
+                    continue;
+                }
+                $pluginAutoNamespaces[strtolower($pluginName)] = rtrim($manifest->namespace, '\\') . '\\Controllers';
+            }
+            $this->router->setPluginAutoRouteNamespaces($pluginAutoNamespaces);
+        }
 		
     }
 
