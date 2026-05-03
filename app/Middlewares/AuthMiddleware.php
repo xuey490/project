@@ -32,9 +32,9 @@ class AuthMiddleware
         }
 
         // 白名单之外的所有请求都必须验证 token
-        app('db');
 
         $accessToken = $this->extractAccessToken($request);
+		$db = app('db');
         if (! $accessToken) {
             $this->debugLog('[AuthMiddleware] 401 - 无access_token', [
                 'path' => $request->getPathInfo(),
@@ -50,63 +50,105 @@ class AuthMiddleware
         $jwt = app('jwt');
 
         try {
-            // 1️⃣ 严格校验 access token
+            // 1.严格校验 access token
             $parsed = $jwt->parseForAccess($accessToken);
             $claims = $parsed->claims();
 
             $uid  = (int) $claims->get('uid');
-            $role = $claims->get('role') ?? 'user';
+            $roleClaim = $claims->get('role');
+            $rolesClaim = $claims->get('roles');
+
             $tenantId = (int) ($claims->get('tenant_id') ?? 0);
             $exp  = $claims->get('exp')->getTimestamp();
 
-            // 2️⃣ 设置租户上下文（多租户隔离）
+            // 兼容 role(string|array) 与 roles(string|array) 两种 claim 形态
+            $userRoles = [];
+            if (is_string($roleClaim) && $roleClaim !== '') {
+                $userRoles[] = $roleClaim;
+            } elseif (is_array($roleClaim)) {
+                foreach ($roleClaim as $r) {
+                    if (is_string($r) && $r !== '') {
+                        $userRoles[] = $r;
+                    }
+                }
+            }
+           
+            if (is_string($rolesClaim) && $rolesClaim !== '') {
+                $userRoles[] = $rolesClaim;
+            } elseif (is_array($rolesClaim)) {
+                foreach ($rolesClaim as $r) {
+                    if (is_string($r) && $r !== '') {
+                        $userRoles[] = $r;
+                    }
+                }
+            }
+            
+
+            $userRoles = array_values(array_unique($userRoles));
+            $role = $userRoles[0] ?? 'user';
+
+            // 2.设置租户上下文（多租户隔离）
             TenantContext::setTenantIdToRequest($request, $tenantId > 0 ? $tenantId : null);
 
-            // 3️⃣ 角色校验（仅当路由明确声明了角色限制时才校验）
+            // 3.角色校验（仅当路由明确声明了角色限制时才校验）
             $attributes = $request->attributes->get('_attributes', []);
 			
-
             /** @var Auth|null $auth */
             $auth = $attributes[Auth::class] ?? null;
             $routeInfo = $request->attributes->get('_route');
 
-            $routeRoles = $request->attributes->get('_roles');
-            if (!is_array($routeRoles) && is_array($routeInfo) && isset($routeInfo['__meta_flat']['_roles']) && is_array($routeInfo['__meta_flat']['_roles'])) {
+
+            $routeRoles = $request->attributes->get('_roles');//来自Role注解
+			
+
+            if ( isset($routeInfo['__meta_flat']['_roles']) && is_array($routeInfo['__meta_flat']['_roles'])) {
                 $routeRoles = $routeInfo['__meta_flat']['_roles'];
             }
-            $routeRoles = is_array($routeRoles) ? $routeRoles : [];
 
-            if ((! empty($auth?->roles) && ! in_array($role, $auth->roles, true))
-                || (! empty($routeRoles) && ! in_array($role, $routeRoles, true))) {
+            $routeRoles = is_array($routeRoles) ? $routeRoles : [];
+			
+            $requiredRoles = [];
+            if (! empty($auth?->roles) && is_array($auth->roles)) {
+                $requiredRoles = $auth->roles;
+            } elseif (! empty($routeRoles)) {
+                $requiredRoles = $routeRoles;
+            }
+
+            if ((! empty($requiredRoles) && empty(array_intersect($userRoles, $requiredRoles)))
+                /*|| (! empty($routeRoles) && ! in_array($role, $routeRoles, true))*/   
+			) {
+                
                 $this->debugLog('[AuthMiddleware] 403 - 角色不匹配', [
                     'path' => $request->getPathInfo(),
                     'user_role' => $role,
-                    'required_roles' => $auth?->roles ?? $routeRoles,
+                    'user_roles' => $userRoles,
+                    'required_roles' => $requiredRoles,
                 ]);
                 return BaseJsonResponse::error('无权限访问！', 403);
             }
 
-            // 4️⃣ 自动续期（失败不影响当前请求）
+            // 4.自动续期（失败不影响当前请求）
             $remaining = $exp - time();
             if ($remaining < $this->refreshThreshold) {
-                $this->tryRefresh($request, $jwt, $uid);
+                $this->tryRefresh($request, $jwt, $uid, $claims->all());
             }
 
             //error_log(json_encode($claims->all()));
 
-            // 5️⃣ 注入用户上下文
+            // 5. 注入用户上下文
             $request->attributes->set('user', [
                 'id'        => $uid,
                 'username'  => $claims->get('name') ?? '',
                 'role'      => $role,
+                'roles'     => $userRoles,
                 'tenant_id' => $tenantId,
             ]);
 
             $request->attributes->set('user_claims', $claims->all());
 
-            // 6️⃣ 验证用户状态（使用数据库字段：status 和 deleted_at）
-            //$currentUser = SysUser::with(['dept', 'roles', 'roles.depts', 'roles.menus'])->find($uid);
-            $currentUser = SysUser::with(['dept', 'roles', 'roles.dataScopeDepts', 'roles.menus'])->find($uid);
+            // 6.验证用户状态（使用数据库字段：status 和 deleted_at）
+            // 注意：不再预加载 dept 关系，因为部门信息现在从 sa_system_user_dept 表获取
+            $currentUser = SysUser::with(['roles', 'roles.dataScopeDepts', 'roles.menus'])->find($uid);
             if ($currentUser) {
                 // 检查用户是否被禁用（status = 0 表示禁用）
                 if ($currentUser->isDisabled()) {
@@ -138,7 +180,7 @@ class AuthMiddleware
             return BaseJsonResponse::unauthorized($msg);
         }
 
-        // 7️⃣ 执行后续逻辑
+        // 7.执行后续逻辑
         $response = $next($request);
 
         $this->writeCookiesIfNeeded($request, $response);
@@ -149,7 +191,7 @@ class AuthMiddleware
     /**
      * 尝试刷新 token（只尝试一次，失败即放弃）
      */
-    protected function tryRefresh(Request $request, JwtFactory $jwt, int $uid): void
+    protected function tryRefresh(Request $request, JwtFactory $jwt, int $uid, array $oldClaims = []): void
     {
         $refreshToken = $request->cookies->get('refresh_token');
         if (! $refreshToken) {
@@ -166,8 +208,14 @@ class AuthMiddleware
             // 1️⃣ rotation refresh token（一次性）
             $newRefresh = $jwt->rotateRefreshToken($refreshToken);
 
-            // 2️⃣ 签发新 access token（直接用已知 uid）
-            $access = $jwt->issue(['uid' => $uid]);
+            // 2️⃣ 签发新 access token（保留关键 claims，避免续期后角色/租户丢失）
+            $newClaims = ['uid' => $uid];
+            foreach (['name', 'nickname', 'tenant_id', 'role', 'roles'] as $key) {
+                if (array_key_exists($key, $oldClaims)) {
+                    $newClaims[$key] = $oldClaims[$key];
+                }
+            }
+            $access = $jwt->issue($newClaims);
 
             // 3️⃣ 暂存，交给 Response 阶段写 Cookie
             $request->attributes->set('_new_access_token', $access);
@@ -230,28 +278,15 @@ class AuthMiddleware
     protected function extractAccessToken(Request $request): ?string
     {
         $header = $request->headers->get('Authorization');
-        if (is_string($header) && str_starts_with($header, 'Bearer ')) {
-            return substr($header, 7);
-        }
-
+		if($header !== '' || !empty($header)){
+			if (is_string($header) && str_starts_with($header, 'Bearer ')) {
+				return substr($header, 7);
+			}
+		}
+		
         return $request->cookies->get('access_token');
     }
 
-    protected function isAdminRequest(Request $request, mixed $routeInfo): bool
-    {
-        // 简单判定：Controller 命名空间 或者 路径前缀
-        $controller = $request->attributes->get('_controller');
-        if (is_string($controller) && str_starts_with($controller, 'App\\Controllers\\Admin\\')) {
-            return true;
-        }
-        
-        $path = $request->getPathInfo();
-        if (str_starts_with($path, '/system/')) {
-            return true;
-        }
-
-        return false;
-    }
 
     protected function isWhitelisted(Request $request): bool
     {
@@ -264,6 +299,9 @@ class AuthMiddleware
             '/api/core/captcha',
             '/api/core/refresh',
             '/api/core/tenants-by-username',
+            #'/api/core/system/statistics',
+            #'/api/core/system/loginChart',
+            #'/api/core/system/loginBarChart',
         ];
 
         if (in_array($path, $exactWhitelist, true)) {
