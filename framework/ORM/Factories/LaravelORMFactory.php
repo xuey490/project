@@ -796,7 +796,7 @@ class LaravelORMFactory
      * @return bool
      * @throws Exception
      */
-    public function bcInc(mixed $key, string $incField, string $inc, string $keyField = null, int $acc = 2): bool
+    public function bcInc(mixed $key, string $incField, string $inc, ?string $keyField = null, int $acc = 2): bool
     {
         // 获取模型实例
         $model = $this->getModel();
@@ -816,7 +816,7 @@ class LaravelORMFactory
      * @return bool
      * @throws ReflectionException
      */
-    public function bcDec($key, string $decField, string $dec, string $keyField = null, int $acc = 2): bool
+    public function bcDec($key, string $decField, string $dec, ?string $keyField = null, int $acc = 2): bool
     {
         return $this->bc($key, $decField, $dec, $keyField, 2, $acc);
     }
@@ -834,7 +834,7 @@ class LaravelORMFactory
      * @return bool
      * @throws ReflectionException
      */
-    public function bc($key, string $field, string $value, string $keyField = null, int $type = 1, int $acc = 2): bool
+    public function bc($key, string $field, string $value, ?string $keyField = null, int $type = 1, int $acc = 2): bool
     {
         // 获取记录
         $result = $keyField === null ? $this->get($key) : $this->getOne([$keyField => $key]);
