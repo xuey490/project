@@ -77,6 +77,19 @@ class Router
      */
     private array $pluginRouteNamespaces = [];
 
+    /**
+     * 应用自动路由映射：
+     * [
+     *   'admin' => 'App\Admin\Controllers',
+     *   'api'   => 'App\Api\Controllers'
+     * ]
+     *
+     * 优先级：低于插件，高于默认 controllerNamespace
+     *
+     * @var array<string, string>
+     */
+    private array $appRouteNamespaces = [];
+
     public function __construct(
         RouteCollection $routes,
         ContainerInterface $container,
@@ -112,6 +125,31 @@ class Router
         $this->requireExplicitAction = $requireExplicitAction;
         $this->whitelist = $whitelist;
         $this->blacklist = $blacklist;
+        return $this;
+    }
+
+    /**
+     * 设置应用自动路由命名空间映射
+     *
+     * 用于支持多应用模式，如 /admin/controller/action → App\Admin\Controllers
+     *
+     * @param array<string, string> $namespaces
+     */
+    public function setAppAutoRouteNamespaces(array $namespaces): self
+    {
+        $normalized = [];
+        foreach ($namespaces as $slug => $namespace) {
+            if (!is_string($slug) || !is_string($namespace)) {
+                continue;
+            }
+            $slug = strtolower(trim($slug));
+            $namespace = trim($namespace, '\\');
+            if ($slug === '' || $namespace === '') {
+                continue;
+            }
+            $normalized[$slug] = $namespace;
+        }
+        $this->appRouteNamespaces = $normalized;
         return $this;
     }
 
@@ -263,6 +301,27 @@ class Router
             return $pluginRoute;
         }
 
+        // 应用自动路由：/admin/user/list => App\Admin\Controllers\UserController::list
+        $appRoute = $this->matchAppAutoRoute($segments, $method, $request);
+        if ($appRoute !== null) {
+            return $appRoute;
+        }
+
+        // 域名绑定应用自动路由：域名匹配的应用无需 URL prefix
+        // 如 admin.example.com/user/list → App\Admin\Controllers\UserController::list
+        $domainAppSlug = $request->attributes->get('_domain_app');
+        if ($domainAppSlug !== null && isset($this->appRouteNamespaces[$domainAppSlug])) {
+            $domainRoute = $this->matchDomainAppRoute(
+                $this->appRouteNamespaces[$domainAppSlug],
+                $segments,
+                $method,
+                $request
+            );
+            if ($domainRoute !== null) {
+                return $domainRoute;
+            }
+        }
+
         // 倒序匹配，支持多级命名空间
         // 例如 /Admin/User/List -> 尝试 Admin\User\ListController, Admin\User\List, Admin\UserController::list
         for ($i = count($segments); $i >= 1; --$i) {
@@ -337,6 +396,98 @@ class Router
 
             if ($route) {
                 $routeName = self::PLUGIN_AUTO_ROUTE_PREFIX . md5($pluginSlug . $controller . $route['method']);
+                return $this->finalizeRoute(
+                    $request,
+                    $controller,
+                    $route['method'],
+                    $route['params'],
+                    $routeName
+                );
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 匹配应用自动路由 /admin/user/list => App\Admin\Controllers\UserController::list
+     *
+     * @param array<int, string> $segments
+     */
+    private function matchAppAutoRoute(array $segments, string $httpMethod, Request $request): ?array
+    {
+        // 至少需要 2 段: /admin/controller 或 /api/user/list
+        if (count($segments) < 2) {
+            return null;
+        }
+
+        $appSlug = strtolower((string)($segments[0] ?? ''));
+        if ($appSlug === '' || !isset($this->appRouteNamespaces[$appSlug])) {
+            return null;
+        }
+
+        $appControllerNamespace = $this->appRouteNamespaces[$appSlug];
+        $controllerSegments = array_slice($segments, 1);
+        if (empty($controllerSegments)) {
+            return null;
+        }
+
+        for ($i = count($controllerSegments); $i >= 1; --$i) {
+            $controller = $this->buildControllerClassForNamespace(
+                $appControllerNamespace,
+                array_slice($controllerSegments, 0, $i)
+            );
+            if (!$controller || !$this->isControllerAllowed($controller)) {
+                continue;
+            }
+
+            $route = $this->matchActionAndParams(
+                $controller,
+                array_slice($controllerSegments, $i),
+                $httpMethod
+            );
+
+            if ($route) {
+                $routeName = 'app_auto_route_' . md5($appSlug . $controller . $route['method']);
+                return $this->finalizeRoute(
+                    $request,
+                    $controller,
+                    $route['method'],
+                    $route['params'],
+                    $routeName
+                );
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 域名绑定应用自动路由：域名匹配的应用无需 URL prefix.
+     *
+     * 如 admin.example.com/user/list → App\Admin\Controllers\UserController::list
+     *
+     * @param array<int, string> $segments URL 路径段（已去除 prefix）
+     */
+    private function matchDomainAppRoute(string $namespace, array $segments, string $httpMethod, Request $request): ?array
+    {
+        for ($i = count($segments); $i >= 1; --$i) {
+            $controller = $this->buildControllerClassForNamespace(
+                $namespace,
+                array_slice($segments, 0, $i)
+            );
+            if (!$controller || !$this->isControllerAllowed($controller)) {
+                continue;
+            }
+
+            $route = $this->matchActionAndParams(
+                $controller,
+                array_slice($segments, $i),
+                $httpMethod
+            );
+
+            if ($route) {
+                $routeName = 'domain_auto_route_' . md5($namespace . $controller . $route['method']);
                 return $this->finalizeRoute(
                     $request,
                     $controller,
@@ -729,15 +880,35 @@ class Router
 
     private function tryHomeController(Request $request): ?array
     {
+        // 域名绑定应用优先：尝试域名对应应用的 HomeController
+        $domainAppSlug = $request->attributes->get('_domain_app');
+        if ($domainAppSlug !== null && isset($this->appRouteNamespaces[$domainAppSlug])) {
+            $namespace = $this->appRouteNamespaces[$domainAppSlug];
+            foreach (['Home', 'HomeController'] as $name) {
+                $class = "{$namespace}\\{$name}";
+                $method = $this->getRestAction($request->getMethod());
+                if ($this->isControllerMethodValid($class, $method)) {
+                    return $this->finalizeRoute(
+                        $request,
+                        $class,
+                        $method,
+                        [],
+                        'domain_home_' . $domainAppSlug
+                    );
+                }
+            }
+        }
+
+        // 默认命名空间兜底
         foreach (['Home', 'HomeController'] as $name) {
             $class = "{$this->controllerNamespace}\\{$name}";
             if ($this->isControllerMethodValid($class, 'index')) {
                 // 使用 finalizeRoute 确保走统一的元数据加载逻辑
                 return $this->finalizeRoute(
-                    $request, 
-                    $class, 
-                    'index', 
-                    [], 
+                    $request,
+                    $class,
+                    'index',
+                    [],
                     self::AUTO_ROUTE_PREFIX . 'home'
                 );
             }
