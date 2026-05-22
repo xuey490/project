@@ -72,6 +72,8 @@
         "psr-4": {
             "Framework\\": "framework/",
             "App\\": "app/",
+            "App\\Admin\\": "app/admin/",
+            "App\\System\\": "app/system/",
             "Plugins\\": "plugins/"
         },
         "files": [

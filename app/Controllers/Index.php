@@ -11,15 +11,16 @@ namespace App\Controllers;
 use Symfony\Component\HttpFoundation\Response;
 use Framework\Attributes\Route;
 
-class HomeController 
+class Index 
 {
 
-	#[Route(path: '/api/home', methods: ['GET'], name: 'home.index')]
+	#[Route(path: '/api/index', methods: ['GET'], name: 'Index.index', group: 'Admins')]
+	
 	public function index():Response
 	{
 
 		return new Response(
-			'<html><body><h1>Hello, World!!</h1></body></html>',
+			'<html><body><h1>Hello, World!!--Index-a</h1></body></html>',
 			Response::HTTP_OK, // Code（200）
 			['Content-Type' => 'text/html; charset=UTF-8']
 		);	

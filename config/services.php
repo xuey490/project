@@ -85,14 +85,39 @@ return function (ContainerConfigurator $configurator) {
     // ✅ 1. 自动加载应用 Provider
     $providerManager = new \Framework\Container\ContainerProviders();
 
-	// ✅ 2. 自动加载核心 + 应用 Provider
+	// ✅ 2. 自动加载核心 + 主应用 Provider
 	$providerManager->loadAll(
 		$configurator,
 		'App\\Providers\\',
 		BASE_PATH . '/app/Providers'
-		
 	);
 
+	// ✅ 自动加载非默认应用的 Provider（从 config/apps.php 动态发现）
+	$appsConfigPath = BASE_PATH . '/config/apps.php';
+	if (file_exists($appsConfigPath)) {
+		$allApps = require $appsConfigPath;
+		foreach ($allApps as $appKey => $appConfig) {
+			if ($appKey === 'default') {
+				continue;
+			}
+			$appDir       = $appConfig['dir'] ?? '';
+			$appNamespace = $appConfig['namespace'] ?? '';
+			if ($appDir === '' || $appNamespace === '') {
+				continue;
+			}
+			// 推导基础目录和命名空间（去掉 /Controllers 和 \Controllers 后缀）
+			$baseDir       = preg_replace('/\/Controllers$/D', '', $appDir);
+			$baseNamespace = preg_replace('/\\\\Controllers$/', '', $appNamespace);
+			$providersDir  = $baseDir . '/Providers';
+			if (is_dir($providersDir)) {
+				$providerManager->loadAll(
+					$configurator,
+					$baseNamespace . '\\Providers\\',
+					$providersDir
+				);
+			}
+		}
+	}
 
     // ✅ 3. 启动所有 Provider（boot）
 	\Framework\Container\Container::setProviderManager($providerManager);
