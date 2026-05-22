@@ -34,21 +34,23 @@ final class EventProvider implements ServiceProviderInterface
     public function register(ContainerConfigurator $configurator): void
     {
         $services = $configurator->services();
+        $appDir = \dirname(__DIR__); // 获取 App 目录的绝对路径
+        if(is_dir($appDir)){
+            $services->load('App\\Listeners\\', $appDir . '/Listeners/**/*.php')
+                ->autowire()
+                ->autoconfigure()
+                ->public();
+                
+            // 2. 注册核心服务
+            $services->set(ListenerScanner::class)->autowire()->public();
+            // 3. 注册事件分发
+            $services->set(\Framework\Event\Dispatcher::class)
+                ->arg('$container', service('service_container'))->public(); // ✅ 显式注入容器自身 注意arg，跟args差异
 
-        $services->load('App\\Listeners\\', \dirname(__DIR__) . '/Listeners/**/*.php')
-            ->autowire()
-            ->autoconfigure()
-            ->public();
-			
-        // 2. 注册核心服务
-        $services->set(ListenerScanner::class)->autowire()->public();
-		// 3. 注册事件分发
-		$services->set(\Framework\Event\Dispatcher::class)
-			->arg('$container', service('service_container'))->public(); // ✅ 显式注入容器自身 注意arg，跟args差异
-
-		// 4. 【关键】绑定接口别名
-		// 当控制器请求 EventDispatcherInterface 时，容器会给它 Dispatcher 实例
-		$services->alias(EventDispatcherInterface::class, Dispatcher::class);
+            // 4. 【关键】绑定接口别名
+            // 当控制器请求 EventDispatcherInterface 时，容器会给它 Dispatcher 实例
+            $services->alias(EventDispatcherInterface::class, Dispatcher::class);
+        }
     }
 	
 
