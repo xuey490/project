@@ -51,6 +51,8 @@ final class Framework
 
     private static ?Framework $instance = null;
 
+    private ?string $lastControllerClass = null;
+
     private ?Request $request = null;
 
     private ContainerInterface $container;
@@ -412,6 +414,7 @@ final class Framework
         } finally {
             // Workerman 下必须释放
             $this->request = null;
+            $this->lastControllerClass = null;
         }
     }
 
@@ -686,6 +689,8 @@ final class Framework
         //$controller = $this->container->get($controllerClass);
         // 它会尝试从容器获取，如果获取不到，会自动 new 并执行我们注入逻辑#
         $controller = \Framework\Core\App::make($controllerClass);
+        // 记录控制器类名，供 dispatch finally 中释放引用
+        $this->lastControllerClass = $controllerClass;
 		
         // 处理路径参数和查询参数的类型转换
         $this->processRequestParameters($controllerClass, $method, $routeParams);

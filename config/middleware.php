@@ -59,7 +59,7 @@ return [
     ],
 	
 	'debug'	=> [
-		'enabled' => env('APP_DEBUG' , true),
+		'enabled' => env('APP_DEBUG', false),
 	],
 
     // 测试环境写操作保护（拦截 POST/PUT/PATCH/DELETE）
