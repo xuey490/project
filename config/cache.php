@@ -2,7 +2,7 @@
 
 // config/cache.php
 return [
-    'default' => env('CACHE_DRIVER', 'file'),
+    'default' => env('CACHE_DRIVER', 'redis'),
 	'REPO_CACHE_DISABLED'	=> true,	//数据库缓存
     'stores' => [
         'file' => [

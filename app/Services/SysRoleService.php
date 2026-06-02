@@ -3,315 +3,281 @@
 declare(strict_types=1);
 
 /**
- * 系统角色服务
- *
- * @package App\Services
- * @author  Genie
- * @date    2026-03-12
+ * @Filename: SysRoleService.php
+ * @Date: 2026-06-02
+ * @Developer: blue2004
+ * @Email: xuey863toy@gmail.com
  */
 
 namespace App\Services;
 
-use App\Models\SysRole;
-use App\Models\SysRoleMenu;
-use App\Models\SysUserRole;
 use App\Dao\SysRoleDao;
-use App\Services\Casbin\CasbinService;
 use Framework\Basic\BaseService;
+use Framework\DI\Attribute\Autowire;
+use InvalidArgumentException;
+use RuntimeException;
 
 /**
- * SysRoleService 角色服务
+ * 角色业务服务层
  *
- * 处理角色相关的业务逻辑
+ * 职责：
+ * - 封装角色 CRUD、状态变更、菜单分配等业务逻辑
+ * - 所有事务由 BaseService::transaction() 统一管理
+ * - 数据访问通过 SysRoleDao 完成，禁止在此层直接写 SQL
  */
 class SysRoleService extends BaseService
 {
-    /**
-     * DAO 实例
-     * @var SysRoleDao
-     */
+    /** @var SysRoleDao 角色数据访问对象，由框架自动注入 */
+    #[Autowire]
     protected SysRoleDao $roleDao;
 
-    /**
-     * Casbin 服务
-     * @var CasbinService
-     */
-    protected CasbinService $casbinService;
+    // =========================================================================
+    //  查询
+    // =========================================================================
 
     /**
-     * 构造函数
+     * 分页查询角色列表
+     *
+     * 支持以下过滤参数：
+     * - page   : int    页码（默认1）
+     * - limit  : int    每页条数（默认20）
+     * - name   : string 角色名称模糊搜索
+     * - code   : string 角色编码模糊搜索
+     * - status : int    状态（1启用 0禁用，空则不过滤）
+     *
+     * @param array<string, mixed> $params 查询参数
+     * @return array{items: array, total: int, page: int, limit: int, pages: int}
      */
-    public function __construct()
+    public function getList(array $params = []): array
     {
-        parent::__construct();
-        $this->roleDao = new SysRoleDao();
-        $this->casbinService = new CasbinService();
+        [$page, $limit] = $this->PageParams($params);
+
+        $where = [];
+
+        if (!empty($params['name'])) {
+            $where['LIKE_name'] = $params['name'];
+        }
+
+        if (!empty($params['code'])) {
+            $where['LIKE_code'] = $params['code'];
+        }
+
+        // status 传空字符串时不过滤，否则按值过滤
+        if (isset($params['status']) && $params['status'] !== '') {
+            $where['EQ_status'] = (int) $params['status'];
+        }
+
+        $total = $this->roleDao->count($where);
+        $items = $this->roleDao->selectList($where, '*', $page, $limit, 'sort asc,id asc');
+
+        return $this->buildPaginateResult(
+            is_array($items) ? $items : $items->toArray(),
+            $total,
+            $page,
+            $limit
+        );
     }
 
     /**
-     * 获取角色列表
+     * 查询所有启用状态的角色（供下拉选择）
      *
-     * @param array $params 查询参数
-     * @return array
-     */
-    public function getList(array $params): array
-    {
-        $page = (int)($params['page'] ?? 1);
-        $limit = (int)($params['limit'] ?? 20);
-        $roleName = $params['role_name'] ?? '';
-        $roleCode = $params['role_code'] ?? '';
-        $status = $params['status'] ?? '';
-
-        $query = SysRole::query()->whereNull('deleted_at');
-
-        if ($roleName !== '') {
-            $query->where('role_name', 'like', "%{$roleName}%");
-        }
-
-        if ($roleCode !== '') {
-            $query->where('role_code', 'like', "%{$roleCode}%");
-        }
-
-        if ($status !== '') {
-            $query->where('status', (int)$status);
-        }
-
-        $total = $query->count();
-        $list = $query->orderBy('sort')
-            ->offset(($page - 1) * $limit)
-            ->limit($limit)
-            ->get()
-            ->toArray();
-
-        // 格式化数据
-        foreach ($list as &$item) {
-            $item = $this->formatRole($item);
-        }
-
-        return [
-            'list' => $list,
-            'total' => $total,
-            'page' => $page,
-            'limit' => $limit,
-        ];
-    }
-
-    /**
-     * 获取所有启用的角色
-     *
-     * @return array
+     * @return array<int, array{id: int, name: string, code: string}>
      */
     public function getAllEnabled(): array
     {
-        return $this->roleDao->getAllEnabled();
+        $rows = $this->roleDao->findAllEnabled();
+        return is_array($rows) ? $rows : $rows->toArray();
     }
 
     /**
-     * 获取角色树
+     * 获取可访问角色列表（id + name 扁平结构）
+     *
+     * @return array<int, array{id: int, name: string}>
+     */
+    public function getAccessRoleList(): array
+    {
+        $rows = $this->roleDao->findAllEnabled();
+        $list = is_array($rows) ? $rows : $rows->toArray();
+
+        return array_map(
+            fn($row) => ['id' => $row['id'], 'name' => $row['name']],
+            $list
+        );
+    }
+
+    /**
+     * 获取角色树（按 sort/id 排序的扁平列表，可扩展为树形）
      *
      * @return array
      */
     public function getRoleTree(): array
     {
-        return SysRole::getRoleTree();
+        $rows = $this->roleDao->selectList(['EQ_status' => 1], 'id,name,code,level,sort', 0, 0, 'sort asc,id asc');
+        return is_array($rows) ? $rows : $rows->toArray();
     }
 
     /**
-     * 获取角色详情
+     * 查询单条角色详情
      *
-     * @param int $roleId 角色ID
+     * @param int $id 角色id
      * @return array|null
      */
-    public function getDetail(int $roleId): ?array
+    public function getDetail(int $id): ?array
     {
-        $role = SysRole::find($roleId);
-
-        if (!$role) {
+        if ($id <= 0) {
             return null;
         }
 
-        $data = $this->formatRole($role);
-        $data['menu_ids'] = SysRoleMenu::getMenuIdsByRoleId($roleId);
+        $role = $this->roleDao->get($id);
+        if (empty($role)) {
+            return null;
+        }
 
-        return $data;
+        return is_array($role) ? $role : $role->toArray();
     }
 
+    // =========================================================================
+    //  写操作
+    // =========================================================================
+
     /**
-     * 创建角色
+     * 新增角色
      *
-     * @param array $data     角色数据
-     * @param int   $operator 操作人ID
-     * @return SysRole|null
+     * @param array<string, mixed> $data     角色数据（已在 Controller 层做必填校验）
+     * @param int                  $operator 操作人 id
+     * @return object 新记录模型实例（含 id）
+     * @throws InvalidArgumentException 角色编码已存在
      */
-    public function create(array $data, int $operator = 0): ?SysRole
+    public function create(array $data, int $operator = 0): object
     {
-        return $this->transaction(function () use ($data, $operator) {
-            // 检查角色编码是否存在
-            if ($this->roleDao->isRoleCodeExists($data['role_code'])) {
-                throw new \Exception('角色编码已存在');
-            }
+        // 编码唯一性校验
+        if (!empty($data['code']) && $this->roleDao->existsByCode($data['code'])) {
+            throw new InvalidArgumentException(sprintf('角色编码 "%s" 已存在', $data['code']));
+        }
 
-            // 设置审计字段
-            $data['created_by'] = $operator;
-            $data['updated_by'] = $operator;
+        $data['created_by'] = $operator;
+        $data['create_time'] = date('Y-m-d H:i:s');
+        $data['update_time'] = date('Y-m-d H:i:s');
 
-            // 创建角色
-            $role = SysRole::create($data);
+        return $this->transaction(function () use ($data) {
+            $newId = $this->roleDao->save($data);
 
-            // 分配菜单
+            // 如果同时传入了菜单 id，同步关联
             if (!empty($data['menu_ids'])) {
-                SysRoleMenu::syncRoleMenus($role->id, $data['menu_ids'], $operator);
+                $this->roleDao->syncMenuIds((int) $newId, (array) $data['menu_ids']);
             }
 
-            return $role;
+            // 返回完整模型（供 Controller 取 id）
+            return $this->roleDao->get((int) $newId);
         });
     }
 
     /**
      * 更新角色
      *
-     * @param int   $roleId   角色ID
-     * @param array $data     角色数据
-     * @param int   $operator 操作人ID
+     * @param int                  $id       角色 id
+     * @param array<string, mixed> $data     更新字段（已过滤空值）
+     * @param int                  $operator 操作人 id
      * @return bool
+     * @throws InvalidArgumentException 角色不存在 / 编码重复
      */
-    public function update(int $roleId, array $data, int $operator = 0): bool
+    public function update(int $id, array $data, int $operator = 0): bool
     {
-        return $this->transaction(function () use ($roleId, $data, $operator) {
-            $role = SysRole::find($roleId);
-            if (!$role) {
-                throw new \Exception('角色不存在');
+        if (empty($this->roleDao->get($id))) {
+            throw new InvalidArgumentException('角色不存在');
+        }
+
+        // 编码唯一性校验（排除自身）
+        if (!empty($data['code']) && $this->roleDao->existsByCode($data['code'], $id)) {
+            throw new InvalidArgumentException(sprintf('角色编码 "%s" 已被其他角色占用', $data['code']));
+        }
+
+        $data['updated_by'] = $operator;
+        $data['update_time'] = date('Y-m-d H:i:s');
+
+        return $this->transaction(function () use ($id, $data) {
+            // 提取并同步菜单关联（不作为主表字段写入）
+            $menuIds = null;
+            if (array_key_exists('menu_ids', $data)) {
+                $menuIds = (array) $data['menu_ids'];
+                unset($data['menu_ids'], $data['dept_ids']); // 关联字段不写主表
             }
 
-            // 检查角色编码是否重复
-            if (isset($data['role_code']) && $data['role_code'] !== $role->role_code) {
-                if ($this->roleDao->isRoleCodeExists($data['role_code'], $roleId)) {
-                    throw new \Exception('角色编码已存在');
-                }
+            $result = $this->roleDao->update($id, $data);
+
+            if ($menuIds !== null) {
+                $this->roleDao->syncMenuIds($id, $menuIds);
             }
 
-            // 设置审计字段
-            $data['updated_by'] = $operator;
-
-            // 更新角色
-            $role->fill($data);
-            $role->save();
-
-            // 更新菜单
-            if (isset($data['menu_ids'])) {
-                SysRoleMenu::syncRoleMenus($roleId, $data['menu_ids'], $operator);
-                // 同步 Casbin 权限
-                $this->casbinService->syncRoleMenuPermissions($roleId);
-            }
-
-            return true;
+            return $result;
         });
     }
 
     /**
-     * 删除角色
+     * 删除角色（物理删除或软删除，视模型配置）
      *
-     * @param int $roleId 角色ID
+     * @param int $id 角色 id
      * @return bool
+     * @throws RuntimeException 角色不存在
      */
-    public function delete(int $roleId): bool
+    public function delete(int $id): bool
     {
-        $role = SysRole::find($roleId);
-        if (!$role) {
-            return false;
+        if (empty($this->roleDao->get($id))) {
+            throw new RuntimeException('角色不存在，删除失败');
         }
 
-        // 检查是否有关联用户
-        $userCount = SysUserRole::where('role_id', $roleId)->count();
-        if ($userCount > 0) {
-            throw new \Exception('该角色下存在用户，无法删除');
-        }
-
-        // 软删除角色
-        $role->delete();
-
-        // 删除角色菜单关联
-        SysRoleMenu::deleteByRoleId($roleId);
-
-        // 删除 Casbin 权限
-        $this->casbinService->deletePermissionsForRole($role->role_code);
-
-        return true;
+        return $this->transaction(function () use ($id) {
+            return $this->roleDao->destroy($id);
+        });
     }
 
     /**
-     * 更新角色状态
+     * 更新角色状态（1启用 / 0禁用）
      *
-     * @param int $roleId 角色ID
-     * @param int $status 状态
+     * @param int $id     角色 id
+     * @param int $status 目标状态
      * @return bool
      */
-    public function updateStatus(int $roleId, int $status): bool
+    public function updateStatus(int $id, int $status): bool
     {
-        return $this->roleDao->updateStatus($roleId, $status);
+        return $this->roleDao->update($id, [
+            'status'      => $status,
+            'update_time' => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    // =========================================================================
+    //  菜单分配
+    // =========================================================================
+
+    /**
+     * 分配菜单给角色（完整替换，先删后插）
+     *
+     * @param int        $roleId   角色 id
+     * @param array<int> $menuIds  菜单 id 数组
+     * @param int        $operator 操作人 id
+     * @return void
+     * @throws RuntimeException 角色不存在
+     */
+    public function assignMenus(int $roleId, array $menuIds, int $operator = 0): void
+    {
+        if (empty($this->roleDao->get($roleId))) {
+            throw new RuntimeException('角色不存在，无法分配菜单');
+        }
+
+        $this->transaction(function () use ($roleId, $menuIds) {
+            $this->roleDao->syncMenuIds($roleId, $menuIds);
+        });
     }
 
     /**
-     * 获取角色菜单ID列表
+     * 获取角色已绑定的菜单 id 列表
      *
-     * @param int $roleId 角色ID
-     * @return array
+     * @param int $roleId 角色 id
+     * @return array<int>
      */
     public function getMenuIds(int $roleId): array
     {
-        return SysRoleMenu::getMenuIdsByRoleId($roleId);
-    }
-
-    /**
-     * 分配菜单给角色
-     *
-     * @param int   $roleId  角色ID
-     * @param array $menuIds 菜单ID数组
-     * @param int   $operator 操作人ID
-     * @return bool
-     */
-    public function assignMenus(int $roleId, array $menuIds, int $operator = 0): bool
-    {
-        SysRoleMenu::syncRoleMenus($roleId, $menuIds, $operator);
-
-        // 同步 Casbin 权限
-        $this->casbinService->syncRoleMenuPermissions($roleId);
-
-        return true;
-    }
-
-    // ==================== 辅助方法 ====================
-
-    /**
-     * 格式化角色数据
-     *
-     * @param SysRole|array $role 角色
-     * @return array
-     */
-    protected function formatRole(SysRole|array $role): array
-    {
-        if ($role instanceof SysRole) {
-            $data = $role->toArray();
-        } else {
-            $data = $role;
-        }
-
-        // 格式化时间
-        if (isset($data['created_at'])) {
-            $data['created_at'] = is_string($data['created_at'])
-                ? $data['created_at']
-                : $data['created_at']?->format('Y-m-d H:i:s');
-        }
-
-        if (isset($data['updated_at'])) {
-            $data['updated_at'] = is_string($data['updated_at'])
-                ? $data['updated_at']
-                : $data['updated_at']?->format('Y-m-d H:i:s');
-        }
-
-        // 状态文本
-        $data['status_text'] = $data['status'] === SysRole::STATUS_ENABLED ? '启用' : '禁用';
-
-        return $data;
+        return $this->roleDao->findMenuIds($roleId);
     }
 }

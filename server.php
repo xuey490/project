@@ -31,6 +31,13 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Framework\Core\Framework;
 use Framework\Schema\SchemaWarmup;
 use Framework\Schema\SchemaRegistry;
+use Framework\Utils\WorkermanHealth;
+use Framework\Pool\RedisPool;
+use Framework\Pool\MysqlPool;
+use Framework\Pool\PoolManager;
+use Framework\Queue\RedisConsumerService;
+use App\Queue\Handlers\DefaultMessageHandler;
+use App\Queue\Handlers\ArticleMessageHandler;
 
 // 只允许 CLI 模式运行
 if (php_sapi_name() !== 'cli') {
@@ -73,16 +80,10 @@ function ws_log(string $msg): void {
 // ----------------------------------------------------------------------
 // 健康检查与日志轮转
 // ----------------------------------------------------------------------
-function update_health(): void {
-    $health = [
-        'pid'     => getmypid(),
-        'memory'  => round(memory_get_usage(true) / 1024 / 1024, 2) . ' MB',
-        'time'    => date('Y-m-d H:i:s'),
-        'uptime'  => round(microtime(true) - $_SERVER['REQUEST_TIME_FLOAT'], 2) . ' s',
-        'php'     => PHP_VERSION,
-        'os'      => PHP_OS,
-    ];
-    file_put_contents(HEALTH_FILE, json_encode($health, JSON_PRETTY_PRINT));
+function update_health(?Worker $worker = null): void {
+    $snapshot = WorkermanHealth::snapshot($worker?->id, $worker?->name);
+    WorkermanHealth::writeHealthFile(HEALTH_FILE, $snapshot);
+    WorkermanHealth::appendMemoryHistory(LOG_DIR, $snapshot, $worker?->name ?? 'http');
 }
 
 function rotate_logs(): void {
@@ -529,23 +530,100 @@ $httpWorker->onWorkerStart = function(Worker $worker) use (&$framework) {
         SchemaRegistry::freeze();
     }
     
+    // ---------------------------------------------------------------
+    // 连接池初始化（每个 Worker 进程独立持有，不跨进程共享）
+    // ---------------------------------------------------------------
+    try {
+        $redisConfig   = require BASE_PATH . '/config/redis.php';
+        $databaseConfig = require BASE_PATH . '/config/database.php';
+
+        // --- Redis 连接池 ---
+        if (!empty($redisConfig['pool']['enabled'])) {
+            $primaryNode = $redisConfig['nodes'][0] ?? [];
+            $redisPoolConfig = array_merge($primaryNode, $redisConfig['pool']);
+            PoolManager::register('redis.default', new RedisPool($redisPoolConfig));
+            log_info(sprintf(
+                '[HTTP-Worker #%d] Redis 连接池已初始化，空闲：%d / 最大：%d',
+                $worker->id,
+                $redisPoolConfig['min_connections'] ?? 2,
+                $redisPoolConfig['max_connections'] ?? 10
+            ));
+        }
+
+        // --- MySQL 连接池 ---
+        if (!empty($databaseConfig['pool']['enabled'])) {
+            $mysqlConn      = $databaseConfig['connections']['mysql'] ?? [];
+            $mysqlPoolConfig = array_merge([
+                'host'     => $mysqlConn['hostname'] ?? '127.0.0.1',
+                'port'     => (int) ($mysqlConn['hostport'] ?? 3306),
+                'database' => $mysqlConn['database'] ?? 'fssoa',
+                'username' => $mysqlConn['username'] ?? 'root',
+                'password' => $mysqlConn['password'] ?? '',
+                'charset'  => $mysqlConn['charset']  ?? 'utf8mb4',
+            ], $databaseConfig['pool']);
+            PoolManager::register('mysql.default', new MysqlPool($mysqlPoolConfig));
+            log_info(sprintf(
+                '[HTTP-Worker #%d] MySQL 连接池已初始化，空闲：%d / 最大：%d',
+                $worker->id,
+                $mysqlPoolConfig['min_connections'] ?? 2,
+                $mysqlPoolConfig['max_connections'] ?? 10
+            ));
+        }
+    } catch (\Throwable $e) {
+        log_info('[HTTP-Worker] 连接池初始化失败（降级为直连）：' . $e->getMessage());
+    }
+
     // 定时任务：内存监控、日志轮转、健康检查
     Timer::add(MEMORY_CHECK_INTERVAL, function() use ($worker) {
-        update_health();
+        update_health($worker);
         rotate_logs();
         
         $pid = getmypid();
-        $memory = memory_get_usage(true) / 1024 / 1024;
         $time = date('Y-m-d H:i:s');
         
-        Worker::log("[{$time}] [Memory] HTTP-Worker #{$worker->id} PID {$pid} uses {$memory} MB");
+        $memoryReal  = memory_get_usage(true) / 1048576;
+        $memoryEmalloc = memory_get_usage(false) / 1048576;
+        $includedFiles = count(get_included_files());
+        $classes = count(get_declared_classes());
+        $interfaces = count(get_declared_interfaces());
+        $traits = count(get_declared_traits());
+        $objects = (function() {
+            $count = 0;
+            foreach (get_defined_vars() as $v) is_object($v) && $count++;
+            return $count;
+        })();
+        
+        Worker::log("[{$time}] [Memory] HTTP-Worker #{$worker->id} PID {$pid} "
+            . "real:{$memoryReal}MB emalloc:{$memoryEmalloc}MB "
+            . "files:{$includedFiles} classes:{$classes} "
+            . "interfaces:{$interfaces} traits:{$traits}");
+
+        // 连接池统计日志
+        $poolStats = PoolManager::stats();
+        if (!empty($poolStats)) {
+            $statStr = implode(' ', array_map(
+                fn($n, $s) => "{$n}[idle:{$s['idle']} active:{$s['active']} max:{$s['max']}]",
+                array_keys($poolStats),
+                $poolStats
+            ));
+            Worker::log("[{$time}] [Pool] HTTP-Worker #{$worker->id} {$statStr}");
+        }
 
         // 内存超限则重启
-        if ($memory > MEMORY_LIMIT_MB) {
-            Worker::log("[{$time}] [Warning] HTTP-Worker #{$worker->id} PID {$pid} memory exceeded limit ({$memory} MB > " . MEMORY_LIMIT_MB . " MB), stopping...");
+        if ($memoryReal > MEMORY_LIMIT_MB) {
+            Worker::log("[{$time}] [Warning] HTTP-Worker #{$worker->id} PID {$pid} memory exceeded limit ({$memoryReal} MB > " . MEMORY_LIMIT_MB . " MB), stopping...");
             $worker->stop();
         }
     });
+};
+
+// ----------------------------------------------------------------------
+// HTTP Worker 停止回调（关闭连接池）
+// ----------------------------------------------------------------------
+$httpWorker->onWorkerStop = function(Worker $worker) {
+    log_info(sprintf('[HTTP-Worker #%d] 正在关闭连接池...', $worker->id));
+    PoolManager::closeAll();
+    log_info(sprintf('[HTTP-Worker #%d] 连接池已关闭', $worker->id));
 };
 
 // ----------------------------------------------------------------------
@@ -623,9 +701,11 @@ $httpWorker->onMessage = function(TcpConnection $connection, WorkermanRequest $r
         $symReq = convert_to_symfony_request($req);
         $symRes = $framework->handleRequest($symReq);
         
-        // 保存 Session
+        // 保存 Session 并清理内存，防止跨请求累积
         if ($symReq->hasSession()) {
-            $symReq->getSession()->save();
+            $session = $symReq->getSession();
+            $session->save();
+            $session->clear();
         }
         
         // 发送队列中的 Cookie
@@ -639,7 +719,10 @@ $httpWorker->onMessage = function(TcpConnection $connection, WorkermanRequest $r
         Worker::log($error);
         $connection->send(new WorkermanResponse(500, [], "Internal Error: {$e->getMessage()}"));
     } finally {
-        // 清理资源
+        // 清理资源：Request/Response + Session 内存
+        if (isset($symReq) && $symReq->hasSession()) {
+            $symReq->getSession()->clear();
+        }
         unset($symReq, $symRes);
         gc_collect_cycles();
     }
@@ -909,6 +992,79 @@ $wsWorker->onClose = function(TcpConnection $connection) {
 $wsWorker->onError = function(TcpConnection $connection, $code, $msg) {
     ws_log("[WS-Error] Connection #{$connection->id} error: {$code} - {$msg}");
 };
+
+// ----------------------------------------------------------------------
+// 队列消费 Worker（独立进程，避免阻塞 http/wss 业务流）
+// ----------------------------------------------------------------------
+$redisConfigForQueue = require __DIR__ . '/config/redis.php';
+
+if (!empty($redisConfigForQueue['queue']['enabled'])) {
+    $queueConfig   = $redisConfigForQueue['queue'];
+    $workerCount   = (int) ($queueConfig['worker_count'] ?? 2);
+    $queueWorker   = new Worker();
+    $queueWorker->name  = 'FSSPHP-Queue';
+    $queueWorker->count = $workerCount;
+
+    $queueWorker->onWorkerStart = function (Worker $worker) use ($redisConfigForQueue, $queueConfig) {
+        log_info(sprintf('[Queue-Worker #%d] PID %d 启动', $worker->id, getmypid()));
+        Worker::log(sprintf('[Queue-Worker #%d] PID %d 启动', $worker->id, getmypid()));
+
+        // 1. 初始化 Redis 连接池（队列 Worker 独立持有）
+        try {
+            $primaryNode     = $redisConfigForQueue['nodes'][0] ?? [];
+            $redisPoolConfig = array_merge($primaryNode, $redisConfigForQueue['pool'] ?? []);
+            PoolManager::register('redis.default', new RedisPool($redisPoolConfig));
+            log_info(sprintf('[Queue-Worker #%d] Redis 连接池已初始化', $worker->id));
+        } catch (\Throwable $e) {
+            log_info(sprintf('[Queue-Worker #%d] Redis 连接池初始化失败：%s', $worker->id, $e->getMessage()));
+            return;
+        }
+
+        // 2. 注册处理器并启动各队列消费服务
+        foreach ($queueConfig['queues'] ?? [] as $qCfg) {
+            try {
+                $consumer = new RedisConsumerService($qCfg);
+
+                // 注册消息处理器（根据 type 路由到对应 Handler）
+                $consumer->registerHandlers([
+                    // 默认兜底处理器（type 不匹配时不会路由到此，仅作备用）
+                    'default'           => new DefaultMessageHandler(),
+                    // 文章业务消息（发布通知 + 浏览统计）
+                    'article_published' => new ArticleMessageHandler(),
+                    'article_view'      => new ArticleMessageHandler(),
+                    // 扩展示例（取消注释并实现对应 Handler 类）：
+                    // 'send_email'   => new \App\Queue\Handlers\SendEmailHandler(),
+                    // 'send_sms'     => new \App\Queue\Handlers\SendSmsHandler(),
+                    // 'export_excel' => new \App\Queue\Handlers\ExportExcelHandler(),
+                ]);
+
+                $consumer->start($worker);
+                log_info(sprintf(
+                    '[Queue-Worker #%d] 队列 [%s] 消费服务已启动',
+                    $worker->id,
+                    $qCfg['name'] ?? 'unknown'
+                ));
+            } catch (\Throwable $e) {
+                log_info(sprintf(
+                    '[Queue-Worker #%d] 队列 [%s] 启动失败：%s',
+                    $worker->id,
+                    $qCfg['name'] ?? 'unknown',
+                    $e->getMessage()
+                ));
+            }
+        }
+    };
+
+    $queueWorker->onWorkerStop = function (Worker $worker) {
+        log_info(sprintf('[Queue-Worker #%d] 正在停止，关闭连接池...', $worker->id));
+        PoolManager::closeAll();
+        log_info(sprintf('[Queue-Worker #%d] 已停止', $worker->id));
+    };
+
+    $queueWorker->onError = function (TcpConnection $connection, $code, $msg) {
+        log_info(sprintf('[Queue-Worker] 错误：%d - %s', $code, $msg));
+    };
+}
 
 // ----------------------------------------------------------------------
 // 运行所有 Worker
