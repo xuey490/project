@@ -70,3 +70,38 @@ return [
         'reconnect_on_failure' => (bool) (env('MYSQL_POOL_RECONNECT') ?? true),
     ],
 ];
+
+
+/*
+MysqlPool 里的 PDO 是独立创建的裸连接，和 Eloquent/ThinkORM 内部维护的连接完全隔离，两者同时运行操作同一个数据库不会互相影响。
+
+MySQL 连接池适合用在哪些场景：
+
+场景	推荐方式
+日常 CRUD、关联查询				Eloquent ORM（简单、安全）
+大批量原生 SQL、存储过程			连接池 PDO（性能更好）
+需要精细控制 SQL / LOAD DATA		连接池 PDO
+队列 Handler 中操作数据库			连接池 PDO（Queue Worker 里 ORM 未初始化）
+
+
+┌─────────────────────────────────────────────┐
+│          你的业务代码（DAO / Service）          │
+│                                             │
+│  Eloquent ORM ──→ Illuminate\Database PDO   │  ← ORM 自己管理的连接
+│                                             │
+│  PoolManager::borrow('mysql.default') ──→ PDO  │  ← 连接池管理的独立 PDO
+└─────────────────────────────────────────────┘
+
+
+
+					ORM（Eloquent/Think）			MySQL 连接池
+连接来源				ORM 内部自己创建和管理				MysqlPool预建的 PDO
+用途					日常 CRUD（model、查询构建器）		需要裸 PDO 的特殊场景
+事务管理				ORM 负责							自己手动管理
+归还					不需要							必须手动归还
+互相影响				❌ 完全独立						❌ 完全独立
+
+结论： 连接池的 PDO 连接和 ORM 的连接是两个不同的数据库连接，互不干扰。
+
+使用连接池 PDO 的铁律：必须用 try/finally 确保 PoolManager::release() 被调用，否则连接永久泄漏，池耗尽后所有请求超时挂起。
+*/
