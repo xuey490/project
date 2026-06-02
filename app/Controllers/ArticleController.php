@@ -11,12 +11,14 @@ declare(strict_types=1);
 
 namespace App\Controllers;
 
+use App\Models\Article;
 use App\Services\ArticleService;
 use Framework\Attributes\Route;
 use Framework\Basic\BaseController;
 use Framework\Basic\BaseJsonResponse;
 use Framework\Pool\PoolManager;
 use Framework\Queue\RedisConsumerService;
+use PDO;
 use Predis\Client as PredisClient;
 use Throwable;
 
@@ -288,6 +290,63 @@ class ArticleController extends BaseController
 
         } catch (Throwable $e) {
             return $this->error('推送失败：' . $e->getMessage());
+        }
+    }
+
+    /**
+     * MySQL 连接池测试接口
+     *
+     * 演示如何借用池中的裸 PDO 连接执行原生 SQL，
+     * 并与 Eloquent ORM 同时运行互不干扰。
+     *
+     * GET /api/article/pool-test
+     */
+    #[Route(path: '/api/article/pool-test', methods: ['GET'], name: 'article.pool_test')]
+    public function poolTest(): BaseJsonResponse
+    {
+        // 1. 检查连接池是否已注册
+        if (!PoolManager::has('mysql.default')) {
+            return $this->fail('mysql.default 连接池未注册（仅 Workerman 模式下可用）');
+        }
+
+        $pdo = null;
+        try {
+            // 2. 从连接池借出裸 PDO 连接
+            /** @var PDO $pdo */
+            $pdo = PoolManager::borrow('mysql.default');
+
+            // 3. 用裸 PDO 执行原生 SQL（与 ORM 完全独立的连接）
+            $stmt = $pdo->query('SELECT VERSION() AS version, NOW() AS now_time, DATABASE() AS db_name');
+            $serverInfo = $stmt->fetch();
+
+            // 4. 再执行一条业务 SQL（查 sa_article 表总数）—— 裸 PDO
+            $countStmt = $pdo->query('SELECT COUNT(*) AS total FROM sa_article');
+            $countRow  = $countStmt->fetch();
+
+            // 5. 同时用 Eloquent ORM 查同一张表，验证两者互不干扰
+            $ormCount = Article::count();
+
+            return $this->success([
+                'pool_pdo' => [
+                    'mysql_version'          => $serverInfo['version']  ?? null,
+                    'server_time'            => $serverInfo['now_time'] ?? null,
+                    'database'               => $serverInfo['db_name']  ?? null,
+                    'articles_total_via_pdo' => (int) ($countRow['total'] ?? 0),
+                ],
+                'orm' => [
+                    'articles_total_via_orm' => $ormCount,
+                ],
+                'pool_stats' => PoolManager::stats(),
+                'note' => 'pool_pdo 和 orm 的 total 应相同，说明两者读同一库互不冲突',
+            ]);
+
+        } catch (Throwable $e) {
+            return $this->error('MySQL 连接池测试失败：' . $e->getMessage());
+        } finally {
+            // 6. 必须归还连接，否则连接泄漏
+            if ($pdo !== null) {
+                PoolManager::release('mysql.default', $pdo);
+            }
         }
     }
 }
