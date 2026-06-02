@@ -24,12 +24,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * 角色表模型，用于RBAC权限控制
  *
  * @property int         $id          角色ID
- * @property string      $role_name   角色名称
- * @property string      $role_code   角色编码
- * @property int         $parent_id   父角色ID
- * @property int         $sort        排序
- * @property int         $status      状态 0=禁用 1=启用
+ * @property string      $name        角色名称
+ * @property string      $code        角色标识
+ * @property int         $level       角色级别
+ * @property int         $data_scope  数据范围
  * @property string      $remark      备注
+ * @property int         $sort        排序
+ * @property int         $parent_id   父角色ID
+ * @property int         $tenant_id   所属租户ID
+ * @property int         $status      状态: 1启用, 0禁用
  * @property int         $created_by  创建人ID
  * @property int         $updated_by  更新人ID
  * @property \DateTime   $created_at  创建时间
@@ -49,26 +52,34 @@ class SysRole extends BaseLaORMModel
      * 表名
      * @var string
      */
-    protected $table = 'sys_role';
+    protected $table = 'sa_system_role';
 
     /**
      * 主键
      * @var string
      */
     protected $primaryKey = 'id';
+    /**
+     * 自定义时间戳字段名
+     */
+    const CREATED_AT = 'create_time';
+    const UPDATED_AT = 'update_time';
+    const DELETED_AT = 'delete_time';
 
     /**
      * 可填充字段
      * @var array
      */
     protected $fillable = [
-        'role_name',
-        'role_code',
-        'parent_id',
-        'sort',
-        'status',
+        'name',
+        'code',
+        'level',
         'data_scope',
         'remark',
+        'sort',
+        'parent_id',
+        'tenant_id',
+        'status',
         'created_by',
         'updated_by',
     ];
@@ -79,15 +90,17 @@ class SysRole extends BaseLaORMModel
      */
     protected $casts = [
         'id' => 'integer',
-        'parent_id' => 'integer',
+        'level' => 'integer',
         'sort' => 'integer',
+        'parent_id' => 'integer',
+        'tenant_id' => 'integer',
         'status' => 'integer',
         'data_scope' => 'integer',
         'created_by' => 'integer',
         'updated_by' => 'integer',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
-        'deleted_at' => 'datetime',
+        'create_time' => 'datetime',
+        'update_time' => 'datetime',
+        'delete_time' => 'datetime',
     ];
 
     // ==================== 状态常量 ====================
@@ -129,7 +142,7 @@ class SysRole extends BaseLaORMModel
     {
         return $this->belongsToMany(
             SysUser::class,
-            'sys_user_role',
+            'sa_system_user_role',
             'role_id',
             'user_id'
         )->withTimestamps();
@@ -144,7 +157,7 @@ class SysRole extends BaseLaORMModel
     {
         return $this->belongsToMany(
             SysMenu::class,
-            'sys_role_menu',
+            'sa_system_role_menu',
             'role_id',
             'menu_id'
         )->withTimestamps();
@@ -179,7 +192,7 @@ class SysRole extends BaseLaORMModel
     {
         return $this->belongsToMany(
             SysDept::class,
-            'sys_role_dept',
+            'sa_system_role_dept',
             'role_id',
             'dept_id'
         );
@@ -214,7 +227,7 @@ class SysRole extends BaseLaORMModel
      */
     public function getMenuIds(): array
     {
-        return $this->menus()->pluck('id')->toArray();
+        return $this->menus()->pluck('sa_system_menu.id')->toArray();
     }
 
     /**
@@ -258,7 +271,7 @@ class SysRole extends BaseLaORMModel
      */
     public static function isRoleCodeUnique(string $roleCode, int $excludeId = 0): bool
     {
-        $query = self::where('role_code', $roleCode);
+        $query = self::where('code', $roleCode);
 
         if ($excludeId > 0) {
             $query->where('id', '!=', $excludeId);
@@ -315,7 +328,7 @@ class SysRole extends BaseLaORMModel
      */
     public function getDataScopeDeptIds(): array
     {
-        return $this->dataScopeDepts()->pluck('id')->toArray();
+        return $this->dataScopeDepts()->pluck('sa_system_dept.id')->toArray();
     }
 
     /**

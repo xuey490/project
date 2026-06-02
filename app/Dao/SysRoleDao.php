@@ -3,126 +3,93 @@
 declare(strict_types=1);
 
 /**
- * 系统角色DAO
- *
- * @package App\Dao
- * @author  Genie
- * @date    2026-03-12
+ * @Filename: SysRoleDao.php
+ * @Date: 2026-06-02
+ * @Developer: blue2004
+ * @Email: xuey863toy@gmail.com
  */
 
 namespace App\Dao;
 
-use App\Models\SysRole;
 use Framework\Basic\BaseDao;
 
 /**
- * SysRoleDao 角色数据访问层
+ * 角色数据访问层
  *
- * 封装角色相关的数据查询操作
+ * 绑定 sys_role 表，继承 BaseDao 提供通用 CRUD 能力。
+ * 如需扩展复杂查询，在此添加方法，不要在 Service/Controller 层写 SQL。
  */
 class SysRoleDao extends BaseDao
 {
     /**
-     * 设置模型类
+     * 绑定模型类
      *
      * @return string
      */
-    protected function setModel(): string
+    public function setModel(): string
     {
-        return SysRole::class;
+        return \App\Models\SysRole::class;
     }
 
     /**
-     * 根据角色编码查找角色
+     * 查询所有启用状态的角色（id + name）
      *
-     * @param string $roleCode 角色编码
-     * @return SysRole|null
+     * @return array<int, array{id: int, name: string}>
      */
-    public function findByRoleCode(string $roleCode): ?SysRole
+    public function findAllEnabled(): array
     {
-        return $this->getOne(['role_code' => $roleCode]);
+        return $this->selectList(['EQ_status' => 1], 'id,name,code,level,sort', 0, 0, 'sort asc,id asc');
     }
 
     /**
-     * 获取启用的角色列表
+     * 按 code 检查是否存在（用于唯一性校验）
      *
-     * @param int $page  页码
-     * @param int $limit 每页数量
-     * @return array
-     */
-    public function getEnabledList(int $page = 1, int $limit = 20): array
-    {
-        return $this->selectList(['status' => SysRole::STATUS_ENABLED], '*', $page, $limit, 'sort asc')->toArray();
-    }
-
-    /**
-     * 获取所有启用的角色
-     *
-     * @return array
-     */
-    public function getAllEnabled(): array
-    {
-        return $this->selectList(['status' => SysRole::STATUS_ENABLED], '*', 0, 0, 'sort asc')->toArray();
-    }
-
-    /**
-     * 获取子角色列表
-     *
-     * @param int $parentId 父角色ID
-     * @return array
-     */
-    public function getChildrenByParentId(int $parentId): array
-    {
-        return $this->selectList(['parent_id' => $parentId], '*', 0, 0, 'sort asc')->toArray();
-    }
-
-    /**
-     * 检查角色编码是否存在
-     *
-     * @param string $roleCode  角色编码
-     * @param int    $excludeId 排除的角色ID
+     * @param string   $code     角色编码
+     * @param int|null $excludeId 排除指定 id（更新时用）
      * @return bool
      */
-    public function isRoleCodeExists(string $roleCode, int $excludeId = 0): bool
+    public function existsByCode(string $code, ?int $excludeId = null): bool
     {
-        $where = ['role_code' => $roleCode];
-        if ($excludeId > 0) {
-            return $this->be($where) && $this->value($where, 'id') != $excludeId;
+        $where = ['EQ_code' => $code];
+        if ($excludeId !== null) {
+            $where['NEQ_id'] = $excludeId;
         }
-        return $this->be($where);
+        return $this->count($where) > 0;
     }
 
     /**
-     * 更新角色状态
+     * 查询角色已绑定的菜单 ID 列表
      *
-     * @param int $roleId 角色ID
-     * @param int $status 状态
-     * @return bool
+     * 实际项目中可能需要联表，此处预留扩展点。
+     * 如果角色菜单关联存储在独立表（如 sys_role_menu），
+     * 请在此方法中实现 DB 查询。
+     *
+     * @param int $roleId 角色 id
+     * @return array<int>
      */
-    public function updateStatus(int $roleId, int $status): bool
+    public function findMenuIds(int $roleId): array
     {
-        return $this->update($roleId, ['status' => $status]);
+        // TODO: 替换为实际的联表查询，例如：
+        // return \think\facade\Db::table('sys_role_menu')
+        //     ->where('role_id', $roleId)
+        //     ->column('menu_id');
+        return [];
     }
 
     /**
-     * 获取角色总数
+     * 保存角色的菜单关联（先删后插）
      *
-     * @param array $where 条件
-     * @return int
+     * @param int        $roleId  角色 id
+     * @param array<int> $menuIds 菜单 id 数组
+     * @return void
      */
-    public function getRoleCount(array $where = []): int
+    public function syncMenuIds(int $roleId, array $menuIds): void
     {
-        return $this->count($where);
-    }
-
-    /**
-     * 获取角色ID列表
-     *
-     * @param array $where 条件
-     * @return array
-     */
-    public function getRoleIds(array $where = []): array
-    {
-        return $this->getColumn($where, 'id');
+        // TODO: 替换为实际操作，例如：
+        // \think\facade\Db::table('sys_role_menu')->where('role_id', $roleId)->delete();
+        // if (!empty($menuIds)) {
+        //     $rows = array_map(fn($mid) => ['role_id' => $roleId, 'menu_id' => $mid], $menuIds);
+        //     \think\facade\Db::table('sys_role_menu')->insertAll($rows);
+        // }
     }
 }

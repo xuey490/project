@@ -17,9 +17,15 @@ class HomeController
 	#[Route(path: '/api/home', methods: ['GET'], name: 'home.index')]
 	public function index():Response
 	{
+		/*
+$cache = app('cache');
+$cache->set('test1', ['name' => 'mike'], 3600);
+		*/
+                $redis = app('redis');
+                $redis->setex('kikiki', 3600, 'hello world');
 
 		return new Response(
-			'<html><body><h1>Hello, World!!</h1></body></html>',
+			'<html><body><h1>Home, hello, World!</h1></body></html>',
 			Response::HTTP_OK, // Code（200）
 			['Content-Type' => 'text/html; charset=UTF-8']
 		);	

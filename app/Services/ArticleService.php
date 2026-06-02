@@ -3,482 +3,349 @@
 declare(strict_types=1);
 
 /**
- * 文章服务层
- *
- * @package App\Services
- * @author  Genie
- * @date    2026-03-19
+ * @Filename: ArticleService.php
+ * @Date: 2026-06-02
+ * @Developer: blue2004
+ * @Email: xuey863toy@gmail.com
  */
 
 namespace App\Services;
 
 use App\Dao\ArticleDao;
-use App\Models\Article;
-use App\Models\SysRole;
-use App\Models\SysRoleDept;
-use App\Models\SysUserRole;
-use Framework\Tenant\TenantContext;
-use Framework\Basic\Traits\DataScopeTrait;
+use Framework\Basic\BaseService;
+use Framework\DI\Attribute\Autowire;
+use Framework\Pool\PoolManager;
+use Framework\Queue\RedisConsumerService;
+use Predis\Client as PredisClient;
 
 /**
- * ArticleService 文章服务层
+ * 文章业务服务层
  *
- * 处理文章相关的业务逻辑，包括：
- * - 文章的增删改查
- * - 数据权限控制
- * - 业务规则验证
+ * 职责：
+ * - 封装文章业务逻辑，由 Controller 调用
+ * - 数据访问通过 ArticleDao 完成（三层架构）
+ * - 事务由 BaseService::transaction() 统一管理
  */
-class ArticleService
+class ArticleService extends BaseService
 {
-    /**
-     * 文章 DAO
-     * @var ArticleDao
-     */
+    /** @var ArticleDao 文章 DAO，由框架自动注入 */
+    #[Autowire]
     protected ArticleDao $articleDao;
 
-    /**
-     * 构造函数
-     */
-    public function __construct()
-    {
-        $this->articleDao = new ArticleDao();
-    }
-
-    // ==================== 数据权限初始化 ====================
+    // =========================================================================
+    //  查询
+    // =========================================================================
 
     /**
-     * 初始化当前用户的数据权限
+     * 查询所有文章列表（支持分页）
      *
-     * 根据当前登录用户的角色，设置数据权限上下文
-     *
-     * @param int $userId 用户ID
-     * @param int|null $deptId 部门ID
-     * @param int|null $tenantId 租户ID
-     * @return void
+     * @param array $params 查询条件，支持以下键：
+     *   - page        : int    页码（默认1）
+     *   - limit       : int    每页条数（默认10）
+     *   - category_id : int    按分类筛选
+     *   - status      : int    状态（1正常 0禁用）
+     *   - keyword     : string 标题模糊搜索
+     * @return array{items: array, total: int, page: int, limit: int, pages: int}
      */
-    public function initDataScope(int $userId, ?int $deptId = null, ?int $tenantId = null): void
+    public function list(array $params = []): array
     {
-        $tenantId = $tenantId ?? TenantContext::getTenantId() ?? 0;
+        [$page, $limit] = $this->PageParams($params);
 
-        // 获取用户在当前租户的角色
-        $roleIds = SysUserRole::getRoleIdsByTenant($userId, $tenantId);
+        // 构建 DAO 查询条件（框架 CrudQueryTrait 前缀约定）
+        $where = [];
 
-        if (empty($roleIds)) {
-            // 没有角色，只能看自己的数据
-            Article::setDataScopeContext($userId, DataScopeTrait::DATA_SCOPE_SELF, $deptId);
-            return;
+        // 状态过滤（默认只查正常状态）
+        $where['EQ_status'] = (int) ($params['status'] ?? 1);
+
+        // 可选：按分类过滤
+        if (!empty($params['category_id'])) {
+            $where['EQ_category_id'] = (int) $params['category_id'];
         }
 
-        // 获取角色的数据权限范围（取最大权限）
-        $dataScope = $this->getMaxDataScope($roleIds);
-
-        // 如果是自定义权限，获取自定义部门ID
-        $customDeptIds = [];
-        if ($dataScope === DataScopeTrait::DATA_SCOPE_CUSTOM) {
-            $customDeptIds = SysRoleDept::getDeptIdsByRoles($roleIds);
+        // 可选：标题关键字模糊搜索
+        if (!empty($params['keyword'])) {
+            $where['LIKE_title'] = $params['keyword'];
         }
 
-        // 设置数据权限上下文
-        Article::setDataScopeContext($userId, $dataScope, $deptId, $customDeptIds);
-    }
-
-    /**
-     * 获取多个角色的最大数据权限
-     *
-     * 权限范围从小到大：本人 < 部门 < 部门及子部门 < 全部
-     *
-     * @param array $roleIds 角色ID数组
-     * @return int 最大权限范围值
-     */
-    protected function getMaxDataScope(array $roleIds): int
-    {
-        // 获取所有角色的数据权限
-        $scopes = \App\Models\SysRole::whereIn('id', $roleIds)
-            ->pluck('data_scope')
-            ->toArray();
-
-        if (empty($scopes)) {
-            return DataScopeTrait::DATA_SCOPE_SELF;
+        // 可选：租户隔离
+        if (!empty($params['tenant_id'])) {
+            $where['EQ_tenant_id'] = (int) $params['tenant_id'];
         }
 
-        // 返回最大权限（数值越小权限越大）
-        return min($scopes);
+        $total = $this->articleDao->count($where, true);
+        $items = $this->articleDao->selectList($where, '*', $page, $limit, 'sort asc,id desc', [], true);
+
+        return $this->buildPaginateResult(
+            is_array($items) ? $items : $items->toArray(),
+            $total,
+            $page,
+            $limit
+        );
     }
 
     /**
-     * 清除数据权限上下文
+     * 查询单篇文章详情，并累加浏览次数
      *
-     * @return void
+     * @param int $id 文章id
+     * @return array|null
      */
-    public function clearDataScope(): void
+    public function detail(int $id): ?array
     {
-        Article::clearDataScopeContext();
-    }
+        $article = $this->articleDao->get($id);
 
-    // ==================== 文章 CRUD ====================
+        if (empty($article)) {
+            return null;
+        }
 
-    /**
-     * 获取文章列表
-     *
-     * @param array $params 查询参数
-     * @param int $page 页码
-     * @param int $pageSize 每页数量
-     * @return array
-     */
-    public function getList(array $params = [], int $page = 1, int $pageSize = 10): array
-    {
-        return $this->articleDao->getList($params, $page, $pageSize);
-    }
+        // Eloquent Model → array
+        $articleArr = is_array($article) ? $article : $article->toArray();
 
-    /**
-     * 获取文章详情
-     *
-     * @param int $id 文章ID
-     * @return Article|null
-     */
-    public function getDetail(int $id): ?Article
-    {
-        return $this->articleDao->getById($id);
+        // 浏览次数 +1（忽略失败）
+        try {
+            $this->articleDao->update($id, ['views' => ($articleArr['views'] ?? 0) + 1]);
+        } catch (\Throwable) {
+            // 浏览量更新失败不影响主流程
+        }
+
+        return $articleArr;
     }
 
     /**
-     * 创建文章
+     * 新增文章（带事务）
      *
      * @param array $data 文章数据
-     * @param int $userId 创建人ID
-     * @param int $deptId 部门ID
-     * @param int|null $tenantId 租户ID
-     * @return Article
-     * @throws \Exception
+     * @return mixed 新记录主键
      */
-    public function create(array $data, int $userId, int $deptId, ?int $tenantId = null): Article
+    public function create(array $data): mixed
     {
-        // 验证数据
-        $this->validateArticleData($data);
+        $data['create_time'] = date('Y-m-d H:i:s');
+        $data['update_time'] = date('Y-m-d H:i:s');
+        $data['status']      = $data['status'] ?? 1;
+        $data['sort']        = $data['sort']   ?? 100;
+        $data['views']       = 0;
 
-        // 补充默认字段
-        $data['created_by'] = $userId;
-        $data['updated_by'] = $userId;
-        $data['dept_id'] = $deptId;
-        $data['tenant_id'] = $tenantId ?? TenantContext::getTenantId() ?? 0;
+        $result = $this->transaction(function () use ($data) {
+            return $this->articleDao->save($data);
+        });
 
-        // 如果状态为已发布，设置发布时间
-        if (isset($data['status']) && $data['status'] == Article::STATUS_PUBLISHED) {
-            $data['published_at'] = now();
+        // laravelORM 的 save() 返回 Eloquent Model，取主键；thinkORM 返回 int
+        if (is_object($result) && method_exists($result, 'getKey')) {
+            return $result->getKey();
         }
 
-        return $this->articleDao->create($data);
+        return $result;
     }
 
     /**
-     * 更新文章
+     * 更新文章（带事务）
      *
-     * @param int $id 文章ID
+     * @param int   $id   文章id
      * @param array $data 更新数据
-     * @param int $userId 更新人ID
      * @return bool
-     * @throws \Exception
      */
-    public function update(int $id, array $data, int $userId): bool
+    public function edit(int $id, array $data): bool
     {
-        // 检查文章是否存在
-        $article = $this->articleDao->getById($id);
-        if (!$article) {
-            throw new \Exception('文章不存在');
-        }
+        $data['update_time'] = date('Y-m-d H:i:s');
 
-        // 验证数据
-        $this->validateArticleData($data, $id);
-
-        // 补充更新字段
-        $data['updated_by'] = $userId;
-
-        // 如果状态从草稿变为已发布，设置发布时间
-        if (isset($data['status']) &&
-            $data['status'] == Article::STATUS_PUBLISHED &&
-            $article->isDraft()) {
-            $data['published_at'] = now();
-        }
-
-        return $this->articleDao->update($id, $data);
+        return $this->transaction(function () use ($id, $data) {
+            return $this->articleDao->update($id, $data);
+        });
     }
 
     /**
-     * 删除文章
+     * 删除文章（软删除，带事务）
      *
-     * @param int $id 文章ID
+     * @param int $id 文章id
      * @return bool
-     * @throws \Exception
      */
-    public function delete(int|string $id): bool
+    public function remove(int $id): bool
     {
-        $article = $this->articleDao->getById($id);
-        if (!$article) {
-            throw new \Exception('文章不存在');
-        }
-
-        return $this->articleDao->delete($id);
+        return $this->transaction(function () use ($id) {
+            return $this->articleDao->destroy($id);
+        });
     }
 
-    /**
-     * 发布文章
-     *
-     * @param int $id 文章ID
-     * @return bool
-     * @throws \Exception
-     */
-    public function publish(int $id): bool
-    {
-        $article = $this->articleDao->getById($id);
-        if (!$article) {
-            throw new \Exception('文章不存在');
-        }
-
-        return $article->publish();
-    }
+    // =========================================================================
+    //  推送队列消息示例
+    // =========================================================================
 
     /**
-     * 下架文章
+     * 文章发布后推送通知消息到队列
      *
-     * @param int $id 文章ID
-     * @return bool
-     * @throws \Exception
-     */
-    public function offline(int $id): bool
-    {
-        $article = $this->articleDao->getById($id);
-        if (!$article) {
-            throw new \Exception('文章不存在');
-        }
-
-        return $article->offline();
-    }
-
-    // ==================== 数据验证 ====================
-
-    /**
-     * 验证文章数据
+     * 在 Controller 调用完 create() 后调用此方法，
+     * 队列 Worker 中的 ArticleMessageHandler 会消费并处理实际通知逻辑。
      *
-     * @param array $data 文章数据
-     * @param int|null $excludeId 排除的文章ID（更新时使用）
+     * @param int    $articleId   文章id
+     * @param string $articleTitle 文章标题
+     * @param int    $authorId    作者id
      * @return void
-     * @throws \Exception
      */
-    protected function validateArticleData(array $data, ?int $excludeId = null): void
+    public function dispatchPublishNotice(int $articleId, string $articleTitle, int $authorId): void
     {
-        // 标题必填
-        if (empty($data['title'])) {
-            throw new \Exception('文章标题不能为空');
-        }
-
-        // 标题长度
-        if (mb_strlen($data['title']) > 200) {
-            throw new \Exception('文章标题不能超过200个字符');
-        }
-
-        // 内容长度检查
-        if (!empty($data['content']) && mb_strlen($data['content']) > 100000) {
-            throw new \Exception('文章内容过长');
-        }
-
-        // 摘要长度
-        if (!empty($data['summary']) && mb_strlen($data['summary']) > 500) {
-            throw new \Exception('文章摘要不能超过500个字符');
-        }
-
-        // 状态有效性
-        if (isset($data['status']) && !in_array($data['status'], [
-            Article::STATUS_DRAFT,
-            Article::STATUS_PUBLISHED,
-            Article::STATUS_OFFLINE,
-        ])) {
-            throw new \Exception('无效的文章状态');
-        }
-    }
-
-    // ==================== 批量操作 ====================
-
-    /**
-     * 批量发布
-     *
-     * @param array $ids 文章ID数组
-     * @return int
-     */
-    public function batchPublish(array $ids): int
-    {
-        return $this->articleDao->batchUpdateStatus($ids, Article::STATUS_PUBLISHED);
+        // 推送到 'default' 队列，消息类型 'article_published'
+        // 对应 server.php 队列 Worker 中注册的 ArticleMessageHandler
+        RedisConsumerService::dispatch('default', 'article_published', [
+            'article_id'    => $articleId,
+            'article_title' => $articleTitle,
+            'author_id'     => $authorId,
+            'published_at'  => date('Y-m-d H:i:s'),
+        ]);
     }
 
     /**
-     * 批量下架
+     * 推送文章浏览统计到队列（批量异步写入，避免频繁更新 DB）
      *
-     * @param array $ids 文章ID数组
-     * @return int
+     * @param int $articleId 文章id
+     * @return void
      */
-    public function batchOffline(array $ids): int
+    public function dispatchViewCount(int $articleId): void
     {
-        return $this->articleDao->batchUpdateStatus($ids, Article::STATUS_OFFLINE);
+        RedisConsumerService::dispatch('default', 'article_view', [
+            'article_id' => $articleId,
+            'viewed_at'  => date('Y-m-d H:i:s'),
+        ]);
     }
 
-    /**
-     * 批量删除
-     *
-     * @param array $ids 文章ID数组
-     * @return int
-     */
-    public function batchDelete(array $ids): int
-    {
-        return $this->articleDao->batchDelete($ids);
-    }
-
-    // ==================== 统计功能 ====================
+    // =========================================================================
+    //  借用 Redis 连接池操作 Redis 示例
+    // =========================================================================
 
     /**
-     * 获取文章统计
+     * 从 Redis 连接池借用连接，缓存文章列表
      *
-     * @return array
-     */
-    public function getStatistics(): array
-    {
-        return $this->articleDao->getStatistics();
-    }
-
-    /**
-     * 获取仪表盘统计
+     * 典型场景：热门文章缓存，直接从 Redis 读取，减少 DB 查询。
      *
-     * @return array
+     * @param string $cacheKey Redis 缓存 Key
+     * @param int    $ttl      缓存有效期（秒）
+     * @return array|null 命中缓存返回数据，否则返回 null
      */
-    public function getDashboardStatistics(): array
+    public function getFromCache(string $cacheKey, int $ttl = 300): ?array
     {
-        $stats = $this->articleDao->getStatistics();
+        /** @var PredisClient|null $redis */
+        $redis = null;
 
-        return [
-            'overview' => [
-                'total' => $stats['total'],
-                'published' => $stats['published'],
-                'draft' => $stats['draft'],
-                'offline' => $stats['offline'],
-            ],
-            'today' => $stats['today_created'],
-            'views' => $stats['total_views'],
-            'by_status' => $this->articleDao->getStatusStatistics(),
-            'by_dept' => $this->articleDao->getDeptStatistics(),
-            'by_creator' => $this->articleDao->getCreatorStatistics(),
-        ];
-    }
+        try {
+            // 1. 从连接池借出连接（O(1)，不新建 TCP 连接）
+            $redis = PoolManager::borrow('redis.default');
 
-    // ==================== 数据权限相关 ====================
+            // 2. 读取缓存
+            $cached = $redis->get($cacheKey);
+            if ($cached !== null) {
+                return json_decode($cached, true);
+            }
 
-    /**
-     * 检查用户是否有权限操作文章
-     *
-     * @param int $articleId 文章ID
-     * @param int $userId 用户ID
-     * @param string $action 操作类型（view/edit/delete）
-     * @return bool
-     */
-    public function checkPermission(int $articleId, int $userId, string $action = 'view'): bool
-    {
-        $article = $this->articleDao->getById($articleId);
+            return null;
 
-        if (!$article) {
-            return false;
-        }
-
-        // 超管有所有权限
-        if ($this->isSuperAdmin($userId)) {
-            return true;
-        }
-
-        // 创建人有编辑和删除权限
-        if ($article->created_by === $userId) {
-            return true;
-        }
-
-        // 查看权限根据数据权限判断
-        if ($action === 'view') {
-            // 使用数据权限 Trait 的检查逻辑
-            return $this->canViewArticle($article, $userId);
-        }
-
-        return false;
-    }
-
-    /**
-     * 检查用户是否可以查看文章
-     *
-     * @param Article $article 文章
-     * @param int $userId 用户ID
-     * @return bool
-     */
-    protected function canViewArticle(Article $article, int $userId): bool
-    {
-        // 获取当前用户的数据权限范围
-        $tenantId = TenantContext::getTenantId() ?? 0;
-        $roleIds = SysUserRole::getRoleIdsByTenant($userId, $tenantId);
-        $dataScope = $this->getMaxDataScope($roleIds);
-
-        switch ($dataScope) {
-            case DataScopeTrait::DATA_SCOPE_ALL:
-                return true;
-
-            case DataScopeTrait::DATA_SCOPE_DEPT:
-                // 需要获取当前用户的部门ID
-                $userDeptId = $this->getUserDeptId($userId);
-                return $article->dept_id === $userDeptId;
-
-            case DataScopeTrait::DATA_SCOPE_DEPT_AND_CHILD:
-            case DataScopeTrait::DATA_SCOPE_DEPT_AND_SELF:
-                $userDeptId = $this->getUserDeptId($userId);
-                if ($article->created_by === $userId) {
-                    return true;
-                }
-                $childDeptIds = \App\Models\SysDept::getAllChildIds($userDeptId);
-                return in_array($article->dept_id, $childDeptIds) || $article->dept_id === $userDeptId;
-
-            case DataScopeTrait::DATA_SCOPE_SELF:
-                return $article->created_by === $userId;
-
-            case DataScopeTrait::DATA_SCOPE_CUSTOM:
-                $customDeptIds = SysRoleDept::getDeptIdsByRoles($roleIds);
-                return in_array($article->dept_id, $customDeptIds);
-
-            default:
-                return false;
+        } catch (\Throwable $e) {
+            // Redis 不可用时降级，记录日志但不抛出异常
+            if (function_exists('log_info')) {
+                log_info('[ArticleService] Redis 缓存读取失败（降级直查DB）：' . $e->getMessage());
+            }
+            return null;
+        } finally {
+            // 3. 归还连接（无论成功/异常都要归还，避免连接泄漏）
+            if ($redis !== null) {
+                PoolManager::release('redis.default', $redis);
+            }
         }
     }
 
     /**
-     * 获取用户部门ID
+     * 将文章列表写入 Redis 缓存（连接池示例）
      *
-     * @param int $userId 用户ID
-     * @return int|null
+     * @param string $cacheKey 缓存 Key
+     * @param array  $data     缓存数据
+     * @param int    $ttl      有效期（秒）
+     * @return void
      */
-    protected function getUserDeptId(int $userId): ?int
+    public function setToCache(string $cacheKey, array $data, int $ttl = 300): void
     {
-        $user = \App\Models\SysUser::find($userId);
-        return $user?->dept_id;
+        $redis = null;
+
+        try {
+            $redis = PoolManager::borrow('redis.default');
+
+            // SET key value EX ttl（设置值并同时设过期时间，原子操作）
+            $redis->set($cacheKey, json_encode($data, JSON_UNESCAPED_UNICODE), 'EX', $ttl);
+
+        } catch (\Throwable $e) {
+            if (function_exists('log_info')) {
+                log_info('[ArticleService] Redis 缓存写入失败：' . $e->getMessage());
+            }
+        } finally {
+            if ($redis !== null) {
+                PoolManager::release('redis.default', $redis);
+            }
+        }
     }
 
     /**
-     * 检查是否为超级管理员
+     * 使用 Redis 实现文章浏览量原子递增（连接池示例：INCR）
      *
-     * @param int $userId 用户ID
-     * @return bool
+     * 相比直接 UPDATE DB，INCR 是原子操作，高并发安全。
+     * 可由定时任务或队列定期将 Redis 计数同步回 DB。
+     *
+     * @param int $articleId 文章id
+     * @return int 当前浏览量
      */
-    protected function isSuperAdmin(int $userId): bool
+    public function incrViewCount(int $articleId): int
     {
-        $user = \App\Models\SysUser::find($userId);
-        return $user?->isSuperAdmin() ?? false;
+        $redis = null;
+
+        try {
+            $redis = PoolManager::borrow('redis.default');
+
+            $key   = 'article:views:' . $articleId;
+            $count = (int) $redis->incr($key);
+
+            // 设置初始过期时间（7天），防止 Key 永不过期堆积
+            if ($count === 1) {
+                $redis->expire($key, 7 * 86400);
+            }
+
+            return $count;
+
+        } catch (\Throwable $e) {
+            if (function_exists('log_info')) {
+                log_info('[ArticleService] Redis INCR 失败：' . $e->getMessage());
+            }
+            return 0;
+        } finally {
+            if ($redis !== null) {
+                PoolManager::release('redis.default', $redis);
+            }
+        }
     }
 
     /**
-     * 获取数据权限选项（用于前端）
+     * Hash 存储文章热度数据（HSET 示例）
      *
-     * @return array
+     * @param int $articleId 文章id
+     * @param array $metrics ['views' => 100, 'likes' => 50]
+     * @return void
      */
-    public function getDataScopeOptions(): array
+    public function saveMetrics(int $articleId, array $metrics): void
     {
-        return Article::getDataScopeOptions();
+        $redis = null;
+
+        try {
+            $redis  = PoolManager::borrow('redis.default');
+            $hashKey = 'article:metrics:' . $articleId;
+
+            // HSET 批量写入 Hash 字段
+            foreach ($metrics as $field => $value) {
+                $redis->hset($hashKey, $field, (string) $value);
+            }
+            $redis->expire($hashKey, 86400); // 1天过期
+
+        } catch (\Throwable $e) {
+            if (function_exists('log_info')) {
+                log_info('[ArticleService] Redis HSET 失败：' . $e->getMessage());
+            }
+        } finally {
+            if ($redis !== null) {
+                PoolManager::release('redis.default', $redis);
+            }
+        }
     }
 }
