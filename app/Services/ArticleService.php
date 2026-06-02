@@ -124,9 +124,16 @@ class ArticleService extends BaseService
         $data['sort']        = $data['sort']   ?? 100;
         $data['views']       = 0;
 
-        return $this->transaction(function () use ($data) {
+        $result = $this->transaction(function () use ($data) {
             return $this->articleDao->save($data);
         });
+
+        // laravelORM 的 save() 返回 Eloquent Model，取主键；thinkORM 返回 int
+        if (is_object($result) && method_exists($result, 'getKey')) {
+            return $result->getKey();
+        }
+
+        return $result;
     }
 
     /**

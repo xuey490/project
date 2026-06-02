@@ -52,19 +52,19 @@ return [
     // 连接池配置（Redis 连接池，在 Workerman 常驻模式下生效）
     // ---------------------------------------------------------------
     'pool' => [
-        'enabled'         => (bool) (env('REDIS_POOL_ENABLED') ?? true),
-        'min_connections' => (int) (env('REDIS_POOL_MIN') ?? 2),
-        'max_connections' => (int) (env('REDIS_POOL_MAX') ?? 10),
-        'borrow_timeout'  => (float) (env('REDIS_POOL_TIMEOUT') ?? 3.0),
-        'retry_attempts'  => (int) (env('REDIS_POOL_RETRY') ?? 3),
+        'enabled'         => true, 	//(bool) (env('REDIS_POOL_ENABLED') ?? true),
+        'min_connections' => 2, 	//(int) (env('REDIS_POOL_MIN') ?? 2),
+        'max_connections' => 10, 	//(int) (env('REDIS_POOL_MAX') ?? 10),
+        'borrow_timeout'  => 3.0, 	//(float) (env('REDIS_POOL_TIMEOUT') ?? 3.0),
+        'retry_attempts'  => 3, 	//(int) (env('REDIS_POOL_RETRY') ?? 3),
     ],
 
     // ---------------------------------------------------------------
     // 队列消费服务配置
     // ---------------------------------------------------------------
     'queue' => [
-        'enabled'       => (bool) (env('REDIS_QUEUE_ENABLED') ?? true),
-        'worker_count'  => (int) (env('REDIS_QUEUE_WORKERS') ?? 2),   // 队列消费 Worker 进程数
+        'enabled'       => true , //(bool) (env('REDIS_QUEUE_ENABLED') ?? true),
+        'worker_count'  => 2, //(int) (env('REDIS_QUEUE_WORKERS') ?? 2),   // 队列消费 Worker 进程数
         'queues'        => [
             [
                 'name'          => 'default',   // 队列名（对应 Redis key: queue:default）

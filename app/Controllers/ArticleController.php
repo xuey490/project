@@ -147,7 +147,7 @@ class ArticleController extends BaseController
 
     /**
      * 新增文章并推送队列消息
-     *
+     * curl -X POST -H "Content-Type: application/json" \ -d '{ "title": "标题", "category_id": 1, "describe": "简介", "content": "正文" }' \ http://localhost:8000/api/article/create
      * POST /api/article/create
      * Body (JSON): { "title": "标题", "category_id": 1, "describe": "简介", "content": "正文" }
      */
