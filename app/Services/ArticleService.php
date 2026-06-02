@@ -97,14 +97,17 @@ class ArticleService extends BaseService
             return null;
         }
 
+        // Eloquent Model → array
+        $articleArr = is_array($article) ? $article : $article->toArray();
+
         // 浏览次数 +1（忽略失败）
         try {
-            $this->articleDao->update($id, ['views' => ($article['views'] ?? 0) + 1]);
+            $this->articleDao->update($id, ['views' => ($articleArr['views'] ?? 0) + 1]);
         } catch (\Throwable) {
             // 浏览量更新失败不影响主流程
         }
 
-        return $article;
+        return $articleArr;
     }
 
     /**

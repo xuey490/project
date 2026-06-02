@@ -127,7 +127,7 @@ class ArticleController extends BaseController
             $article = $this->ArticleService->detail($id);
 
             if ($article === null) {
-                return $this->fail('文章不存在');
+                return $this->fail('文章不存在'.$id);
             }
 
             // 使用 Redis 连接池原子递增浏览量（高并发安全）
