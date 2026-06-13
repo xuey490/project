@@ -902,6 +902,7 @@ final class Framework
                     'status_text' => Response::$statusTexts[$statusCode] ?? 'Server Error',
                     'message'     => 'An unexpected error occurred. Please try again later. 程序发生错误，请稍后再试！',
                 ]);
+				//$content = view('errors/debug.html.twig', $templateVars);
             }
         } catch (Throwable $e2) {
             // 记录渲染模板失败的错误日志

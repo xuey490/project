@@ -6,7 +6,7 @@ return [
 
     'single_device_login' => env('JWT_SINGLE_DEVICE_LOGIN', false), // 默认允许多点登录
 
-    'secret' => env('JWT_SECRET', 'your-secret-key-here_dGkiOiJhNTE0YzhhMzZjZGRkZDhkM2FlOGY2NDRhMDdlMTJjYXQiOjE3Nj'),
+    'secret' => env('JWT_SECRET', ''),
 
     'algo' => 'HS256', // 支持 HS256, HS384, HS512, RS256 等
 
