@@ -16,10 +16,10 @@ declare(strict_types=1);
 
 namespace Framework\Event;
 
-use Framework\Cache\CacheFactory;
 use Framework\Event\Attribute\EventListener;
 use RecursiveDirectoryIterator;
 use RecursiveIteratorIterator;
+use Framework\Utils\ReflectionTypes;
 use ReflectionClass;
 use ReflectionMethod;
 
@@ -27,21 +27,19 @@ class ListenerScanner
 {
     private string $listenerDir;
 
-    private CacheFactory $cache;
-
     private int $cacheTtl = 3600; // 1小时
 
     private string $cacheKey = 'event.subscribers';
 
-    public function __construct(CacheFactory $cache, ?string $listenerDir = null)
+    public function __construct(?string $listenerDir = null)
     {
-        $this->cache       = $cache;
         $this->listenerDir = $listenerDir ?? BASE_PATH . '/app/Listeners';
     }
 
     /**
      * 获取监听器（自动缓存 + 自动刷新）.
-     */
+     * @return array<mixed>
+ */
     public function getSubscribers(): array
     {
         // 开发环境建议禁用缓存（可选）
@@ -78,7 +76,8 @@ class ListenerScanner
 
     /**
      * 核心扫描逻辑：支持 Interface 和 Attributes
-     */
+     * @return array<mixed>
+ */
     private function scanAndBuild(): array
     {
         if (! is_dir($this->listenerDir)) {
@@ -128,9 +127,9 @@ class ListenerScanner
                         // 从方法参数获取: handle(UserLogin $event)
                         $params = $method->getParameters();
                         if (isset($params[0])) {
-                            $type = $params[0]->getType();
-                            if ($type && !$type->isBuiltin()) {
-                                $eventClass = $type->getName();
+                            $namedType = ReflectionTypes::asNamed($params[0]->getType());
+                            if ($namedType !== null && !$namedType->isBuiltin()) {
+                                $eventClass = $namedType->getName();
                             }
                         }
                     }

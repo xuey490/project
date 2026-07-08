@@ -26,6 +26,7 @@ use RuntimeException;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\Compiler\PassConfig;
+use Symfony\Component\DependencyInjection\Container as SymfonyContainer;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\ContainerInterface as SymfonyContainerInterface;
 use Symfony\Component\DependencyInjection\Definition;
@@ -36,13 +37,18 @@ use Symfony\Component\Dotenv\Dotenv;
 
 /**
  * A wrapper class for Symfony's Dependency Injection Container with extended functionality
+ *
+ * @implements ArrayAccess<mixed, mixed>
  */
 class Container implements SymfonyContainerInterface, ArrayAccess
 {
     private const CACHE_FILE = BASE_PATH . '/storage/cache/container.php';
-    private static ?SymfonyContainerInterface $container = null;
+    private static SymfonyContainer|ContainerBuilder|null $container = null;
     private static ?ContainerProviders $providers = null;
 
+    /**
+    * @param array<mixed> $parameters
+    */
     public static function init(array $parameters = []): void
     {
         if (self::$container !== null) {
@@ -91,10 +97,7 @@ class Container implements SymfonyContainerInterface, ArrayAccess
             $dumper       = new PhpDumper($containerBuilder);
             $cacheContent = $dumper->dump(['class' => 'ProjectServiceContainer']);
             file_put_contents(self::CACHE_FILE, $cacheContent);
-            $loadedContainer = require self::CACHE_FILE;
-            self::$container = $loadedContainer instanceof SymfonyContainerInterface
-                ? $loadedContainer
-                : $containerBuilder;
+            self::$container = self::loadCompiledContainer(self::CACHE_FILE, $containerBuilder);
         } else {
             self::$container = $containerBuilder;
         }
@@ -112,14 +115,37 @@ class Container implements SymfonyContainerInterface, ArrayAccess
         throw new RuntimeException('Current container is not an instance of ContainerBuilder (it might be compiled or cached).');
     }
 
-    private static function getContainer(): SymfonyContainerInterface
+    /**
+     * 加载已编译的容器缓存文件
+     *
+     * 缓存文件由 file_put_contents 在编译后生成，静态分析时可能尚不存在，
+     * 因此路径通过参数传入，避免分析器误报文件不存在。
+     *
+     * @param string $cacheFile 缓存文件路径
+     * @param SymfonyContainerInterface $fallback 编译后的容器构建器（兜底）
+     * @return SymfonyContainer
+     */
+    private static function loadCompiledContainer(string $cacheFile, SymfonyContainerInterface $fallback): SymfonyContainer
     {
-        if (self::$container === null) {
-            self::init();
+        if (! is_file($cacheFile)) {
+            if ($fallback instanceof SymfonyContainer) {
+                return $fallback;
+            }
+            throw new RuntimeException('Compiled container fallback is not a Symfony Container instance.');
         }
-        return self::$container;
+
+        $container = require $cacheFile;
+
+        return $container instanceof SymfonyContainer
+            ? $container
+            : ($fallback instanceof SymfonyContainer
+                ? $fallback
+                : throw new RuntimeException('Compiled container is not a Symfony Container instance.'));
     }
 
+    /**
+    * @param array<mixed> $parameters
+    */
     public function make(string $abstract, array $parameters = []): object
     {
         if (empty($parameters) && self::$container->has($abstract)) {
@@ -189,7 +215,7 @@ class Container implements SymfonyContainerInterface, ArrayAccess
                     $namespace = implode('\\', array_slice(explode('\\', $className), 0, -1)) . '\\';
                     $composerAutoload = null;
                     foreach (spl_autoload_functions() as $func) {
-                        if (is_array($func) && isset($func[0]) && $func[0] instanceof \Composer\Autoload\ClassLoader) {
+                        if (is_array($func) && $func[0] instanceof \Composer\Autoload\ClassLoader) {
                             $composerAutoload = $func[0];
                             break;
                         }
@@ -299,6 +325,9 @@ class Container implements SymfonyContainerInterface, ArrayAccess
         self::$container->setParameter($name, $value);
     }
 
+    /**
+    * @param array<mixed> $attributes
+    */
     public function tag(string $id, string $tag, array $attributes = []): void
     {
         if (self::$container === null) {
@@ -366,9 +395,12 @@ class Container implements SymfonyContainerInterface, ArrayAccess
         return self::$container->initialized($id);
     }
 
+    /**
+    * @return array<mixed>
+    */
     public function getServiceIds(): array
     {
-        return self::$container->getServiceIds();
+        return $this->getSymfonyContainer()->getServiceIds();
     }
 
     public function setParameter(string $name, mixed $value): void
@@ -384,6 +416,9 @@ class Container implements SymfonyContainerInterface, ArrayAccess
         return self::$container->hasParameter($name);
     }
 
+    /**
+    * @return array<mixed>
+    */
     public function getParameter(string $name): array|bool|float|int|string|\UnitEnum|null
     {
         return self::$container->getParameter($name);
@@ -391,7 +426,7 @@ class Container implements SymfonyContainerInterface, ArrayAccess
 
     public function getParameterBag(): ParameterBagInterface
     {
-        return self::$container->getParameterBag();
+        return $this->getSymfonyContainer()->getParameterBag();
     }
 
     public function compile(bool $resolveEnvPlaceholders = false): void
@@ -403,18 +438,31 @@ class Container implements SymfonyContainerInterface, ArrayAccess
 
     public function isCompiled(): bool
     {
-        return self::$container->isCompiled();
+        if (self::$container instanceof ContainerBuilder) {
+            return self::$container->isCompiled();
+        }
+
+        return self::$container !== null;
     }
 
     public function getCompilerPassConfig(): PassConfig
     {
-        return self::$container->getCompilerPassConfig();
+        return $this->getBuilder()->getCompilerPassConfig();
     }
 
     public function addCompilerPass(CompilerPassInterface $pass, string $type = PassConfig::TYPE_BEFORE_OPTIMIZATION, int $priority = 0): static
     {
-        self::$container->addCompilerPass($pass, $type, $priority);
+        $this->getBuilder()->addCompilerPass($pass, $type, $priority);
         return $this;
+    }
+
+    private function getSymfonyContainer(): SymfonyContainer
+    {
+        if (self::$container === null) {
+            throw new RuntimeException('Container has not been initialized.');
+        }
+
+        return self::$container;
     }
 
     // ========== ArrayAccess Implementation for Facade Compatibility ==========

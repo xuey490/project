@@ -24,6 +24,7 @@ use Framework\DI\Attribute\Inject;
 use Framework\DI\Attribute\Context;
 use ReflectionClass;
 use ReflectionException;
+use Framework\Utils\ReflectionTypes;
 use ReflectionProperty;
 use RuntimeException;
 
@@ -61,7 +62,7 @@ class AttributeInjector
      *     ...
      * ]
      *
-     * @var array<string, array<array{reflection: ReflectionProperty, property: string, attr: object, type: string|null}>>
+     * @var array<string, array{array{reflection: ReflectionProperty, property: string, attr: object, type: string|null}}>
      */
     protected static array $metadataCache = [];
 
@@ -95,7 +96,7 @@ class AttributeInjector
 
         // 2. Iterate through metadata and perform injection for each property
         foreach (self::$metadataCache[$className] as $meta) {
-            /** @var ReflectionProperty $reflectionProperty The reflection object of the target property */
+            
             $reflectionProperty = $meta['reflection'];
             $propertyName = $meta['property']; // Name of the target property
 			
@@ -126,7 +127,7 @@ class AttributeInjector
      * 4. Make private/protected properties accessible for injection
      *
      * @param string $className Fully qualified class name to parse
-     * @return array Array of injection metadata for the class's properties
+     * @return array<mixed> Array of injection metadata for the class's properties
      * @throws RuntimeException If reflection fails (e.g., class does not exist)
      */
     protected static function parseMetadata(string $className): array
@@ -157,7 +158,7 @@ class AttributeInjector
                             'reflection' => $property,          // ReflectionProperty instance
                             'property'   => $property->getName(), // Property name as string
                             'attr'       => $inst,              // Attribute instance (Inject/Autowire/Context)
-                            'type'       => $property->getType()?->getName(), // Property type hint (nullable)
+                            'type'       => ReflectionTypes::asNamed($property->getType())?->getName(),
                         ];
                         // Only process the first injection attribute per property
                         // This prevents conflicts if multiple injection attributes are applied

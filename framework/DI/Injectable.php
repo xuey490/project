@@ -20,6 +20,7 @@ use Framework\DI\Attribute\Inject;
 use Framework\DI\Attribute\Autowire;
 use Framework\DI\Attribute\Context;
 use Framework\Core\App;
+use Framework\Utils\ReflectionTypes;
 use ReflectionClass;
 use ReflectionProperty;
 use RuntimeException;
@@ -30,6 +31,7 @@ trait Injectable
      * 反射元数据缓存，避免重复反射同一个类
      * 格式: [ ClassName => [ [property_name, attribute_instance, type_name], ...  ] ]
      */
+    /** @var array<mixed> */
     protected static array $injectionMetaCache = [];
 
     /**
@@ -66,7 +68,8 @@ trait Injectable
 
     /**
      * 解析类的属性元数据
-     */
+     * @return array<mixed>
+ */
     protected function parseInjectionMeta(string $className): array
     {
         $metaList = [];
@@ -87,7 +90,7 @@ trait Injectable
                         'reflection_property' => $property,
                         'property' => $property->getName(),
                         'attr'     => $inst,
-                        'type'     => $property->getType()?->getName(), // 获取属性类型声明
+                        'type'     => ReflectionTypes::asNamed($property->getType())?->getName(),
                     ];
                     // 一个属性只处理一个注入注解，处理完即跳出内层循环
                     break;

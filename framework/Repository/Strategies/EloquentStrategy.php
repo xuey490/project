@@ -14,11 +14,17 @@ class EloquentStrategy implements OrmStrategyInterface
         return \Illuminate\Database\Capsule\Manager::table($modelClass);
     }
 
+    /**
+    * @param array<mixed> $extra
+    */
     public function increment(mixed $query, string $field, int $amount, array $extra): bool
     {
         return (bool) $query->increment($field, $amount, $extra);
     }
 
+    /**
+    * @param array<mixed> $extra
+    */
     public function decrement(mixed $query, string $field, int $amount, array $extra): bool
     {
         return (bool) $query->decrement($field, $amount, $extra);
@@ -26,18 +32,25 @@ class EloquentStrategy implements OrmStrategyInterface
 
     public function transaction(\Closure $callback): mixed
     {
-        return \Illuminate\Database\Capsule\Manager::transaction($callback);
+        return \Illuminate\Support\Facades\DB::transaction($callback);
     }
 
+    /**
+    * @param array<int|string, mixed> $bindings
+    * @return array<int, mixed>
+    */
     public function query(string $sql, array $bindings): array
     {
-        $result = \Illuminate\Database\Capsule\Manager::select($sql, $bindings);
+        $result = \Illuminate\Support\Facades\DB::select($sql, $bindings);
         return array_map(fn($item) => (array) $item, $result);
     }
 
+    /**
+    * @param array<int|string, mixed> $bindings
+    */
     public function execute(string $sql, array $bindings): int
     {
-        return \Illuminate\Database\Capsule\Manager::affectingStatement($sql, $bindings);
+        return \Illuminate\Support\Facades\DB::affectingStatement($sql, $bindings);
     }
 }
 
