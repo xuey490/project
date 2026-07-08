@@ -32,7 +32,7 @@ return [
         ],
         [
             'name'     => 'backup-1',
-            'host'     => '192.168.0.100',
+            'host'     => '127.0.0.1',
             'port'     => 6379,
             'password' => null,
             'database' => 1,
