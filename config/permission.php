@@ -16,11 +16,10 @@ return [
         'default' => [
             'model' => [
                 'config_type' => 'file',
-                'config_file_path' => __DIR__ . '/casbin-model.conf',
+                'config_file_path' => __DIR__ . '/casbin_rbac_model.conf',
             ],
-            // 注意：命名空间要加反斜杠（\），且确保类文件存在
-            'adapter' => \Framework\Casbin\Adapter\LaravelDatabaseAdapter::class,
-            //'adapter' => \Framework\Casbin\Adapter\DatabaseAdapter::class,
+            // 使用统一的 DatabaseAdapter
+            'adapter' => \App\Services\Casbin\DatabaseAdapter::class,
             // 数据库设置	
             'database' => [
                 'connection' => 'mysql',
@@ -41,13 +40,13 @@ return [
 			*/
 			
 			
-            // Redis Watcher 配置
+            // Redis Watcher 配置（与 .env REDIS_* 对齐）
             'redis_watcher' => [
                 'enable' => true,
-                'host' => '127.0.0.1',
-                'port' => 6379,
-                'password' => '',
-                'database' => 0,
+                'host' => env('REDIS_HOST', '127.0.0.1'),
+                'port' => (int) env('REDIS_PORT', 6379),
+                'password' => env('REDIS_PASSWORD') ?: '',
+                'database' => (int) env('REDIS_DB', 0),
                 'channel' => '/casbin',
                 'timeout' => 5.0,
             ],
@@ -60,7 +59,8 @@ return [
                 'config_file_path' => __DIR__ . '/plugin/casbin/webman-permission/restful-model.conf', // 修正路径：去掉 config_path()，改用 __DIR__
                 'config_text' => '',
             ],
-            'adapter' => \Framework\Casbin\Adapter\DatabaseAdapter::class, // 补充反斜杠
+            // 使用统一的 DatabaseAdapter
+            'adapter' => \App\Services\Casbin\DatabaseAdapter::class,
             'database' => [
                 'connection' => '',
                 'rules_table' => 'restful_casbin_rule',
